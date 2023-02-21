@@ -16,6 +16,7 @@ import android.animation.ValueAnimator;
 import android.app.Dialog;
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.res.ColorStateList;
 import android.content.res.Configuration;
 import android.graphics.Canvas;
 import android.graphics.Insets;
@@ -50,6 +51,7 @@ import androidx.annotation.RequiresApi;
 import androidx.core.view.NestedScrollingParent;
 import androidx.core.view.NestedScrollingParentHelper;
 import androidx.core.view.ViewCompat;
+import androidx.core.widget.ImageViewCompat;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.FileLog;
@@ -94,6 +96,8 @@ public class BottomSheet extends Dialog {
 
     private CharSequence[] items;
     private int[] itemIcons;
+    private int selectedItemIndex;
+    
     private View customView;
     private CharSequence title;
     private boolean bigTitle;
@@ -800,9 +804,20 @@ public class BottomSheet extends Dialog {
             setBackgroundDrawable(Theme.getSelectorDrawable(false));
             //setPadding(AndroidUtilities.dp(16), 0, AndroidUtilities.dp(16), 0);
 
+            ColorStateList contentColor = new ColorStateList(
+                new int[][] {
+                    new int[] { android.R.attr.state_selected },
+                    new int[] { },
+                },
+                new int[] {
+                    getThemedColor(Theme.key_dialogTextBlue),
+                    getThemedColor(Theme.key_dialogTextBlack)
+                }
+            );
+
             imageView = new ImageView(context);
             imageView.setScaleType(ImageView.ScaleType.CENTER);
-            imageView.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_dialogIcon), PorterDuff.Mode.MULTIPLY));
+            ImageViewCompat.setImageTintList(imageView, contentColor);
             addView(imageView, LayoutHelper.createFrame(56, 48, Gravity.CENTER_VERTICAL | (LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT)));
 
             textView = new TextView(context);
@@ -811,7 +826,7 @@ public class BottomSheet extends Dialog {
             textView.setGravity(Gravity.CENTER_HORIZONTAL);
             textView.setEllipsize(TextUtils.TruncateAt.END);
             if (type == 0) {
-                textView.setTextColor(getThemedColor(Theme.key_dialogTextBlack));
+                textView.setTextColor(contentColor);
                 textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
                 addView(textView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, (LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.CENTER_VERTICAL));
             } else if (type == 1) {
@@ -1116,6 +1131,7 @@ public class BottomSheet extends Dialog {
                     cell.setTextAndIcon(items[a], itemIcons != null ? itemIcons[a] : 0, null, bigTitle);
                     containerView.addView(cell, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 48, Gravity.LEFT | Gravity.TOP, 0, topOffset, 0, 0));
                     topOffset += 48;
+                    cell.setSelected(a == selectedItemIndex);
                     cell.setTag(a);
                     cell.setOnClickListener(v -> dismissWithButtonClick((Integer) v.getTag()));
                     itemViews.add(cell);
@@ -1465,6 +1481,15 @@ public class BottomSheet extends Dialog {
         if (dismissed) {
             return;
         }
+
+        for (BottomSheetCell itemView : itemViews) {
+            itemView.setSelected(false);
+        }
+
+        if (item < itemViews.size()) {
+            itemViews.get(item).setSelected(true);
+        }
+
         dismissed = true;
         cancelSheetAnimation();
         currentSheetAnimationType = 2;
@@ -1669,6 +1694,14 @@ public class BottomSheet extends Dialog {
         public Builder setItems(CharSequence[] items, int[] icons, final OnClickListener onClickListener) {
             bottomSheet.items = items;
             bottomSheet.itemIcons = icons;
+            bottomSheet.onClickListener = onClickListener;
+            return this;
+        }
+
+        public Builder setItems(CharSequence[] items, int[] icons, int selectedItem, final OnClickListener onClickListener) {
+            bottomSheet.items = items;
+            bottomSheet.itemIcons = icons;
+            bottomSheet.selectedItemIndex = selectedItem;
             bottomSheet.onClickListener = onClickListener;
             return this;
         }

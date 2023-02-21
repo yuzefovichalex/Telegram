@@ -2670,7 +2670,9 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 									currentBluetoothDeviceName != null ? currentBluetoothDeviceName : LocaleController.getString("VoipAudioRoutingBluetooth", R.string.VoipAudioRoutingBluetooth)},
 							new int[]{R.drawable.calls_menu_speaker,
 									isHeadsetPlugged ? R.drawable.calls_menu_headset : R.drawable.calls_menu_phone,
-									R.drawable.calls_menu_bluetooth}, (dialog, which) -> {
+									R.drawable.calls_menu_bluetooth},
+						getSelectedOutputType(),
+						(dialog, which) -> {
 								if (getSharedInstance() == null) {
 									return;
 								}
@@ -2707,6 +2709,16 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 		}
 		for (StateListener l : stateListeners) {
 			l.onAudioSettingsChanged();
+		}
+	}
+
+	private int getSelectedOutputType() {
+		if (isBluetoothOn()) {
+			return 2;
+		} else if (isSpeakerphoneOn()) {
+			return 0;
+		} else {
+			return 1;
 		}
 	}
 
