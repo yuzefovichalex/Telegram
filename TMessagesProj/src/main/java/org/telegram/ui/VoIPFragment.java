@@ -78,6 +78,7 @@ import org.telegram.ui.Components.BackupImageView;
 import org.telegram.ui.Components.CubicBezierInterpolator;
 import org.telegram.ui.Components.HintView;
 import org.telegram.ui.Components.LayoutHelper;
+import org.telegram.ui.Components.MotionBackgroundDrawable;
 import org.telegram.ui.Components.voip.AcceptDeclineView;
 import org.telegram.ui.Components.voip.PrivateVideoPreviewDialog;
 import org.telegram.ui.Components.voip.VoIPButtonsLayout;
@@ -114,6 +115,11 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
 
     private ViewGroup fragmentView;
     private VoIPOverlayBackground overlayBackground;
+
+    private View initiatingCallBackground;
+    private MotionBackgroundDrawable initiatingCallBackgroundDrawable;
+    private ValueAnimator initiatingCallBackgroundAnimator;
+    private boolean isInitiatingCallAnimationReversed;
 
     private BackupImageView callingUserPhotoView;
     private BackupImageView callingUserPhotoViewMini;
@@ -767,6 +773,37 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
         frameLayout.addView(callingUserMiniFloatingLayout);
         frameLayout.addView(overlayBackground);
 
+        initiatingCallBackground = new View(context);
+        initiatingCallBackgroundDrawable = new MotionBackgroundDrawable();
+        initiatingCallBackgroundDrawable.setIndeterminateAnimation(true);
+        initiatingCallBackgroundDrawable.setParentView(initiatingCallBackground);
+        initiatingCallBackground.setBackground(initiatingCallBackgroundDrawable);
+
+        initiatingCallBackgroundAnimator = ValueAnimator.ofFloat(0f, 1f);
+        initiatingCallBackgroundAnimator.setRepeatCount(ValueAnimator.INFINITE);
+        initiatingCallBackgroundAnimator.setRepeatMode(ValueAnimator.RESTART);
+        initiatingCallBackgroundAnimator.setDuration(10000);
+        initiatingCallBackgroundAnimator.addUpdateListener(animation -> {
+            float animatedValue = (float) animation.getAnimatedValue();
+            float blendRatio = isInitiatingCallAnimationReversed ? 1f - animatedValue : animatedValue;
+            int color1 = ColorUtils.blendARGB(0xff20A4D7, 0xff08B0A3, blendRatio);
+            int color2 = ColorUtils.blendARGB(0xff3F8BEA, 0xff17AAE4, blendRatio);
+            int color3 = ColorUtils.blendARGB(0xff8148EC, 0xff3B7AF1, blendRatio);
+            int color4 = ColorUtils.blendARGB(0xffB456D8, 0xff4576E9, blendRatio);
+            initiatingCallBackgroundDrawable.setColors(color1, color2, color3, color4, 0, false);
+            initiatingCallBackgroundDrawable.updateAnimation(true);
+        });
+
+        initiatingCallBackgroundAnimator.addListener(
+            new AnimatorListenerAdapter() {
+                @Override
+                public void onAnimationRepeat(Animator animation) {
+                    isInitiatingCallAnimationReversed = !isInitiatingCallAnimationReversed;
+                }
+            }
+        );
+
+        frameLayout.addView(initiatingCallBackground, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
 
         bottomShadow = new View(context);
         bottomShadow.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{Color.TRANSPARENT, ColorUtils.setAlphaComponent(Color.BLACK, (int) (255 * 0.5f))}));
@@ -1412,6 +1449,7 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
                 break;
             case VoIPService.STATE_REQUESTING:
                 statusTextView.setText(LocaleController.getString("VoipRequesting", R.string.VoipRequesting), true, animated);
+                initiatingCallBackgroundAnimator.start();
                 break;
             case VoIPService.STATE_HANGING_UP:
                 break;
