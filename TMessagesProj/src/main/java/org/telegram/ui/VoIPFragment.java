@@ -74,6 +74,7 @@ import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.DarkAlertDialog;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.AlertsCreator;
+import org.telegram.ui.Components.AvatarDrawable;
 import org.telegram.ui.Components.BackgroundGradientDrawable;
 import org.telegram.ui.Components.BackupImageView;
 import org.telegram.ui.Components.CubicBezierInterpolator;
@@ -120,13 +121,11 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
     private View initiatingCallBackground;
     private MotionBackgroundDrawable initiatingCallBackgroundDrawable;
     private ValueAnimator initiatingCallBackgroundAnimator;
-    private boolean isInitiatingCallAnimationReversed;
 
-    private View inCallBackground;
-    private MotionBackgroundDrawable inCallBackgroundDrawable;
-    private ValueAnimator inCallBackgroundAnimator;
-    private boolean isInCallAnimationReversed;
-    private Animator inCallBackgroundRevealAnimator;
+    private View establishedCallBackground;
+    private MotionBackgroundDrawable establishedCallBackgroundDrawable;
+    private ValueAnimator establishedCallBackgroundAnimator;
+    private Animator establishedCallBackgroundRevealAnimator;
 
     private BackupImageView callingUserPhotoView;
     private BackupImageView callingUserPhotoViewMini;
@@ -800,29 +799,20 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
             initiatingCallBackgroundDrawable.updateAnimation(true);
         });
 
-        initiatingCallBackgroundAnimator.addListener(
-            new AnimatorListenerAdapter() {
-                @Override
-                public void onAnimationRepeat(Animator animation) {
-                    isInitiatingCallAnimationReversed = !isInitiatingCallAnimationReversed;
-                }
-            }
-        );
-
         frameLayout.addView(initiatingCallBackground, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
 
-        inCallBackground = new View(context);
-        inCallBackground.setVisibility(View.INVISIBLE);
-        inCallBackgroundDrawable = new MotionBackgroundDrawable();
-        inCallBackgroundDrawable.setIndeterminateAnimation(true);
-        inCallBackgroundDrawable.setParentView(inCallBackground);
-        inCallBackground.setBackground(inCallBackgroundDrawable);
+        establishedCallBackground = new View(context);
+        establishedCallBackground.setVisibility(View.INVISIBLE);
+        establishedCallBackgroundDrawable = new MotionBackgroundDrawable();
+        establishedCallBackgroundDrawable.setIndeterminateAnimation(true);
+        establishedCallBackgroundDrawable.setParentView(establishedCallBackground);
+        establishedCallBackground.setBackground(establishedCallBackgroundDrawable);
 
-        inCallBackgroundAnimator = ValueAnimator.ofFloat(0f, 1f, 2f);
-        inCallBackgroundAnimator.setRepeatCount(ValueAnimator.INFINITE);
-        inCallBackgroundAnimator.setRepeatMode(ValueAnimator.REVERSE);
-        inCallBackgroundAnimator.setDuration(10000);
-        inCallBackgroundAnimator.addUpdateListener(animation -> {
+        establishedCallBackgroundAnimator = ValueAnimator.ofFloat(0f, 1f, 2f);
+        establishedCallBackgroundAnimator.setRepeatCount(ValueAnimator.INFINITE);
+        establishedCallBackgroundAnimator.setRepeatMode(ValueAnimator.REVERSE);
+        establishedCallBackgroundAnimator.setDuration(10000);
+        establishedCallBackgroundAnimator.addUpdateListener(animation -> {
             float animatedValue = (float) animation.getAnimatedValue();
             float blendRatio = animatedValue <= 1f ? animatedValue : animatedValue - 1f;
             int color1;
@@ -840,20 +830,11 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
                 color3 = ColorUtils.blendARGB(0xff3B7AF1, 0xff8148EC, blendRatio);
                 color4 = ColorUtils.blendARGB(0xff4576E9, 0xffB456D8, blendRatio);
             }
-            inCallBackgroundDrawable.setColors(color1, color2, color3, color4, 0, false);
-            inCallBackgroundDrawable.updateAnimation(true);
+            establishedCallBackgroundDrawable.setColors(color1, color2, color3, color4, 0, false);
+            establishedCallBackgroundDrawable.updateAnimation(true);
         });
 
-        inCallBackgroundAnimator.addListener(
-            new AnimatorListenerAdapter() {
-                @Override
-                public void onAnimationRepeat(Animator animation) {
-                    isInCallAnimationReversed = !isInCallAnimationReversed;
-                }
-            }
-        );
-
-        frameLayout.addView(inCallBackground, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+        frameLayout.addView(establishedCallBackground, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
 
         bottomShadow = new View(context);
         bottomShadow.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{Color.TRANSPARENT, ColorUtils.setAlphaComponent(Color.BLACK, (int) (255 * 0.5f))}));
@@ -1792,15 +1773,15 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
     }
 
     private void revealInCallAnimatedBackground() {
-        if (inCallBackgroundRevealAnimator == null || !inCallBackgroundRevealAnimator.isStarted()) {
-            inCallBackgroundRevealAnimator = ViewAnimationUtils.createCircularReveal(
-                inCallBackground,
+        if (establishedCallBackgroundRevealAnimator == null || !establishedCallBackgroundRevealAnimator.isStarted()) {
+            establishedCallBackgroundRevealAnimator = ViewAnimationUtils.createCircularReveal(
+                establishedCallBackground,
                 540,
                 640,
                 0,
-                inCallBackground.getMeasuredHeight()
+                establishedCallBackground.getMeasuredHeight()
             );
-            inCallBackgroundRevealAnimator.addListener(
+            establishedCallBackgroundRevealAnimator.addListener(
                 new AnimatorListenerAdapter() {
                     @Override
                     public void onAnimationStart(Animator animation) {
@@ -1809,7 +1790,7 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
 
                     @Override
                     public void onAnimationEnd(Animator animation) {
-                        inCallBackgroundAnimator.start();
+                        establishedCallBackgroundAnimator.start();
                         initiatingCallBackground.setVisibility(View.GONE);
                     }
                 }
@@ -1818,9 +1799,9 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
             int color2 = 0xff5AB147;
             int color3 = 0xff07BA63;
             int color4 = 0xff07A9AC;
-            inCallBackgroundDrawable.setColors(color1, color2, color3, color4, 0, true);
-            inCallBackground.setVisibility(View.VISIBLE);
-            inCallBackgroundRevealAnimator.start();
+            establishedCallBackgroundDrawable.setColors(color1, color2, color3, color4, 0, true);
+            establishedCallBackground.setVisibility(View.VISIBLE);
+            establishedCallBackgroundRevealAnimator.start();
         }
     }
 
