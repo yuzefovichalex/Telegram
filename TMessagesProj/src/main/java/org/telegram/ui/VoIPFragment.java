@@ -39,11 +39,13 @@ import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityManager;
 import android.view.accessibility.AccessibilityNodeInfo;
+import android.view.animation.AccelerateDecelerateInterpolator;
 import android.view.animation.LinearInterpolator;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 import android.widget.ToggleButton;
 
 import androidx.annotation.RequiresApi;
@@ -74,7 +76,6 @@ import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.DarkAlertDialog;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.AlertsCreator;
-import org.telegram.ui.Components.AvatarDrawable;
 import org.telegram.ui.Components.BackgroundGradientDrawable;
 import org.telegram.ui.Components.BackupImageView;
 import org.telegram.ui.Components.CubicBezierInterpolator;
@@ -92,6 +93,7 @@ import org.telegram.ui.Components.voip.VoIPPiPView;
 import org.telegram.ui.Components.voip.VoIPStatusTextView;
 import org.telegram.ui.Components.voip.VoIPTextureView;
 import org.telegram.ui.Components.voip.VoIPToggleButton;
+import org.telegram.ui.Components.voip.VoIPUserPhotoView;
 import org.telegram.ui.Components.voip.VoIPWindowView;
 import org.webrtc.EglBase;
 import org.webrtc.GlRectDrawer;
@@ -128,7 +130,8 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
     private Animator establishedCallBackgroundRevealAnimator;
 
     private BackupImageView callingUserPhotoView;
-    private BackupImageView callingUserPhotoViewMini;
+    private VoIPUserPhotoView callingUserPhotoViewMini;
+    private ValueAnimator callingUserPhotoViewAnimator;
 
     private TextView callingUserTitle;
 
@@ -438,6 +441,7 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
         NotificationCenter.getInstance(currentAccount).addObserver(this, NotificationCenter.voipServiceCreated);
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.emojiLoaded);
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.closeInCallActivity);
+        NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.webRtcMicAmplitudeEvent);
     }
 
     private void destroy() {
@@ -448,6 +452,7 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
         NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.voipServiceCreated);
         NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.emojiLoaded);
         NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.closeInCallActivity);
+        NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.webRtcMicAmplitudeEvent);
     }
 
     @Override
@@ -475,6 +480,9 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
             updateKeyView(true);
         } else if (id == NotificationCenter.closeInCallActivity) {
             windowView.finish();
+        } else if (id == NotificationCenter.webRtcMicAmplitudeEvent) {
+            float micAmplitude = ((float) args[0]) * 80f;
+            callingUserPhotoViewMini.setAmplitude(micAmplitude);
         }
     }
 
@@ -907,10 +915,8 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
         statusLayout.setFocusable(true);
         statusLayout.setFocusableInTouchMode(true);
 
-        AvatarDrawable callingUserImage = new AvatarDrawable();
-        callingUserImage.setInfo(callingUser);
-        callingUserPhotoViewMini = new BackupImageView(context);
-        callingUserPhotoViewMini.setImageDrawable(callingUserImage);
+        callingUserPhotoViewMini = new VoIPUserPhotoView(context);
+        callingUserPhotoViewMini.setUserInfo(callingUser);
         callingUserPhotoViewMini.setVisibility(View.GONE);
         statusLayout.addView(callingUserPhotoViewMini, LayoutHelper.createLinear(145, 145, Gravity.CENTER_HORIZONTAL, 0, 0, 0, 6));
 
@@ -1764,6 +1770,10 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
         callingUserMiniFloatingLayout.restoreRelativePosition();
 
         updateSpeakerPhoneIcon();
+
+        if (previousState != currentState) {
+            animateCallingUserPhotoMini(currentState);
+        }
     }
 
     private void revealInCallAnimatedBackground() {
@@ -1800,6 +1810,55 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
             establishedCallBackgroundDrawable.setColors(color1, color2, color3, color4, 0, true);
             establishedCallBackground.setVisibility(View.VISIBLE);
             establishedCallBackgroundRevealAnimator.start();
+        }
+    }
+
+    private void animateCallingUserPhotoMini(int state) {
+        boolean ignoreStateChange = false;
+
+        switch (state) {
+            case VoIPService.STATE_REQUESTING:
+                clearCallingUserPhotoViewAnimation();
+                callingUserPhotoViewAnimator = ValueAnimator.ofFloat(0.95f, 1.05f);
+                callingUserPhotoViewAnimator.setDuration(1500);
+                callingUserPhotoViewAnimator.setRepeatCount(ValueAnimator.INFINITE);
+                callingUserPhotoViewAnimator.setRepeatMode(ValueAnimator.REVERSE);
+                callingUserPhotoViewAnimator.setInterpolator(CubicBezierInterpolator.DEFAULT);
+                callingUserPhotoViewAnimator.addUpdateListener(
+                    animation -> {
+                        float animatedValue = (float) animation.getAnimatedValue();
+                        callingUserPhotoViewMini.setScaleX(animatedValue);
+                        callingUserPhotoViewMini.setScaleY(animatedValue);
+                    }
+                );
+                break;
+            case VoIPService.STATE_ESTABLISHED:
+                clearCallingUserPhotoViewAnimation();
+                callingUserPhotoViewAnimator = ValueAnimator.ofFloat(callingUserPhotoViewMini.getScaleX(), 1.2f, 1f);
+                callingUserPhotoViewAnimator.setDuration(300);
+                callingUserPhotoViewAnimator.setInterpolator(new AccelerateDecelerateInterpolator());
+                callingUserPhotoViewAnimator.addUpdateListener(
+                    animation -> {
+                        float animatedValue = (float) animation.getAnimatedValue();
+                        callingUserPhotoViewMini.setScaleX(animatedValue);
+                        callingUserPhotoViewMini.setScaleY(animatedValue);
+                    }
+                );
+                break;
+            default:
+                ignoreStateChange = true;
+                break;
+        }
+
+        if (callingUserPhotoViewAnimator != null && !ignoreStateChange) {
+            callingUserPhotoViewAnimator.start();
+        }
+    }
+
+    private void clearCallingUserPhotoViewAnimation() {
+        if (callingUserPhotoViewAnimator != null) {
+            callingUserPhotoViewAnimator.cancel();
+            callingUserPhotoViewAnimator.removeAllUpdateListeners();
         }
     }
 
