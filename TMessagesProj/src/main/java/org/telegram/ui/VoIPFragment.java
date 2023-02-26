@@ -410,9 +410,8 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
         ((FrameLayout.LayoutParams) backIcon.getLayoutParams()).topMargin = lastInsets.getSystemWindowInsetTop();
         ((FrameLayout.LayoutParams) speakerPhoneIcon.getLayoutParams()).topMargin = lastInsets.getSystemWindowInsetTop();
         ((FrameLayout.LayoutParams) topShadow.getLayoutParams()).topMargin = lastInsets.getSystemWindowInsetTop();
-        ((FrameLayout.LayoutParams) statusLayout.getLayoutParams()).topMargin = AndroidUtilities.dp(68) + lastInsets.getSystemWindowInsetTop();
+        ((FrameLayout.LayoutParams) statusLayout.getLayoutParams()).topMargin = AndroidUtilities.dp(34) + lastInsets.getSystemWindowInsetTop();
         ((FrameLayout.LayoutParams) emojiLayout.getLayoutParams()).topMargin = AndroidUtilities.dp(17) + lastInsets.getSystemWindowInsetTop();
-        ((FrameLayout.LayoutParams) callingUserPhotoViewMini.getLayoutParams()).topMargin = AndroidUtilities.dp(68) + lastInsets.getSystemWindowInsetTop();
 
         ((FrameLayout.LayoutParams) currentUserCameraFloatingLayout.getLayoutParams()).bottomMargin = lastInsets.getSystemWindowInsetBottom();
         ((FrameLayout.LayoutParams) callingUserMiniFloatingLayout.getLayoutParams()).bottomMargin = lastInsets.getSystemWindowInsetBottom();
@@ -908,10 +907,12 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
         statusLayout.setFocusable(true);
         statusLayout.setFocusableInTouchMode(true);
 
+        AvatarDrawable callingUserImage = new AvatarDrawable();
+        callingUserImage.setInfo(callingUser);
         callingUserPhotoViewMini = new BackupImageView(context);
-        callingUserPhotoViewMini.setImage(ImageLocation.getForUserOrChat(callingUser, ImageLocation.TYPE_SMALL), null, Theme.createCircleDrawable(AndroidUtilities.dp(135), 0xFF000000), callingUser);
-        callingUserPhotoViewMini.setRoundRadius(AndroidUtilities.dp(135) / 2);
+        callingUserPhotoViewMini.setImageDrawable(callingUserImage);
         callingUserPhotoViewMini.setVisibility(View.GONE);
+        statusLayout.addView(callingUserPhotoViewMini, LayoutHelper.createLinear(145, 145, Gravity.CENTER_HORIZONTAL, 0, 0, 0, 6));
 
         callingUserTitle = new TextView(context);
         callingUserTitle.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 24);
@@ -932,7 +933,6 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
         statusLayout.setClipToPadding(false);
         statusLayout.setPadding(0, 0, 0, AndroidUtilities.dp(15));
 
-        frameLayout.addView(callingUserPhotoViewMini, LayoutHelper.createFrame(135, 135, Gravity.CENTER_HORIZONTAL, 0, 68, 0, 0));
         frameLayout.addView(statusLayout, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 0, 68, 0, 0));
         frameLayout.addView(emojiLayout, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 0, 17, 0, 0));
         frameLayout.addView(emojiRationalTextView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 24, 32, 24, 0));
@@ -1442,7 +1442,6 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
         boolean showAcceptDeclineView = false;
         boolean showTimer = false;
         boolean showReconnecting = false;
-        boolean showCallingAvatarMini = false;
         int statusLayoutOffset = 0;
         VoIPService service = VoIPService.getSharedInstance();
 
@@ -1453,11 +1452,6 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
                 statusLayoutOffset = AndroidUtilities.dp(24);
                 acceptDeclineView.setRetryMod(false);
                 if (service != null && service.privateCall.video) {
-                    if (currentUserIsVideo && callingUser.photo != null) {
-                        showCallingAvatarMini = true;
-                    } else {
-                        showCallingAvatarMini = false;
-                    }
                     statusTextView.setText(LocaleController.getString("VoipInVideoCallBranding", R.string.VoipInVideoCallBranding), true, animated);
                     acceptDeclineView.setTranslationY(-AndroidUtilities.dp(60));
                 } else {
@@ -1621,7 +1615,7 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
 
         boolean showCallingUserVideoMini = currentUserIsVideo && cameraForceExpanded;
 
-        showCallingUserAvatarMini(showCallingAvatarMini, animated);
+        showCallingUserAvatarMini(true, animated);
         statusLayoutOffset += callingUserPhotoViewMini.getTag() == null ? 0 : AndroidUtilities.dp(135) + AndroidUtilities.dp(12);
         showAcceptDeclineView(showAcceptDeclineView, animated);
         windowView.setLockOnScreen(lockOnScreen || deviceIsLocked);
@@ -1774,11 +1768,15 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
 
     private void revealInCallAnimatedBackground() {
         if (establishedCallBackgroundRevealAnimator == null || !establishedCallBackgroundRevealAnimator.isStarted()) {
+            int[] callingUserPhotoLocation = new int[2];
+            callingUserPhotoViewMini.getLocationOnScreen(callingUserPhotoLocation);
+            int centerX = callingUserPhotoLocation[0] + callingUserPhotoViewMini.getMeasuredWidth() / 2;
+            int centerY = callingUserPhotoLocation[1] + callingUserPhotoViewMini.getMeasuredHeight() / 2;
             establishedCallBackgroundRevealAnimator = ViewAnimationUtils.createCircularReveal(
                 establishedCallBackground,
-                540,
-                640,
-                0,
+                centerX,
+                centerY,
+                callingUserPhotoViewMini.getMeasuredWidth(),
                 establishedCallBackground.getMeasuredHeight()
             );
             establishedCallBackgroundRevealAnimator.addListener(
