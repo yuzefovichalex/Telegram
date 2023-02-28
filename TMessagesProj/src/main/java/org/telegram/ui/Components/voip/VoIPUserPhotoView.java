@@ -13,9 +13,10 @@ import org.telegram.messenger.ImageReceiver;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.Components.AvatarDrawable;
 import org.telegram.ui.Components.BlobDrawable;
-import org.telegram.ui.GroupCallActivity;
 
 public class VoIPUserPhotoView extends View {
+
+    public static final int SIZE_DP = 200;
 
     private final ImageReceiver avatarImageReceiver = new ImageReceiver();
     private final AvatarDrawable avatarDrawable = new AvatarDrawable();
@@ -38,12 +39,12 @@ public class VoIPUserPhotoView extends View {
         tinyWaveDrawable = new BlobDrawable(9);
         bigWaveDrawable = new BlobDrawable(12);
 
-        tinyWaveDrawable.minRadius = AndroidUtilities.dp(88);
-        tinyWaveDrawable.maxRadius = AndroidUtilities.dp(96);
+        tinyWaveDrawable.minRadius = AndroidUtilities.dp(86);
+        tinyWaveDrawable.maxRadius = AndroidUtilities.dp(90);
         tinyWaveDrawable.generateBlob();
 
-        bigWaveDrawable.minRadius = AndroidUtilities.dp(104);
-        bigWaveDrawable.maxRadius = AndroidUtilities.dp(108);
+        bigWaveDrawable.minRadius = AndroidUtilities.dp(96);
+        bigWaveDrawable.maxRadius = AndroidUtilities.dp(100);
         bigWaveDrawable.generateBlob();
 
         paint.setColor(Color.WHITE);
@@ -52,12 +53,14 @@ public class VoIPUserPhotoView extends View {
 
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
-        float size = AndroidUtilities.dp(157);
+        int size = AndroidUtilities.dp(SIZE_DP);
+        int sizeSpec = View.MeasureSpec.makeMeasureSpec(size, MeasureSpec.EXACTLY);
+        int avatarSize = AndroidUtilities.dp(160);
+        super.onMeasure(sizeSpec, sizeSpec);
         cx = getMeasuredWidth() >> 1;
-        cy = (getMeasuredHeight() >> 1) + (GroupCallActivity.isLandscapeMode ? 0 : -getMeasuredHeight() * 0.12f);
-        avatarImageReceiver.setRoundRadius((int) (size / 2f));
-        avatarImageReceiver.setImageCoords(cx - size / 2, cy - size / 2, size, size);
+        cy = getMeasuredHeight() >> 1;
+        avatarImageReceiver.setRoundRadius((int) (avatarSize / 2f));
+        avatarImageReceiver.setImageCoords(cx - avatarSize / 2f, cy - avatarSize / 2f, avatarSize, avatarSize);
     }
 
     @Override
