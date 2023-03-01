@@ -140,6 +140,7 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
     private ImageView speakerPhoneIcon;
 
     LinearLayout emojiLayout;
+    HintView emojiHint;
     TextView emojiRationalTextView;
     ImageView[] emojiViews = new ImageView[4];
     Emoji.EmojiDrawable[] emojiDrawables = new Emoji.EmojiDrawable[4];
@@ -413,9 +414,9 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
         ((FrameLayout.LayoutParams) backIcon.getLayoutParams()).topMargin = lastInsets.getSystemWindowInsetTop();
         ((FrameLayout.LayoutParams) speakerPhoneIcon.getLayoutParams()).topMargin = lastInsets.getSystemWindowInsetTop();
         ((FrameLayout.LayoutParams) topShadow.getLayoutParams()).topMargin = lastInsets.getSystemWindowInsetTop();
-        ((FrameLayout.LayoutParams) statusLayout.getLayoutParams()).topMargin = AndroidUtilities.dp(92) + lastInsets.getSystemWindowInsetTop();
+        ((FrameLayout.LayoutParams) statusLayout.getLayoutParams()).topMargin = AndroidUtilities.dp(108) + lastInsets.getSystemWindowInsetTop();
         ((FrameLayout.LayoutParams) emojiLayout.getLayoutParams()).topMargin = AndroidUtilities.dp(17) + lastInsets.getSystemWindowInsetTop();
-        ((FrameLayout.LayoutParams) callingUserPhotoViewMini.getLayoutParams()).topMargin = AndroidUtilities.dp(92) + lastInsets.getSystemWindowInsetTop();
+        ((FrameLayout.LayoutParams) callingUserPhotoViewMini.getLayoutParams()).topMargin = AndroidUtilities.dp(108) + lastInsets.getSystemWindowInsetTop();
 
         ((FrameLayout.LayoutParams) currentUserCameraFloatingLayout.getLayoutParams()).bottomMargin = lastInsets.getSystemWindowInsetBottom();
         ((FrameLayout.LayoutParams) callingUserMiniFloatingLayout.getLayoutParams()).bottomMargin = lastInsets.getSystemWindowInsetBottom();
@@ -874,6 +875,21 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
                 expandEmoji(!emojiExpanded);
             }
         });
+
+        emojiHint = new HintView(context, 8, true);
+        emojiHint.setBackgroundColor(0x20000000, 0xffffffff);
+        emojiHint.setCenterArrow(true);
+        emojiHint.setShowingDuration(HintView.SHOWING_DURATION_INFINITE);
+        AnimatorSet showAnimator = new AnimatorSet();
+        showAnimator.playTogether(
+            ObjectAnimator.ofFloat(emojiHint, View.ALPHA, 0f, 1f),
+            ObjectAnimator.ofFloat(emojiHint, View.SCALE_X, 0f, 1f),
+            ObjectAnimator.ofFloat(emojiHint, View.SCALE_Y, 0f, 1f)
+        );
+        showAnimator.setInterpolator(CubicBezierInterpolator.DEFAULT);
+        showAnimator.setDuration(280);
+        emojiHint.setShowAnimator(showAnimator);
+        frameLayout.addView(emojiHint, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT));
 
         emojiRationalTextView = new TextView(context);
         emojiRationalTextView.setText(LocaleController.formatString("CallEmojiKeyTooltip", R.string.CallEmojiKeyTooltip, UserObject.getFirstName(callingUser)));
@@ -1897,6 +1913,7 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
             speakerPhoneIcon.animate().alpha(0).translationY(-AndroidUtilities.dp(50)).setDuration(150).setInterpolator(CubicBezierInterpolator.DEFAULT).start();
             backIcon.animate().alpha(0).translationY(-AndroidUtilities.dp(50)).setDuration(150).setInterpolator(CubicBezierInterpolator.DEFAULT).start();
             emojiLayout.animate().alpha(0).translationY(-AndroidUtilities.dp(50)).setDuration(150).setInterpolator(CubicBezierInterpolator.DEFAULT).start();
+            emojiHint.animate().alpha(0).translationY(-AndroidUtilities.dp(50)).setDuration(150).setInterpolator(CubicBezierInterpolator.DEFAULT).start();
             statusLayout.animate().alpha(0).setDuration(150).setInterpolator(CubicBezierInterpolator.DEFAULT).start();
             buttonsLayout.animate().alpha(0).translationY(AndroidUtilities.dp(50)).setDuration(150).setInterpolator(CubicBezierInterpolator.DEFAULT).start();
             bottomShadow.animate().alpha(0).setDuration(150).setInterpolator(CubicBezierInterpolator.DEFAULT).start();
@@ -1913,6 +1930,7 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
             speakerPhoneIcon.animate().alpha(1f).translationY(0).setDuration(150).setInterpolator(CubicBezierInterpolator.DEFAULT).start();
             backIcon.animate().alpha(1f).translationY(0).setDuration(150).setInterpolator(CubicBezierInterpolator.DEFAULT).start();
             emojiLayout.animate().alpha(1f).translationY(0).setDuration(150).setInterpolator(CubicBezierInterpolator.DEFAULT).start();
+            emojiHint.animate().alpha(1f).translationY(emojiHint.getBaseTranslationY()).setDuration(150).setInterpolator(CubicBezierInterpolator.DEFAULT).start();
             statusLayout.animate().alpha(1f).setDuration(150).setInterpolator(CubicBezierInterpolator.DEFAULT).start();
             buttonsLayout.animate().alpha(1f).translationY(0).setDuration(150).setInterpolator(CubicBezierInterpolator.DEFAULT).start();
             bottomShadow.animate().alpha(1f).setDuration(150).setInterpolator(CubicBezierInterpolator.DEFAULT).start();
@@ -2104,6 +2122,15 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
                     }
                 }
             }
+            showEmojiHint();
+        }
+    }
+
+    private void showEmojiHint() {
+        if (emojiHint.getTag() == null) {
+            emojiHint.setText(LocaleController.getString(R.string.VoipEncryptionKey));
+            emojiHint.showForView(emojiLayout, true);
+            emojiHint.setTag(1);
         }
     }
 

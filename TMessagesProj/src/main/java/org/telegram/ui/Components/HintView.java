@@ -33,15 +33,20 @@ public class HintView extends FrameLayout {
     public static final int TYPE_COMMON = 4;
     public static final int TYPE_POLL_VOTE = 5;
 
+    public static final int SHOWING_DURATION_INFINITE = -1;
+
     public TextView textView;
     private ImageView imageView;
     private ImageView arrowImageView;
     private ChatMessageCell messageCell;
     private View currentView;
-    private AnimatorSet animatorSet;
+    private Animator changeAnimator;
+    private Animator showAnimator;
     private Runnable hideRunnable;
     private int currentType;
     private boolean isTopArrow;
+
+    private boolean centerArrow;
     private String overrideText;
     private int shownY;
     private float translationY;
@@ -109,6 +114,31 @@ public class HintView extends FrameLayout {
         addView(arrowImageView, LayoutHelper.createFrame(14, 6, Gravity.LEFT | (topArrow ? Gravity.TOP : Gravity.BOTTOM), 0, 0, 0, 0));
     }
 
+    private Animator createDefaultShowAnimator() {
+        AnimatorSet animatorSet = new AnimatorSet();
+        animatorSet.playTogether(
+            ObjectAnimator.ofFloat(this, View.ALPHA, 0.0f, 1.0f)
+        );
+        animatorSet.setDuration(300);
+        return animatorSet;
+    }
+
+    private Animator createDefaultHideAnimator() {
+        AnimatorSet animatorSet = new AnimatorSet();
+        animatorSet.playTogether(
+            ObjectAnimator.ofFloat(this, View.ALPHA, 0.0f)
+        );
+        animatorSet.setDuration(300);
+        return animatorSet;
+    }
+
+    public void setShowAnimator(Animator showAnimator) {
+        if (this.showAnimator != null) {
+            this.showAnimator.cancel();
+        }
+        this.showAnimator = showAnimator;
+    }
+
     public void setBackgroundColor(int background, int text) {
         textView.setTextColor(text);
         arrowImageView.setColorFilter(new PorterDuffColorFilter(background, PorterDuff.Mode.MULTIPLY));
@@ -128,6 +158,10 @@ public class HintView extends FrameLayout {
     public void setExtraTranslationY(float value) {
         extraTranslationY = value;
         setTranslationY(extraTranslationY + translationY);
+    }
+
+    public void setCenterArrow(boolean centerArrow) {
+        this.centerArrow = centerArrow;
     }
 
     public float getBaseTranslationY() {
@@ -255,27 +289,26 @@ public class HintView extends FrameLayout {
         }
 
         messageCell = cell;
-        if (animatorSet != null) {
-            animatorSet.cancel();
-            animatorSet = null;
+        if (changeAnimator != null) {
+            changeAnimator.cancel();
+            changeAnimator.removeAllListeners();
+            changeAnimator = null;
         }
 
         setTag(1);
         setVisibility(VISIBLE);
         if (animated) {
-            animatorSet = new AnimatorSet();
-            animatorSet.playTogether(
-                    ObjectAnimator.ofFloat(this, View.ALPHA, 0.0f, 1.0f)
-            );
-            animatorSet.addListener(new AnimatorListenerAdapter() {
+            changeAnimator = showAnimator != null ? showAnimator : createDefaultShowAnimator();
+            changeAnimator.addListener(new AnimatorListenerAdapter() {
                 @Override
                 public void onAnimationEnd(Animator animation) {
-                    animatorSet = null;
-                    AndroidUtilities.runOnUIThread(hideRunnable = () -> hide(), currentType == 0 ? 10000 : 2000);
+                    changeAnimator = null;
+                    if (showingDuration > SHOWING_DURATION_INFINITE) {
+                        AndroidUtilities.runOnUIThread(hideRunnable = () -> hide(), currentType == 0 ? 10000 : 2000);
+                    }
                 }
             });
-            animatorSet.setDuration(300);
-            animatorSet.start();
+            changeAnimator.start();
         } else {
             setAlpha(1.0f);
         }
@@ -297,27 +330,26 @@ public class HintView extends FrameLayout {
         updatePosition(view);
 
         currentView = view;
-        if (animatorSet != null) {
-            animatorSet.cancel();
-            animatorSet = null;
+        if (changeAnimator != null) {
+            changeAnimator.cancel();
+            changeAnimator.removeAllListeners();
+            changeAnimator = null;
         }
 
         setTag(1);
         setVisibility(VISIBLE);
         if (animated) {
-            animatorSet = new AnimatorSet();
-            animatorSet.playTogether(
-                    ObjectAnimator.ofFloat(this, View.ALPHA, 0.0f, 1.0f)
-            );
-            animatorSet.addListener(new AnimatorListenerAdapter() {
+            changeAnimator = showAnimator != null ? showAnimator : createDefaultShowAnimator();
+            changeAnimator.addListener(new AnimatorListenerAdapter() {
                 @Override
                 public void onAnimationEnd(Animator animation) {
-                    animatorSet = null;
-                    AndroidUtilities.runOnUIThread(hideRunnable = () -> hide(), showingDuration);
+                    changeAnimator = null;
+                    if (showingDuration > SHOWING_DURATION_INFINITE) {
+                        AndroidUtilities.runOnUIThread(hideRunnable = () -> hide(), showingDuration);
+                    }
                 }
             });
-            animatorSet.setDuration(300);
-            animatorSet.start();
+            changeAnimator.start();
         } else {
             setAlpha(1.0f);
         }
@@ -382,7 +414,7 @@ public class HintView extends FrameLayout {
             leftMargin = ((MarginLayoutParams) getLayoutParams()).leftMargin;
             rightMargin = ((MarginLayoutParams) getLayoutParams()).rightMargin;
         }
-        if (currentType == 8 && !isTopArrow) {
+        if (currentType == 8 && !isTopArrow || centerArrow) {
             offset = (parentWidth - leftMargin - rightMargin - getMeasuredWidth()) / 2;
         } else if (centerX > parentView.getMeasuredWidth() / 2) {
             if (currentType == TYPE_SEARCH_AS_LIST) {
@@ -441,31 +473,28 @@ public class HintView extends FrameLayout {
             AndroidUtilities.cancelRunOnUIThread(hideRunnable);
             hideRunnable = null;
         }
-        if (animatorSet != null) {
-            animatorSet.cancel();
-            animatorSet = null;
+        if (changeAnimator != null) {
+            changeAnimator.cancel();
+            changeAnimator.removeAllListeners();
+            changeAnimator = null;
         }
         if (animate) {
-            animatorSet = new AnimatorSet();
-            animatorSet.playTogether(
-                    ObjectAnimator.ofFloat(this, View.ALPHA, 0.0f)
-            );
-            animatorSet.addListener(new AnimatorListenerAdapter() {
+            changeAnimator = createDefaultHideAnimator();
+            changeAnimator.addListener(new AnimatorListenerAdapter() {
                 @Override
                 public void onAnimationEnd(Animator animation) {
                     setVisibility(View.INVISIBLE);
                     currentView = null;
                     messageCell = null;
-                    animatorSet = null;
+                    changeAnimator = null;
                 }
             });
-            animatorSet.setDuration(300);
-            animatorSet.start();
+            changeAnimator.start();
         } else {
             setVisibility(View.INVISIBLE);
             currentView = null;
             messageCell = null;
-            animatorSet = null;
+            changeAnimator = null;
         }
     }
 
