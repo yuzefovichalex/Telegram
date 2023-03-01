@@ -168,6 +168,8 @@ public class HintView extends FrameLayout {
         return translationY;
     }
 
+    public float getFullTranslationY() { return extraTranslationY + translationY; }
+
     public boolean showForMessageCell(ChatMessageCell cell, boolean animated) {
         return showForMessageCell(cell, null, 0, 0, animated);
     }
@@ -441,22 +443,27 @@ public class HintView extends FrameLayout {
             arrowX += AndroidUtilities.dp(2);
         }
         arrowImageView.setTranslationX(arrowX);
-        if (centerX > parentView.getMeasuredWidth() / 2) {
-            if (arrowX < AndroidUtilities.dp(10)) {
-                float diff = arrowX - AndroidUtilities.dp(10);
-                setTranslationX(getTranslationX() + diff);
-                arrowImageView.setTranslationX(arrowX - diff);
+
+        if (!centerArrow) {
+            if (centerX > parentView.getMeasuredWidth() / 2) {
+                if (arrowX < AndroidUtilities.dp(10)) {
+                    float diff = arrowX - AndroidUtilities.dp(10);
+                    setTranslationX(getTranslationX() + diff);
+                    arrowImageView.setTranslationX(arrowX - diff);
+                }
+            } else {
+                if (arrowX > getMeasuredWidth() - AndroidUtilities.dp(14 + 10)) {
+                    float diff = arrowX - getMeasuredWidth() + AndroidUtilities.dp(14 + 10);
+                    setTranslationX(diff);
+                    arrowImageView.setTranslationX(arrowX - diff);
+                } else if (arrowX < AndroidUtilities.dp(10)) {
+                    float diff = arrowX - AndroidUtilities.dp(10);
+                    setTranslationX(getTranslationX() + diff);
+                    arrowImageView.setTranslationX(arrowX - diff);
+                }
             }
         } else {
-            if (arrowX > getMeasuredWidth() - AndroidUtilities.dp(14 + 10)) {
-                float diff = arrowX - getMeasuredWidth() + AndroidUtilities.dp(14 + 10);
-                setTranslationX(diff);
-                arrowImageView.setTranslationX(arrowX - diff);
-            } else if (arrowX < AndroidUtilities.dp(10)) {
-                float diff = arrowX - AndroidUtilities.dp(10);
-                setTranslationX(getTranslationX() + diff);
-                arrowImageView.setTranslationX(arrowX - diff);
-            }
+            arrowImageView.setTranslationX(getMeasuredWidth() / 2f - arrowImageView.getMeasuredWidth() / 2f);
         }
     }
 

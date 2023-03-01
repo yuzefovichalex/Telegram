@@ -193,7 +193,7 @@ public class VoIPNotificationsLayout extends LinearLayout {
             setFocusableInTouchMode(true);
 
             iconView = new ImageView(context);
-            setBackground(Theme.createRoundRectDrawable(AndroidUtilities.dp(16), ColorUtils.setAlphaComponent(Color.BLACK, (int) (255 * 0.4f))));
+            setBackground(Theme.createRoundRectDrawable(AndroidUtilities.dp(16), ColorUtils.setAlphaComponent(Color.BLACK, (int) (255 * 0.1f))));
             addView(iconView, LayoutHelper.createFrame(24, 24, 0, 10, 4, 10, 4));
 
             textView = new TextView(context);
