@@ -17,13 +17,11 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.annotation.FloatRange;
-import androidx.annotation.IntRange;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.Emoji;
-import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaDataController;
 import org.telegram.messenger.R;
@@ -45,7 +43,8 @@ public class VoIPEmojiKeyLayout extends LinearLayout {
 
     private final LinearLayout emojiLayout;
     private final BackupImageView[] emojiViews = new BackupImageView[4];
-    private final Drawable[] emojiDrawables = new Drawable[4];
+    private final Emoji.EmojiDrawable[] staticEmojiDrawables = new Emoji.EmojiDrawable[4];
+    private final AnimatedEmojiDrawable[] animatedEmojiDrawables = new AnimatedEmojiDrawable[4];
     private boolean areEmojiLoaded;
 
     private final HintView hint;
@@ -145,20 +144,19 @@ public class VoIPEmojiKeyLayout extends LinearLayout {
             TLRPC.Document document = MediaDataController.getInstance(account).getEmojiAnimatedSticker(emoji[i]);
             if (document != null) {
                 AnimatedEmojiDrawable drawable = AnimatedEmojiDrawable.make(account, AnimatedEmojiDrawable.CACHE_TYPE_MESSAGES, document);
-                emojiViews[i].setAnimatedEmojiDrawable(drawable);
-                emojiDrawables[i] = drawable;
-            } else {
-                Emoji.preloadEmoji(emoji[i]);
-                Emoji.EmojiDrawable drawable = Emoji.getEmojiDrawable(emoji[i]);
-                if (drawable != null) {
-                    drawable.setBounds(0, 0, AndroidUtilities.dp(EMOJI_ITEM_SIZE_DP), AndroidUtilities.dp(EMOJI_ITEM_SIZE_DP));
-                    drawable.preload();
+                animatedEmojiDrawables[i] = drawable;
+            }
 
-                    emojiViews[i].setImageDrawable(drawable);
-                    emojiViews[i].setContentDescription(emoji[i]);
-                    emojiViews[i].setVisibility(View.GONE);
-                    emojiDrawables[i] = drawable;
-                }
+            Emoji.preloadEmoji(emoji[i]);
+            Emoji.EmojiDrawable emojiDrawable = Emoji.getEmojiDrawable(emoji[i]);
+            if (emojiDrawable != null) {
+                emojiDrawable.setBounds(0, 0, AndroidUtilities.dp(EMOJI_ITEM_SIZE_DP), AndroidUtilities.dp(EMOJI_ITEM_SIZE_DP));
+                emojiDrawable.preload();
+
+                emojiViews[i].setImageDrawable(emojiDrawable);
+                emojiViews[i].setContentDescription(emoji[i]);
+                emojiViews[i].setVisibility(View.GONE);
+                staticEmojiDrawables[i] = emojiDrawable;
             }
         }
         updateAnimatedEmojiState(false);
@@ -169,13 +167,9 @@ public class VoIPEmojiKeyLayout extends LinearLayout {
         int count = 0;
 
         for (int i = 0; i < 4; i++) {
-            Drawable emojiDrawable = emojiDrawables[i];
+            Drawable emojiDrawable = staticEmojiDrawables[i];
             if (emojiDrawable != null) {
-                if (emojiDrawable instanceof Emoji.EmojiDrawable) {
-                    count += ((Emoji.EmojiDrawable) emojiDrawable).isLoaded() ? 1 : 0;
-                } else {
-                    count++;
-                }
+                count++;
             }
         }
 
@@ -241,20 +235,19 @@ public class VoIPEmojiKeyLayout extends LinearLayout {
 
     private void updateAnimatedEmojiState(boolean animate) {
         // TODO add check if all emoji are animated
-        for (Drawable emojiDrawable : emojiDrawables) {
-            if (emojiDrawable instanceof AnimatedEmojiDrawable) {
-                ImageReceiver imageReceiver = ((AnimatedEmojiDrawable) emojiDrawable).getImageReceiver();
-                if (animate) {
-                    imageReceiver.setAllowStartAnimation(true);
-                    imageReceiver.setAllowStartLottieAnimation(true);
-                    imageReceiver.startAnimation();
-                    imageReceiver.invalidate();
+        for (int i = 0; i < 4; i++) {
+            Emoji.EmojiDrawable staticEmojiDrawable = staticEmojiDrawables[i];
+            if (animate) {
+                AnimatedEmojiDrawable animatedEmojiDrawable = animatedEmojiDrawables[i];
+                if (animatedEmojiDrawable != null) {
+                    emojiViews[i].setImageDrawable(null);
+                    emojiViews[i].setAnimatedEmojiDrawable(animatedEmojiDrawable);
                 } else {
-                    imageReceiver.setAllowStartAnimation(false);
-                    imageReceiver.setAllowStartLottieAnimation(false);
-                    imageReceiver.stopAnimation();
-                    imageReceiver.invalidate();
+                    emojiViews[i].setImageDrawable(staticEmojiDrawable);
                 }
+            } else {
+                emojiViews[i].setAnimatedEmojiDrawable(null);
+                emojiViews[i].setImageDrawable(staticEmojiDrawable);
             }
         }
     }
