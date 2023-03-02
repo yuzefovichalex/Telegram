@@ -33,20 +33,15 @@ public class HintView extends FrameLayout {
     public static final int TYPE_COMMON = 4;
     public static final int TYPE_POLL_VOTE = 5;
 
-    public static final int SHOWING_DURATION_INFINITE = -1;
-
     public TextView textView;
     private ImageView imageView;
     private ImageView arrowImageView;
     private ChatMessageCell messageCell;
     private View currentView;
-    private Animator changeAnimator;
-    private Animator showAnimator;
+    private AnimatorSet animatorSet;
     private Runnable hideRunnable;
     private int currentType;
     private boolean isTopArrow;
-
-    private boolean centerArrow;
     private String overrideText;
     private int shownY;
     private float translationY;
@@ -114,31 +109,6 @@ public class HintView extends FrameLayout {
         addView(arrowImageView, LayoutHelper.createFrame(14, 6, Gravity.LEFT | (topArrow ? Gravity.TOP : Gravity.BOTTOM), 0, 0, 0, 0));
     }
 
-    private Animator createDefaultShowAnimator() {
-        AnimatorSet animatorSet = new AnimatorSet();
-        animatorSet.playTogether(
-            ObjectAnimator.ofFloat(this, View.ALPHA, 0.0f, 1.0f)
-        );
-        animatorSet.setDuration(300);
-        return animatorSet;
-    }
-
-    private Animator createDefaultHideAnimator() {
-        AnimatorSet animatorSet = new AnimatorSet();
-        animatorSet.playTogether(
-            ObjectAnimator.ofFloat(this, View.ALPHA, 0.0f)
-        );
-        animatorSet.setDuration(300);
-        return animatorSet;
-    }
-
-    public void setShowAnimator(Animator showAnimator) {
-        if (this.showAnimator != null) {
-            this.showAnimator.cancel();
-        }
-        this.showAnimator = showAnimator;
-    }
-
     public void setBackgroundColor(int background, int text) {
         textView.setTextColor(text);
         arrowImageView.setColorFilter(new PorterDuffColorFilter(background, PorterDuff.Mode.MULTIPLY));
@@ -160,15 +130,9 @@ public class HintView extends FrameLayout {
         setTranslationY(extraTranslationY + translationY);
     }
 
-    public void setCenterArrow(boolean centerArrow) {
-        this.centerArrow = centerArrow;
-    }
-
     public float getBaseTranslationY() {
         return translationY;
     }
-
-    public float getFullTranslationY() { return extraTranslationY + translationY; }
 
     public boolean showForMessageCell(ChatMessageCell cell, boolean animated) {
         return showForMessageCell(cell, null, 0, 0, animated);
@@ -291,26 +255,27 @@ public class HintView extends FrameLayout {
         }
 
         messageCell = cell;
-        if (changeAnimator != null) {
-            changeAnimator.cancel();
-            changeAnimator.removeAllListeners();
-            changeAnimator = null;
+        if (animatorSet != null) {
+            animatorSet.cancel();
+            animatorSet = null;
         }
 
         setTag(1);
         setVisibility(VISIBLE);
         if (animated) {
-            changeAnimator = showAnimator != null ? showAnimator : createDefaultShowAnimator();
-            changeAnimator.addListener(new AnimatorListenerAdapter() {
+            animatorSet = new AnimatorSet();
+            animatorSet.playTogether(
+                ObjectAnimator.ofFloat(this, View.ALPHA, 0.0f, 1.0f)
+            );
+            animatorSet.addListener(new AnimatorListenerAdapter() {
                 @Override
                 public void onAnimationEnd(Animator animation) {
-                    changeAnimator = null;
-                    if (showingDuration > SHOWING_DURATION_INFINITE) {
-                        AndroidUtilities.runOnUIThread(hideRunnable = () -> hide(), currentType == 0 ? 10000 : 2000);
-                    }
+                    animatorSet = null;
+                    AndroidUtilities.runOnUIThread(hideRunnable = () -> hide(), currentType == 0 ? 10000 : 2000);
                 }
             });
-            changeAnimator.start();
+            animatorSet.setDuration(300);
+            animatorSet.start();
         } else {
             setAlpha(1.0f);
         }
@@ -332,26 +297,27 @@ public class HintView extends FrameLayout {
         updatePosition(view);
 
         currentView = view;
-        if (changeAnimator != null) {
-            changeAnimator.cancel();
-            changeAnimator.removeAllListeners();
-            changeAnimator = null;
+        if (animatorSet != null) {
+            animatorSet.cancel();
+            animatorSet = null;
         }
 
         setTag(1);
         setVisibility(VISIBLE);
         if (animated) {
-            changeAnimator = showAnimator != null ? showAnimator : createDefaultShowAnimator();
-            changeAnimator.addListener(new AnimatorListenerAdapter() {
+            animatorSet = new AnimatorSet();
+            animatorSet.playTogether(
+                ObjectAnimator.ofFloat(this, View.ALPHA, 0.0f, 1.0f)
+            );
+            animatorSet.addListener(new AnimatorListenerAdapter() {
                 @Override
                 public void onAnimationEnd(Animator animation) {
-                    changeAnimator = null;
-                    if (showingDuration > SHOWING_DURATION_INFINITE) {
-                        AndroidUtilities.runOnUIThread(hideRunnable = () -> hide(), showingDuration);
-                    }
+                    animatorSet = null;
+                    AndroidUtilities.runOnUIThread(hideRunnable = () -> hide(), showingDuration);
                 }
             });
-            changeAnimator.start();
+            animatorSet.setDuration(300);
+            animatorSet.start();
         } else {
             setAlpha(1.0f);
         }
@@ -416,7 +382,7 @@ public class HintView extends FrameLayout {
             leftMargin = ((MarginLayoutParams) getLayoutParams()).leftMargin;
             rightMargin = ((MarginLayoutParams) getLayoutParams()).rightMargin;
         }
-        if (currentType == 8 && !isTopArrow || centerArrow) {
+        if (currentType == 8 && !isTopArrow) {
             offset = (parentWidth - leftMargin - rightMargin - getMeasuredWidth()) / 2;
         } else if (centerX > parentView.getMeasuredWidth() / 2) {
             if (currentType == TYPE_SEARCH_AS_LIST) {
@@ -443,27 +409,22 @@ public class HintView extends FrameLayout {
             arrowX += AndroidUtilities.dp(2);
         }
         arrowImageView.setTranslationX(arrowX);
-
-        if (!centerArrow) {
-            if (centerX > parentView.getMeasuredWidth() / 2) {
-                if (arrowX < AndroidUtilities.dp(10)) {
-                    float diff = arrowX - AndroidUtilities.dp(10);
-                    setTranslationX(getTranslationX() + diff);
-                    arrowImageView.setTranslationX(arrowX - diff);
-                }
-            } else {
-                if (arrowX > getMeasuredWidth() - AndroidUtilities.dp(14 + 10)) {
-                    float diff = arrowX - getMeasuredWidth() + AndroidUtilities.dp(14 + 10);
-                    setTranslationX(diff);
-                    arrowImageView.setTranslationX(arrowX - diff);
-                } else if (arrowX < AndroidUtilities.dp(10)) {
-                    float diff = arrowX - AndroidUtilities.dp(10);
-                    setTranslationX(getTranslationX() + diff);
-                    arrowImageView.setTranslationX(arrowX - diff);
-                }
+        if (centerX > parentView.getMeasuredWidth() / 2) {
+            if (arrowX < AndroidUtilities.dp(10)) {
+                float diff = arrowX - AndroidUtilities.dp(10);
+                setTranslationX(getTranslationX() + diff);
+                arrowImageView.setTranslationX(arrowX - diff);
             }
         } else {
-            arrowImageView.setTranslationX(getMeasuredWidth() / 2f - arrowImageView.getMeasuredWidth() / 2f);
+            if (arrowX > getMeasuredWidth() - AndroidUtilities.dp(14 + 10)) {
+                float diff = arrowX - getMeasuredWidth() + AndroidUtilities.dp(14 + 10);
+                setTranslationX(diff);
+                arrowImageView.setTranslationX(arrowX - diff);
+            } else if (arrowX < AndroidUtilities.dp(10)) {
+                float diff = arrowX - AndroidUtilities.dp(10);
+                setTranslationX(getTranslationX() + diff);
+                arrowImageView.setTranslationX(arrowX - diff);
+            }
         }
     }
 
@@ -480,28 +441,31 @@ public class HintView extends FrameLayout {
             AndroidUtilities.cancelRunOnUIThread(hideRunnable);
             hideRunnable = null;
         }
-        if (changeAnimator != null) {
-            changeAnimator.cancel();
-            changeAnimator.removeAllListeners();
-            changeAnimator = null;
+        if (animatorSet != null) {
+            animatorSet.cancel();
+            animatorSet = null;
         }
         if (animate) {
-            changeAnimator = createDefaultHideAnimator();
-            changeAnimator.addListener(new AnimatorListenerAdapter() {
+            animatorSet = new AnimatorSet();
+            animatorSet.playTogether(
+                ObjectAnimator.ofFloat(this, View.ALPHA, 0.0f)
+            );
+            animatorSet.addListener(new AnimatorListenerAdapter() {
                 @Override
                 public void onAnimationEnd(Animator animation) {
                     setVisibility(View.INVISIBLE);
                     currentView = null;
                     messageCell = null;
-                    changeAnimator = null;
+                    animatorSet = null;
                 }
             });
-            changeAnimator.start();
+            animatorSet.setDuration(300);
+            animatorSet.start();
         } else {
             setVisibility(View.INVISIBLE);
             currentView = null;
             messageCell = null;
-            changeAnimator = null;
+            animatorSet = null;
         }
     }
 
