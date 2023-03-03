@@ -251,6 +251,10 @@ public class RLottieImageView extends ImageView {
         }
     }
 
+    public long getDuration() {
+        return drawable != null ? drawable.getDuration() : 0;
+    }
+
     public boolean isPlaying() {
         return drawable != null && drawable.isRunning();
     }

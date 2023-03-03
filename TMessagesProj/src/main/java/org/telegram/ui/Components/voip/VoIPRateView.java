@@ -27,9 +27,20 @@ public class VoIPRateView extends LinearLayout {
     private static final int STAR_COUNT = 5;
 
     private static final int STAR_SIZE_DP = 32;
+    private static final int HIGH_RATE_EFFECT_SIZE_DP = STAR_SIZE_DP * 4;
 
     private final LinearLayout starsLayout;
     private final CheckableRLottieImageView[] starViews = new CheckableRLottieImageView[STAR_COUNT];
+
+    private final RLottieImageView highRateEffectView;
+
+    private int lastHighRatePosition;
+    private final Runnable removeHighRateEffect = new Runnable() {
+        @Override
+        public void run() {
+            getOverlay().remove(highRateEffectView);
+        }
+    };
 
     private int rate;
 
@@ -67,7 +78,7 @@ public class VoIPRateView extends LinearLayout {
         description.setText("Please rate the quality of this call.");
         addView(
             description,
-            LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 16)
+            LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 12)
         );
 
         starsLayout = new LinearLayout(context);
@@ -85,12 +96,15 @@ public class VoIPRateView extends LinearLayout {
             starView.setAnimation(R.raw.check_star, STAR_SIZE_DP, STAR_SIZE_DP);
             starView.setOnClickListener(view -> handleClick(position));
             starViews[i] = starView;
-            int leftMargin = i != 0 ? STAR_SIZE_DP / 3 : 0;
+            int leftMargin = i != 0 ? STAR_SIZE_DP / 4 : 0;
             starsLayout.addView(
                 starView,
                 LayoutHelper.createLinear(STAR_SIZE_DP, STAR_SIZE_DP, leftMargin, 0, 0, 0)
             );
         }
+
+        highRateEffectView = new RLottieImageView(context);
+        highRateEffectView.setAnimation(R.raw.high_rate_star_effect, HIGH_RATE_EFFECT_SIZE_DP, HIGH_RATE_EFFECT_SIZE_DP);
 
         setVisibility(GONE);
     }
@@ -159,10 +173,10 @@ public class VoIPRateView extends LinearLayout {
                     setStarChecked(i, false, 150 - 30 * i);
                 }
             }
-            if (position < STAR_COUNT - 2) {
+            if (rate > position + 1 || position < STAR_COUNT - 2) {
                 shakeStar(position, 150);
             } else {
-                //TODO run lottie
+                showHighRateEffectOnStar(position);
             }
         } else {
             for (int i = 0; i <= position; i++) {
@@ -186,6 +200,45 @@ public class VoIPRateView extends LinearLayout {
             .translationY(-starView.getMeasuredHeight() / 2f)
             .setStartDelay(startDelay)
             .withEndAction(shakeAnimation::start);
+    }
+
+    private void showHighRateEffectOnStar(int position) {
+        AndroidUtilities.cancelRunOnUIThread(removeHighRateEffect);
+        highRateEffectView.stopAnimation();
+        getOverlay().remove(highRateEffectView);
+
+        if (highRateEffectView.getMeasuredWidth() == 0) {
+            highRateEffectView.measure(
+                View.MeasureSpec.makeMeasureSpec(AndroidUtilities.dp(HIGH_RATE_EFFECT_SIZE_DP), MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(AndroidUtilities.dp(HIGH_RATE_EFFECT_SIZE_DP), MeasureSpec.EXACTLY)
+            );
+        }
+
+        if (lastHighRatePosition != position) {
+            int[] thisViewLocation = new int[2];
+            getLocationInWindow(thisViewLocation);
+
+            CheckableRLottieImageView starView = starViews[position];
+            int[] starViewLocation = new int[2];
+            starView.getLocationInWindow(starViewLocation);
+
+            int starViewCenterX = starViewLocation[0] - thisViewLocation[0] + starView.getMeasuredWidth() / 2;
+            int starViewCenterY = starViewLocation[1] - thisViewLocation[1] + starView.getMeasuredHeight() / 2;
+
+            int left = starViewCenterX - highRateEffectView.getMeasuredWidth() / 2;
+            int top = starViewCenterY - highRateEffectView.getMeasuredHeight() / 2;
+            int right = left + highRateEffectView.getMeasuredWidth();
+            int bottom = top + highRateEffectView.getMeasuredHeight();
+            highRateEffectView.layout(left, top, right, bottom);
+        }
+
+        getOverlay().add(highRateEffectView);
+        highRateEffectView.setProgress(0f);
+        highRateEffectView.playAnimation();
+
+        AndroidUtilities.runOnUIThread(removeHighRateEffect, highRateEffectView.getDuration());
+
+        lastHighRatePosition = position;
     }
 
 
