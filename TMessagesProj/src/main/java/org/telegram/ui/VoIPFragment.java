@@ -89,6 +89,7 @@ import org.telegram.ui.Components.voip.VoIPHelper;
 import org.telegram.ui.Components.voip.VoIPNotificationsLayout;
 import org.telegram.ui.Components.voip.VoIPOverlayBackground;
 import org.telegram.ui.Components.voip.VoIPPiPView;
+import org.telegram.ui.Components.voip.VoIPRateView;
 import org.telegram.ui.Components.voip.VoIPStatusTextView;
 import org.telegram.ui.Components.voip.VoIPTextureView;
 import org.telegram.ui.Components.voip.VoIPToggleButton;
@@ -140,6 +141,8 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
     
     private TextView emojiRationaleHideButton;
     private VoIPEmojiKeyLayout emojiKeyLayout;
+
+    private VoIPRateView rateView;
 
     LinearLayout statusLayout;
     private VoIPFloatingLayout currentUserCameraFloatingLayout;
@@ -243,6 +246,17 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
     private boolean canZoomGesture;
     ValueAnimator zoomBackAnimator;
     /* === pinch to zoom === */
+
+    private TLRPC.TL_phone_setCallRating callRateRequest;
+    private final Runnable finishWindowRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (callRateRequest != null) {
+                VoIPHelper.sendSimpleCallRateData(currentAccount, callRateRequest);
+            }
+            windowView.finish();
+        }
+    };
 
     public static void show(Activity activity, int account) {
         show(activity, false, account);
@@ -441,6 +455,7 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.emojiLoaded);
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.closeInCallActivity);
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.webRtcMicAmplitudeEvent);
+        NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.callRateNeeded);
     }
 
     private void destroy() {
@@ -452,6 +467,7 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
         NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.emojiLoaded);
         NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.closeInCallActivity);
         NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.webRtcMicAmplitudeEvent);
+        NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.callRateNeeded);
     }
 
     @Override
@@ -482,6 +498,9 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
         } else if (id == NotificationCenter.webRtcMicAmplitudeEvent) {
             float micAmplitude = ((float) args[0]) * 30f;
             callingUserPhotoViewMini.setAmplitude(micAmplitude);
+        } else if (id == NotificationCenter.callRateNeeded) {
+            createCallRateRequest(args);
+            showCallRate();
         }
     }
 
@@ -931,6 +950,9 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
         statusLayout.setPadding(0, 0, 0, AndroidUtilities.dp(15));
 
         frameLayout.addView(statusLayout, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 0, 92, 0, 0));
+
+        rateView = new VoIPRateView(context);
+        rateView.setOnRateChangeListener(this::handleCallRateChange);
 
         buttonsLayout = new VoIPButtonsLayout(context);
         for (int i = 0; i < 4; i++) {
@@ -1503,7 +1525,7 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
                 break;
             case VoIPService.STATE_ENDED:
                 currentUserTextureView.saveCameraLastBitmap();
-                AndroidUtilities.runOnUIThread(() -> windowView.finish(), 200);
+                AndroidUtilities.runOnUIThread(finishWindowRunnable, 200);
                 break;
             case VoIPService.STATE_FAILED:
                 statusTextView.setText(LocaleController.getString("VoipFailed", R.string.VoipFailed), false, animated);
@@ -1773,6 +1795,38 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
         if (previousState != currentState) {
             animateCallingUserPhotoMini(currentState);
         }
+    }
+
+    private void createCallRateRequest(Object... args) {
+        callRateRequest = new TLRPC.TL_phone_setCallRating();
+        callRateRequest.peer = new TLRPC.TL_inputPhoneCall();
+        callRateRequest.peer.id = (long) args[0];
+        callRateRequest.peer.access_hash = (long) args[1];
+        callRateRequest.user_initiative = false;
+    }
+
+    private void showCallRate() {
+        AndroidUtilities.cancelRunOnUIThread(finishWindowRunnable);
+
+        FrameLayout.LayoutParams lp = LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.TOP);
+        lp.setMargins(
+            AndroidUtilities.dp(40),
+            (int) (statusLayout.getY()) + statusLayout.getMeasuredHeight() + AndroidUtilities.dp(32),
+            AndroidUtilities.dp(40),
+            0
+        );
+        fragmentView.addView(rateView, lp);
+        rateView.show();
+    }
+
+    private void handleCallRateChange(int rate) {
+        AndroidUtilities.cancelRunOnUIThread(finishWindowRunnable);
+
+        if (callRateRequest != null) {
+            callRateRequest.rating = rate;
+        }
+
+        AndroidUtilities.runOnUIThread(finishWindowRunnable, 5000);
     }
 
     private void revealInCallAnimatedBackground() {

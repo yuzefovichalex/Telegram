@@ -277,6 +277,8 @@ public class NotificationCenter {
     public static int chatSwithcedToForum = totalEvents++;
     public static int didUpdateGlobalAutoDeleteTimer = totalEvents++;
 
+    public static final int callRateNeeded = totalEvents++;
+
     public static boolean alreadyLogged;
 
     private SparseArray<ArrayList<NotificationCenterDelegate>> observers = new SparseArray<>();

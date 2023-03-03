@@ -9,6 +9,7 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.dynamicanimation.animation.DynamicAnimation;
 import androidx.dynamicanimation.animation.SpringAnimation;
 import androidx.dynamicanimation.animation.SpringForce;
@@ -43,6 +44,9 @@ public class VoIPRateView extends LinearLayout {
     };
 
     private int rate;
+
+    @Nullable
+    private OnRateChangeListener onRateChangeListener;
 
 
     public VoIPRateView(@NonNull Context context) {
@@ -107,6 +111,11 @@ public class VoIPRateView extends LinearLayout {
         highRateEffectView.setAnimation(R.raw.high_rate_star_effect, HIGH_RATE_EFFECT_SIZE_DP, HIGH_RATE_EFFECT_SIZE_DP);
 
         setVisibility(GONE);
+    }
+
+
+    public void setOnRateChangeListener(@Nullable OnRateChangeListener onRateChangeListener) {
+        this.onRateChangeListener = onRateChangeListener;
     }
 
     public void show() {
@@ -185,6 +194,10 @@ public class VoIPRateView extends LinearLayout {
         }
 
         rate = position + 1;
+
+        if (onRateChangeListener != null) {
+            onRateChangeListener.onRateChange(rate);
+        }
     }
 
     private void setStarChecked(int position, boolean checked, int delay) {
@@ -292,6 +305,10 @@ public class VoIPRateView extends LinearLayout {
                 .withEndAction(scaleXAnimation::start);
         }
 
+    }
+
+    public interface OnRateChangeListener {
+        void onRateChange(int rate);
     }
 
 }

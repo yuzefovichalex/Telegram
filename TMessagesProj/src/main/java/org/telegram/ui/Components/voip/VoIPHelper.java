@@ -611,6 +611,10 @@ public class VoIPHelper {
 		});
 	}
 
+	public static void sendSimpleCallRateData(final int account, TLRPC.TL_phone_setCallRating req) {
+		ConnectionsManager.getInstance(account).sendRequest(req, (response, error) -> { });
+	}
+
 	private static File getLogFile(long callID) {
 		if (BuildVars.DEBUG_VERSION) {
 			File debugLogsDir = new File(ApplicationLoader.applicationContext.getExternalFilesDir(null), "logs");

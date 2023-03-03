@@ -99,7 +99,7 @@ public class VoIPEmojiKeyLayout extends LinearLayout {
         title.setText("This call is end-to-end encrypted.");
         addView(
             title,
-            LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 8)
+            LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 4)
         );
 
         description = new TextView(context);
