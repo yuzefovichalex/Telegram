@@ -111,10 +111,20 @@ public class RLottieImageView extends ImageView {
     }
 
     public void setReverse() {
+        setReverse(true);
+    }
+
+    public void setReverse(boolean reverse) {
         if (drawable != null) {
-            drawable.setPlayInDirectionOfCustomEndFrame(true);
-            drawable.setCurrentFrame(drawable.getFramesCount());
-            drawable.setCustomEndFrame(0);
+            if (reverse) {
+                drawable.setPlayInDirectionOfCustomEndFrame(true);
+                drawable.setCurrentFrame(drawable.getFramesCount());
+                drawable.setCustomEndFrame(0);
+            } else {
+                drawable.setPlayInDirectionOfCustomEndFrame(false);
+                drawable.setCurrentFrame(0);
+                drawable.setCustomEndFrame(-1);
+            }
         }
     }
 
