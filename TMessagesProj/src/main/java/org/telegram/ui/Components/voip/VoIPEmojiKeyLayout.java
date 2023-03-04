@@ -97,7 +97,7 @@ public class VoIPEmojiKeyLayout extends LinearLayout {
         title.setTypeface(AndroidUtilities.getTypeface(AndroidUtilities.TYPEFACE_ROBOTO_MEDIUM));
         title.setGravity(Gravity.CENTER);
         title.setTextColor(Color.WHITE);
-        title.setText("This call is end-to-end encrypted.");
+        title.setText(LocaleController.getString(R.string.CallEmojiKeyEncrypted));
         addView(
             title,
             LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 4)

@@ -15,6 +15,7 @@ import androidx.dynamicanimation.animation.SpringAnimation;
 import androidx.dynamicanimation.animation.SpringForce;
 
 import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.R;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.CubicBezierInterpolator;
@@ -70,7 +71,7 @@ public class VoIPRateView extends LinearLayout {
         title.setTypeface(AndroidUtilities.getTypeface(AndroidUtilities.TYPEFACE_ROBOTO_MEDIUM));
         title.setGravity(Gravity.CENTER);
         title.setTextColor(Color.WHITE);
-        title.setText("Rate this call");
+        title.setText(LocaleController.getString(R.string.VoipCallRatingTitle));
         addView(
             title,
             LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 4)
@@ -79,7 +80,7 @@ public class VoIPRateView extends LinearLayout {
         TextView description = new TextView(context);
         description.setGravity(Gravity.CENTER);
         description.setTextColor(Color.WHITE);
-        description.setText("Please rate the quality of this call.");
+        description.setText(LocaleController.getString(R.string.VoipCallRatingDescription));
         addView(
             description,
             LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 12)

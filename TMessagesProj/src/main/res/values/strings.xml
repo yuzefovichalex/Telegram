@@ -3941,6 +3941,8 @@
     <string name="VoipVoiceChat">Ongoing Voice Chat</string>
     <string name="VoipLiveStream">Ongoing Live Stream</string>
     <string name="VoipEndCall">End call</string>
+    <string name="VoipCallRatingTitle">Rate this call</string>
+    <string name="VoipCallRatingDescription">Please rate the quality of this call.</string>
     <string name="VoipOngoingAlertTitle">Another call in progress</string>
     <string name="VoipOngoingAlert">You currently have an ongoing call with **%1$s**. Would you like to hang up and start a new one with **%2$s**?</string>
     <string name="VoipOngoingAlert2">End call with **%1$s** and start voice chat in **%2$s**?</string>
@@ -4010,6 +4012,7 @@
     <string name="VoipOutputDevices">Output Devices</string>
     <string name="ReturnToCall">RETURN TO CALL</string>
     <string name="CallNotAvailable">Sorry, **%1$s** doesn\'t accept calls.</string>
+    <string name="CallEmojiKeyEncrypted">This call is end-to-end encrypted.</string>
     <string name="CallEmojiKeyTooltip">If emoji on %1$s\'s screen are the same, this call is 100%% secure.</string>
     <string name="CallMessageReportProblem">Rate Call</string>
     <string name="CallReportHint">What went wrong?</string>
