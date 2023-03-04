@@ -16,10 +16,12 @@ import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.graphics.ColorUtils;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.R;
+import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.CubicBezierInterpolator;
 import org.telegram.ui.Components.LayoutHelper;
 
@@ -28,6 +30,7 @@ public class VoIPStatusTextView extends FrameLayout {
     LoadingLayout[] statusLayouts = new LoadingLayout[2];
     LoadingLayout reconnectLayout;
     VoIPTimerView timerView;
+    private final TextView weakSignalView;
 
     CharSequence nextTextToSet;
     boolean animationInProgress;
@@ -50,6 +53,15 @@ public class VoIPStatusTextView extends FrameLayout {
 
         timerView = new VoIPTimerView(context);
         addView(timerView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+        
+        weakSignalView = new TextView(context);
+        weakSignalView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
+        weakSignalView.setTextColor(Color.WHITE);
+        weakSignalView.setText(LocaleController.getString(R.string.VoipWeakSignal));
+        weakSignalView.setBackground(Theme.createRoundRectDrawable(AndroidUtilities.dp(16), ColorUtils.setAlphaComponent(Color.BLACK, (int) (255 * 0.1f))));
+        weakSignalView.setPadding(AndroidUtilities.dp(16), AndroidUtilities.dp(4), AndroidUtilities.dp(16), AndroidUtilities.dp(4));
+        weakSignalView.setVisibility(View.GONE);
+        addView(weakSignalView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 0, 28, 0, 0));
     }
 
     public void setText(String text, boolean ellipsis, boolean animated) {
@@ -75,6 +87,7 @@ public class VoIPStatusTextView extends FrameLayout {
 
             if (timerShowing) {
                 statusLayouts[0].setText(text);
+                statusLayouts[0].setLoadingVisible(ellipsis);
                 replaceViews(timerView, statusLayouts[0], null);
             } else {
                 if (!statusLayouts[0].getText().equals(text)) {
@@ -187,6 +200,10 @@ public class VoIPStatusTextView extends FrameLayout {
     }
 
     public void showReconnect(boolean showReconnecting, boolean animated) {
+        if (weakSignalView.getVisibility() == VISIBLE) {
+            showWeakSignal(false);
+        }
+
         if (!animated) {
             reconnectLayout.animate().setListener(null).cancel();
             reconnectLayout.setVisibility(showReconnecting ? View.VISIBLE : View.GONE);
@@ -206,6 +223,38 @@ public class VoIPStatusTextView extends FrameLayout {
                     }
                 }).setDuration(150).start();
             }
+        }
+    }
+    
+    public void showWeakSignal(boolean showWeakSignal) {
+        if (reconnectLayout.getVisibility() == VISIBLE) {
+            showReconnect(false, true);
+        }
+
+        if (showWeakSignal) {
+            if (weakSignalView.getVisibility() != View.VISIBLE) {
+                weakSignalView.setVisibility(View.VISIBLE);
+                weakSignalView.setAlpha(0);
+                weakSignalView.setScaleX(0f);
+                weakSignalView.setScaleY(0f);
+            }
+            weakSignalView.animate().setListener(null).cancel();
+            weakSignalView.animate()
+                .alpha(1f)
+                .scaleX(1f)
+                .scaleY(1f)
+                .setDuration(150)
+                .setInterpolator(CubicBezierInterpolator.DEFAULT)
+                .start();
+        } else {
+            weakSignalView.animate()
+                .alpha(0)
+                .scaleX(0f)
+                .scaleY(0f)
+                .setDuration(150)
+                .setInterpolator(CubicBezierInterpolator.DEFAULT)
+                .withEndAction(() -> weakSignalView.setVisibility(View.GONE))
+                .start();
         }
     }
     

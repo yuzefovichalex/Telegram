@@ -3932,6 +3932,7 @@
     <string name="VoipHangingUp">Hanging up</string>
     <string name="VoipCallEnded">Call Ended</string>
     <string name="VoipFailed">Failed to connect</string>
+    <string name="VoipWeakSignal">Weak network signal</string>
     <string name="VoipRinging">Ringing</string>
     <string name="VoipBusy">Line busy</string>
     <string name="VoipInCallBranding">Telegram Call</string>
