@@ -32,7 +32,6 @@ import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.ViewAnimationUtils;
 import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.view.WindowInsets;
@@ -79,7 +78,6 @@ import org.telegram.ui.Components.BackupImageView;
 import org.telegram.ui.Components.CubicBezierInterpolator;
 import org.telegram.ui.Components.HintView;
 import org.telegram.ui.Components.LayoutHelper;
-import org.telegram.ui.Components.MotionBackgroundDrawable;
 import org.telegram.ui.Components.TextViewSwitcher;
 import org.telegram.ui.Components.voip.AcceptDeclineView;
 import org.telegram.ui.Components.voip.PrivateVideoPreviewDialog;
@@ -1480,7 +1478,7 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
                 updateEmojiKey();
                 showTimer = true;
                 if (currentState == VoIPService.STATE_ESTABLISHED) {
-                    revealInCallAnimatedBackground();
+                    handleCallEstablish();
                 }
                 if (currentState == VoIPService.STATE_RECONNECTING) {
                     showReconnecting = true;
@@ -1826,13 +1824,15 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
         AndroidUtilities.runOnUIThread(finishWindowRunnable, 5000);
     }
 
-    private void revealInCallAnimatedBackground() {
-        int[] callingUserPhotoLocation = new int[2];
-        callingUserPhotoViewMini.getLocationOnScreen(callingUserPhotoLocation);
-        int centerX = callingUserPhotoLocation[0] + callingUserPhotoViewMini.getMeasuredWidth() / 2;
-        int centerY = callingUserPhotoLocation[1] + callingUserPhotoViewMini.getMeasuredHeight() / 2;
-        float startRadius = callingUserPhotoViewMini.getMeasuredWidth();
-        overlayGradientBackground.handleCallEstablish(centerX, centerY, startRadius);
+    private void handleCallEstablish() {
+        if (overlayGradientBackground.isAttachedToWindow()) {
+            int[] callingUserPhotoLocation = new int[2];
+            callingUserPhotoViewMini.getLocationOnScreen(callingUserPhotoLocation);
+            int centerX = callingUserPhotoLocation[0] + callingUserPhotoViewMini.getMeasuredWidth() / 2;
+            int centerY = callingUserPhotoLocation[1] + callingUserPhotoViewMini.getMeasuredHeight() / 2;
+            float startRadius = callingUserPhotoViewMini.getMeasuredWidth();
+            overlayGradientBackground.handleCallEstablish(centerX, centerY, startRadius);
+        }
     }
 
     private void animateCallingUserPhotoMini(int state) {
@@ -2216,6 +2216,8 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
             bottomButtons[3].setOnClickListener(view -> {
                 if (VoIPService.getSharedInstance() != null) {
                     VoIPService.getSharedInstance().hangUp();
+                } else {
+                    AndroidUtilities.runOnUIThread(finishWindowRunnable);
                 }
             });
         }
