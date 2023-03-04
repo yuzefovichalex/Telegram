@@ -2971,7 +2971,6 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 
 	@Override
 	public void onDestroy() {
-		forceRating();
 		if (BuildVars.LOGS_ENABLED) {
 			FileLog.d("=============== VoIPService STOPPING ===============");
 		}
