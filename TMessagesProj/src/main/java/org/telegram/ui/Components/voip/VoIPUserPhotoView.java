@@ -9,6 +9,7 @@ import android.view.View;
 import androidx.annotation.NonNull;
 
 import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.ImageLocation;
 import org.telegram.messenger.ImageReceiver;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.Components.AvatarDrawable;
@@ -33,8 +34,6 @@ public class VoIPUserPhotoView extends View {
 
     public VoIPUserPhotoView(@NonNull Context context) {
         super(context);
-
-        avatarImageReceiver.setImage(null, null, avatarDrawable, null, 0);
 
         tinyWaveDrawable = new BlobDrawable(9);
         bigWaveDrawable = new BlobDrawable(12);
@@ -104,6 +103,8 @@ public class VoIPUserPhotoView extends View {
         if (user != null) {
             avatarDrawable.setInfo(user.id, user.first_name, user.last_name, null);
         }
+
+        avatarImageReceiver.setImage(ImageLocation.getForUserOrChat(user, ImageLocation.TYPE_BIG), null, avatarDrawable, null, user, 0);
     }
 
     public void setAmplitude(double value) {
