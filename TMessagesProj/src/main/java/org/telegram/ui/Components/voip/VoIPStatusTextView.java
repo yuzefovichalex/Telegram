@@ -223,6 +223,10 @@ public class VoIPStatusTextView extends FrameLayout {
         timerView.setSignalBarCount(count);
     }
 
+    public void setCallEnded() {
+        timerView.setCallEnded();
+    }
+
     public void showReconnect(boolean showReconnecting, boolean animated) {
         if (!animated) {
             reconnectTextView.animate().setListener(null).cancel();

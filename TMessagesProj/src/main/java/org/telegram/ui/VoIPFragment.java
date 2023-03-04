@@ -80,6 +80,7 @@ import org.telegram.ui.Components.CubicBezierInterpolator;
 import org.telegram.ui.Components.HintView;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.MotionBackgroundDrawable;
+import org.telegram.ui.Components.TextViewSwitcher;
 import org.telegram.ui.Components.voip.AcceptDeclineView;
 import org.telegram.ui.Components.voip.PrivateVideoPreviewDialog;
 import org.telegram.ui.Components.voip.VoIPButtonsLayout;
@@ -133,6 +134,7 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
     private VoIPUserPhotoView callingUserPhotoViewMini;
     private ValueAnimator callingUserPhotoViewAnimator;
 
+    private TextViewSwitcher titleSwitcher;
     private TextView callingUserTitle;
 
     private VoIPStatusTextView statusTextView;
@@ -500,7 +502,7 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
             callingUserPhotoViewMini.setAmplitude(micAmplitude);
         } else if (id == NotificationCenter.callRateNeeded) {
             createCallRateRequest(args);
-            showCallRate();
+            displayCallEndedWithRatingState();
         }
     }
 
@@ -939,7 +941,19 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
         callingUserTitle.setTextColor(Color.WHITE);
         callingUserTitle.setGravity(Gravity.CENTER_HORIZONTAL);
         callingUserTitle.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        statusLayout.addView(callingUserTitle, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 0, 0, 0, 6));
+
+        TextView callEndedTitle = new TextView(context);
+        callEndedTitle.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 24);
+        callEndedTitle.setText(LocaleController.getString(R.string.VoipCallEnded));
+        callEndedTitle.setShadowLayer(AndroidUtilities.dp(3), 0, AndroidUtilities.dp(.666666667f), 0x4C000000);
+        callEndedTitle.setTextColor(Color.WHITE);
+        callEndedTitle.setGravity(Gravity.CENTER_HORIZONTAL);
+        callEndedTitle.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+
+        titleSwitcher = new TextViewSwitcher(context);
+        titleSwitcher.addView(callingUserTitle);
+        titleSwitcher.addView(callEndedTitle);
+        statusLayout.addView(titleSwitcher, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 0, 0, 0, 6));
 
         statusTextView = new VoIPStatusTextView(context);
         ViewCompat.setImportantForAccessibility(statusTextView, ViewCompat.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
@@ -1805,18 +1819,52 @@ public class VoIPFragment implements VoIPService.StateListener, NotificationCent
         callRateRequest.user_initiative = false;
     }
 
-    private void showCallRate() {
+    private void displayCallEndedWithRatingState() {
         AndroidUtilities.cancelRunOnUIThread(finishWindowRunnable);
+
+        displayCallEndedState();
 
         FrameLayout.LayoutParams lp = LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.TOP);
         lp.setMargins(
             AndroidUtilities.dp(40),
-            (int) (statusLayout.getY()) + statusLayout.getMeasuredHeight() + AndroidUtilities.dp(32),
+            (int) (statusLayout.getY()) + statusLayout.getMeasuredHeight() - AndroidUtilities.dp(40) + AndroidUtilities.dp(32),
             AndroidUtilities.dp(40),
             0
         );
         fragmentView.addView(rateView, lp);
         rateView.show();
+    }
+
+    private void displayCallEndedState() {
+        hideEmojiKey();
+
+        float contentOffset = -AndroidUtilities.dp(40);
+
+        // TODO hide waves fully
+        callingUserPhotoViewMini.setAmplitude(0);
+        callingUserPhotoViewMini.animate()
+            .translationYBy(contentOffset)
+            .setInterpolator(CubicBezierInterpolator.DEFAULT)
+            .setDuration(300);
+
+        titleSwitcher.setText(LocaleController.getString(R.string.VoipCallEnded));
+
+        statusTextView.setCallEnded();
+
+        statusLayout.animate()
+            .translationYBy(contentOffset)
+            .setInterpolator(CubicBezierInterpolator.DEFAULT)
+            .setDuration(300);
+    }
+
+    private void hideEmojiKey() {
+        long delay = 0;
+        if (emojiKeyLayout.isExpanded()) {
+            delay = VoIPEmojiKeyLayout.COLLAPSE_ANIMATION_DURATION;
+            expandEmojiRationale(false);
+        }
+
+        AndroidUtilities.runOnUIThread(() -> emojiKeyLayout.hide(), delay);
     }
 
     private void handleCallRateChange(int rate) {

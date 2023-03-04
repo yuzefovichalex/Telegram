@@ -157,7 +157,6 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 	public static final int STATE_RECONNECTING = Instance.STATE_RECONNECTING;
 	public static final int STATE_CREATING = 6;
 	public static final int STATE_ENDED = 11;
-	public static final int STATE_ENDED_WITH_RATE = 12;
 	public static final String ACTION_HEADSET_PLUG = "android.intent.action.HEADSET_PLUG";
 
 	private static final int ID_ONGOING_CALL_NOTIFICATION = 201;
@@ -4214,7 +4213,9 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 		if (groupCall != null && (!playedConnectedSound || onDestroyRunnable != null)) {
 			needPlayEndSound = false;
 		}
-		AndroidUtilities.runOnUIThread(() -> dispatchStateChanged(needRateCall ? STATE_ENDED_WITH_RATE : STATE_ENDED));
+		if (!needRateCall) {
+			AndroidUtilities.runOnUIThread(() -> dispatchStateChanged(STATE_ENDED));
+		}
 		int delay = 700;
 		Utilities.globalQueue.postRunnable(() -> {
 			if (spPlayId != 0) {

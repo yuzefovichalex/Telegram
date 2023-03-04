@@ -254,6 +254,13 @@ public class VoIPRateView extends LinearLayout {
         lastHighRatePosition = position;
     }
 
+    @Override
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+
+        setPivotX(getMeasuredWidth() / 2f);
+        setPivotY(getMeasuredHeight());
+    }
 
     private static class CheckableRLottieImageView extends RLottieImageView implements Checkable {
 

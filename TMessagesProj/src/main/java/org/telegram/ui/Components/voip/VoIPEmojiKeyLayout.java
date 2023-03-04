@@ -37,14 +37,15 @@ import org.telegram.ui.Components.LayoutHelper;
 public class VoIPEmojiKeyLayout extends LinearLayout {
 
     private static final int BACKGROUND_COLOR = 0x20000000;
+    private static final int EMOJI_COUNT = 4;
     private static final int EMOJI_ITEM_SIZE_DP = 40;
     public static final long EXPAND_ANIMATION_DURATION = 300;
     public static final long COLLAPSE_ANIMATION_DURATION = 200;
 
     private final LinearLayout emojiLayout;
-    private final BackupImageView[] emojiViews = new BackupImageView[4];
-    private final Emoji.EmojiDrawable[] staticEmojiDrawables = new Emoji.EmojiDrawable[4];
-    private final AnimatedEmojiDrawable[] animatedEmojiDrawables = new AnimatedEmojiDrawable[4];
+    private final BackupImageView[] emojiViews = new BackupImageView[EMOJI_COUNT];
+    private final Emoji.EmojiDrawable[] staticEmojiDrawables = new Emoji.EmojiDrawable[EMOJI_COUNT];
+    private final AnimatedEmojiDrawable[] animatedEmojiDrawables = new AnimatedEmojiDrawable[EMOJI_COUNT];
     private boolean areEmojiLoaded;
 
     private final HintView hint;
@@ -77,7 +78,7 @@ public class VoIPEmojiKeyLayout extends LinearLayout {
         emojiLayout = new LinearLayout(context);
         emojiLayout.setOrientation(HORIZONTAL);
         emojiLayout.setGravity(Gravity.CENTER_HORIZONTAL);
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < EMOJI_COUNT; i++) {
             BackupImageView emojiView = new BackupImageView(context);
             emojiViews[i] = emojiView;
             emojiLayout.addView(
@@ -140,7 +141,7 @@ public class VoIPEmojiKeyLayout extends LinearLayout {
 
     public void loadEmojis(int account, @NonNull byte[] encryptedKeySha256) {
         String[] emoji = EncryptionKeyEmojifier.emojifyForCall(encryptedKeySha256);
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < EMOJI_COUNT; i++) {
             TLRPC.Document document = MediaDataController.getInstance(account).getEmojiAnimatedSticker(emoji[i]);
             if (document != null) {
                 AnimatedEmojiDrawable drawable = AnimatedEmojiDrawable.make(account, AnimatedEmojiDrawable.CACHE_TYPE_MESSAGES, document);
@@ -166,28 +167,33 @@ public class VoIPEmojiKeyLayout extends LinearLayout {
     private void checkEmojiLoaded() {
         int count = 0;
 
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < EMOJI_COUNT; i++) {
             Drawable emojiDrawable = staticEmojiDrawables[i];
             if (emojiDrawable != null) {
                 count++;
             }
         }
 
-        if (count == 4) {
+        if (count == EMOJI_COUNT) {
             areEmojiLoaded = true;
-            for (int i = 0; i < 4; i++) {
-                if (emojiViews[i].getVisibility() != View.VISIBLE) {
-                    emojiViews[i].setVisibility(View.VISIBLE);
-                    emojiViews[i].setAlpha(0f);
-                    emojiViews[i].setTranslationY(AndroidUtilities.dp(30));
-                    emojiViews[i].animate()
-                        .alpha(1f)
-                        .translationY(0f)
-                        .setDuration(200)
-                        .setStartDelay(20 * i);
-                }
-            }
+            show();
             showHint();
+        }
+    }
+
+    public void show() {
+        for (int i = 0; i < EMOJI_COUNT; i++) {
+            if (emojiViews[i].getVisibility() != View.VISIBLE) {
+                emojiViews[i].setVisibility(View.VISIBLE);
+                emojiViews[i].setAlpha(0f);
+                emojiViews[i].setTranslationY(AndroidUtilities.dp(30));
+                emojiViews[i].animate()
+                    .alpha(1f)
+                    .translationY(0f)
+                    .setInterpolator(CubicBezierInterpolator.DEFAULT)
+                    .setDuration(200)
+                    .setStartDelay(20 * i);
+            }
         }
     }
 
@@ -233,9 +239,40 @@ public class VoIPEmojiKeyLayout extends LinearLayout {
         isExpanded = false;
     }
 
+    public void hide() {
+        long delay = 0;
+        if (isExpanded) {
+            delay = COLLAPSE_ANIMATION_DURATION;
+            collapse(true);
+        }
+
+        AndroidUtilities.runOnUIThread(() -> {
+            for (int i = 0; i < EMOJI_COUNT; i++) {
+                emojiViews[i].setAlpha(1f);
+                emojiViews[i].setScaleX(1f);
+                emojiViews[i].setScaleY(1f);
+                emojiViews[i].animate()
+                    .alpha(0f)
+                    .scaleX(0f)
+                    .scaleY(0f)
+                    .setInterpolator(CubicBezierInterpolator.DEFAULT)
+                    .setDuration(200);
+            }
+        }, delay);
+
+        hideHint();
+    }
+
     private void updateAnimatedEmojiState(boolean animate) {
-        // TODO add check if all emoji are animated
-        for (int i = 0; i < 4; i++) {
+        if (animate) {
+            for (int i = 0; i < EMOJI_COUNT; i++) {
+                if (animatedEmojiDrawables[i] == null) {
+                    return;
+                }
+            }
+        }
+
+        for (int i = 0; i < EMOJI_COUNT; i++) {
             Emoji.EmojiDrawable staticEmojiDrawable = staticEmojiDrawables[i];
             if (animate) {
                 AnimatedEmojiDrawable animatedEmojiDrawable = animatedEmojiDrawables[i];
