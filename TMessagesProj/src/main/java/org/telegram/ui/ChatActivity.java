@@ -37,6 +37,7 @@ import android.graphics.Matrix;
 import android.graphics.Outline;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.PixelFormat;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
 import android.graphics.PorterDuffXfermode;
@@ -48,6 +49,7 @@ import android.graphics.Typeface;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
+import android.opengl.GLSurfaceView;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Looper;
@@ -67,6 +69,7 @@ import android.text.style.ClickableSpan;
 import android.text.style.ForegroundColorSpan;
 import android.text.style.ImageSpan;
 import android.text.style.URLSpan;
+import android.util.DisplayMetrics;
 import android.util.Log;
 import android.util.Pair;
 import android.util.Property;
@@ -233,6 +236,7 @@ import org.telegram.ui.Components.CombinedDrawable;
 import org.telegram.ui.Components.CounterView;
 import org.telegram.ui.Components.CrossfadeDrawable;
 import org.telegram.ui.Components.CubicBezierInterpolator;
+import org.telegram.ui.Components.DeleteEffect.DeleteMessageEffectRenderer;
 import org.telegram.ui.Components.EditTextBoldCursor;
 import org.telegram.ui.Components.EditTextCaption;
 import org.telegram.ui.Components.EmbedBottomSheet;
@@ -1069,6 +1073,9 @@ public class ChatActivity extends BaseFragment implements NotificationCenter.Not
 
     private ValueAnimator searchExpandAnimator;
     private float searchExpandProgress;
+
+    private GLSurfaceView deleteMessageSurfaceView;
+    private DeleteMessageEffectRenderer deleteMessageEffectRenderer;
 
     public static ChatActivity of(long dialogId) {
         Bundle bundle = new Bundle();
@@ -2832,6 +2839,9 @@ public class ChatActivity extends BaseFragment implements NotificationCenter.Not
             progressDialogCurrent = null;
         }
         chatMessagesMetadataController.onFragmentDestroy();
+
+        FrameLayout activityRoot = getParentActivity().findViewById(android.R.id.content);
+        activityRoot.removeView(deleteMessageSurfaceView);
     }
 
     private static class ChatActivityTextSelectionHelper extends TextSelectionHelper.ChatListTextSelectionHelper {
@@ -7328,6 +7338,25 @@ public class ChatActivity extends BaseFragment implements NotificationCenter.Not
                 updateReactionsMentionButton(false);
             }
         }
+
+        FrameLayout rootView = getParentActivity().findViewById(android.R.id.content);
+        deleteMessageEffectRenderer = new DeleteMessageEffectRenderer(
+            context,
+            rootView.getMeasuredWidth(),
+            rootView.getMeasuredHeight()
+        );
+
+        deleteMessageSurfaceView = new GLSurfaceView(context);
+        deleteMessageSurfaceView.setEGLContextClientVersion(2);
+        deleteMessageSurfaceView.setZOrderOnTop(true);
+        deleteMessageSurfaceView.setEGLConfigChooser(8, 8, 8, 8, 16, 0);
+        deleteMessageSurfaceView.getHolder().setFormat(PixelFormat.RGBA_8888);
+        deleteMessageSurfaceView.setRenderer(deleteMessageEffectRenderer);
+
+        contentView.addView(deleteMessageSurfaceView);
+        contentView.setDelegate((keyboardHeight, isWidthGreater) -> {
+            deleteMessageEffectRenderer.setTargetContainerHeight(contentView.getMeasuredHeight());
+        });
 
         return fragmentView;
     }
@@ -23663,6 +23692,8 @@ public class ChatActivity extends BaseFragment implements NotificationCenter.Not
         }
 
         flagSecure.attach();
+
+        deleteMessageSurfaceView.onResume();
     }
 
     public float getPullingDownOffset() {
@@ -23829,6 +23860,8 @@ public class ChatActivity extends BaseFragment implements NotificationCenter.Not
         if (AvatarPreviewer.hasVisibleInstance()) {
             AvatarPreviewer.getInstance().close();
         }
+
+        deleteMessageSurfaceView.onPause();
     }
 
     public void applyDraftMaybe(boolean canClear) {
@@ -29663,6 +29696,7 @@ public class ChatActivity extends BaseFragment implements NotificationCenter.Not
                             chatListItemAnimator.onGreetingStickerTransition(holder, greetingsViewContainer);
                         }
                     }
+                    messageCell.setVisibility(View.VISIBLE);
                 } else if (view instanceof ChatActionCell) {
                     ChatActionCell actionCell = (ChatActionCell) view;
                     actionCell.setMessageObject(message);
@@ -30011,6 +30045,9 @@ public class ChatActivity extends BaseFragment implements NotificationCenter.Not
             if (BuildVars.LOGS_ENABLED) {
                 FileLog.d("notify item removed " + position);
             }
+
+            startDeleteMessageEffect(position);
+
             if (!fragmentBeginToShow) {
                 chatListView.setItemAnimator(null);
             } else if (chatListView.getItemAnimator() != chatListItemAnimator) {
@@ -30029,6 +30066,11 @@ public class ChatActivity extends BaseFragment implements NotificationCenter.Not
             if (BuildVars.LOGS_ENABLED) {
                 FileLog.d("notify item range removed" + positionStart + ":" + itemCount);
             }
+
+            for (int i = positionStart; i < positionStart + itemCount; i++) {
+                startDeleteMessageEffect(i);
+            }
+
             if (!fragmentBeginToShow) {
                 chatListView.setItemAnimator(null);
             } else if (chatListView.getItemAnimator() != chatListItemAnimator) {
@@ -30039,6 +30081,41 @@ public class ChatActivity extends BaseFragment implements NotificationCenter.Not
                 super.notifyItemRangeRemoved(positionStart, itemCount);
             } catch (Exception e) {
                 FileLog.e(e);
+            }
+        }
+
+        private void startDeleteMessageEffect(int position) {
+            RecyclerView.ViewHolder viewHolder = chatListView.findViewHolderForAdapterPosition(position);
+            if (viewHolder != null) {
+                View itemView = viewHolder.itemView;
+                if (itemView instanceof ChatMessageCell) {
+                    float clipTop = chatListViewPaddingTop - chatListViewPaddingVisibleOffset - AndroidUtilities.dp(4);
+                    if (itemView.getY() + itemView.getMeasuredHeight() < clipTop || itemView.getY() > chatListView.getMeasuredHeight() - blurredViewBottomOffset) {
+                        return;
+                    }
+
+                    ChatMessageCell cell = (ChatMessageCell) itemView;
+
+                    int[] viewLocation = new int[2];
+
+                    MessageObject.GroupedMessages group = cell.getCurrentMessagesGroup();
+                    Rect bounds = cell.getCurrentBackgroundDrawable(true).getBounds();
+
+                    int bottomOffset = contentView.getKeyboardHeight() != 0 ? contentView.getKeyboardHeight() : chatEmojiViewPadding;
+                    viewLocation[0] = 0;
+                    int add = 0;
+                    if (chatListView.getY() == 0) {
+                        add = ActionBar.getCurrentActionBarHeight() + AndroidUtilities.statusBarHeight;
+                    }
+                    viewLocation[1] = (int) (cell.getY()  +
+                        bounds.top +
+                        (group != null ? group.transitionParams.top + group.transitionParams.offsetTop : 0) -
+                        bottomOffset
+                        - add
+                    );
+
+                    deleteMessageEffectRenderer.composeView(cell, viewLocation);
+                }
             }
         }
 

@@ -21222,4 +21222,11 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
     public int getNameStatusY() {
         return (int) (nameY + (nameLayout == null ? 0 : nameLayout.getHeight()) / 2);
     }
+
+    public void drawCachedBackground(@NonNull Canvas canvas) {
+        if (currentBackgroundDrawable != null && drawBackground) {
+            currentBackgroundDrawable.drawCached(canvas, backgroundCacheParams);
+        }
+    }
+
 }
