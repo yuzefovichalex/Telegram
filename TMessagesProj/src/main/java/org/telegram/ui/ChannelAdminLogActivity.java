@@ -2895,7 +2895,7 @@ public class ChannelAdminLogActivity extends BaseFragment implements Notificatio
                     }
 
                     @Override
-                    public void didPressSideButton(ChatMessageCell cell, float x, float y) {
+                    public void didPressSideButton(ChatMessageCell cell, float x, float y, boolean longClick) {
                         if (getParentActivity() == null) {
                             return;
                         }

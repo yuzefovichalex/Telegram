@@ -27,6 +27,7 @@ public class SharePopupWindow extends PopupWindow {
         shareView.setOnHideListener(super::dismiss);
         setContentView(shareView);
         setAnimationStyle(android.R.style.Animation);
+        setFocusable(true);
     }
 
 
