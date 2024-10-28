@@ -172,8 +172,8 @@ public class FragmentContextView extends FrameLayout implements NotificationCent
             int currentTime = fragment.getConnectionsManager().getCurrentTime();
             int diff = call.call.schedule_date - currentTime;
             String str;
-            if (!call.call.schedule_start_subscribed && diff > 0) {
-                str = "Notify";
+            if (!call.call.schedule_start_subscribed) {
+                str = "Notify Me";
             } else if (diff >= 24 * 60 * 60) {
                 str = LocaleController.formatPluralString("Days", Math.round(diff / (24 * 60 * 60.0f)));
             } else {

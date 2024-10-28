@@ -35322,9 +35322,16 @@ public class ChatActivity extends BaseFragment implements NotificationCenter.Not
             } else if (longClick) {
                 ShareView.Controller controller = new DialogShareViewController(UserConfig.selectedAccount, 5) {
                     @Override
-                    public void onItemSelect(int idx) {
-
+                    public void drawAnchorOverlay(@NonNull Canvas canvas) {
+                        final int scx = dp(16), scy = dp(16);
+                        Drawable drawable = getThemedDrawable(Theme.key_drawable_shareIcon);
+                        final int shw = drawable.getIntrinsicWidth() / 2, shh = drawable.getIntrinsicHeight() / 2;
+                        drawable.setBounds(scx - shw, scy - shh, scx + shw, scy + shh);
+                        drawable.draw(canvas);
                     }
+
+                    @Override
+                    public void onItemSelect(int idx) { }
 
                     @Override
                     public void onItemClick(ShareView shareView, int idx) {
@@ -35366,19 +35373,13 @@ public class ChatActivity extends BaseFragment implements NotificationCenter.Not
 
                 SharePopupWindow w = new SharePopupWindow(getContext());
                 w.setColor(getThemedColor(Theme.key_dialogBackground));
+                w.setShadowColor(getThemedColor(Theme.key_dialogShadowLine));
                 w.setController(controller);
                 w.show(
                     fragmentView,
-                    loc[0] + x + dp(16), loc[1] + y - AndroidUtilities.statusBarHeight + dp(16), dp(32),
-                    new LinearGradient(
-                        0f, 0f, 0f, 100,
-                        new int[] {
-                            getThemedColor(Theme.key_dialogBackground),
-                            getThemedColor(Theme.key_dialogBackground),
-                        },
-                        null,
-                        Shader.TileMode.CLAMP
-                    )
+                    loc[0] + x + dp(16),
+                    loc[1] + y - AndroidUtilities.statusBarHeight + dp(16),
+                    dp(32)
                 );
             } else {
                 ArrayList<MessageObject> arrayList = null;

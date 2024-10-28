@@ -17,8 +17,7 @@ import java.util.ArrayList;
 public abstract class DialogShareViewController implements ShareView.Controller {
 
     private final ArrayList<TLRPC.Dialog> recentDialogs = new ArrayList<TLRPC.Dialog>();
-    private final ArrayList<AvatarDrawable> avatars = new ArrayList<>();
-
+    private final ArrayList<ShareDrawable> avatars = new ArrayList<>();
 
     public DialogShareViewController(int currentAccount, int dialogCount) {
         int remain = dialogCount;
@@ -67,22 +66,31 @@ public abstract class DialogShareViewController implements ShareView.Controller 
         }
 
         for (int i = 0; i < dialogCount; i++) {
-            AvatarDrawable d;
+            ShareDrawable d;
             if (i < recentDialogs.size()) {
                 TLRPC.Dialog dialog = recentDialogs.get(i);
                 TLRPC.User user = MessagesController.getInstance(currentAccount).getUser(dialog.id);
-                d = new AvatarDrawable();
-                d.setInfo(currentAccount, user);
+                TLRPC.Chat chat = MessagesController.getInstance(currentAccount).getChat(-dialog.id);
+                d = new ShareDrawable();
+
                 if (UserObject.isUserSelf(user)) {
                     d.setAvatarType(AvatarDrawable.AVATAR_TYPE_SAVED);
+                } else if (user != null) {
+                    d.setInfo(currentAccount, user);
+                    d.setForUserOrChat((TLRPC.User) user);
+                } else if (chat != null) {
+                    d.setInfo(currentAccount, chat);
+                    d.setForUserOrChat((TLRPC.Chat) chat);
                 }
             } else {
-                d = new AvatarDrawable();
+                d = new ShareDrawable();
             }
             avatars.add(d);
         }
     }
 
+    @Override
+    public void onAttachedToWindow(ShareView shareView) { }
 
     @NonNull
     @Override
@@ -93,5 +101,8 @@ public abstract class DialogShareViewController implements ShareView.Controller 
     protected TLRPC.Dialog getDialog(int idx) {
         return recentDialogs.get(idx);
     }
+
+    @Override
+    public void onDetachFromWindow(ShareView shareView) { }
 
 }

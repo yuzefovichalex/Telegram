@@ -9,6 +9,7 @@
 package org.telegram.ui.Components;
 
 import static org.telegram.messenger.AndroidUtilities.dp;
+import static org.telegram.messenger.Utilities.clamp;
 
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -711,7 +712,8 @@ public class AvatarDrawable extends Drawable {
 
     @Override
     public void setAlpha(int alpha) {
-        this.alpha = alpha;
+        this.alpha = clamp(alpha, 255, 0);
+        invalidateSelf();
     }
 
     @Override

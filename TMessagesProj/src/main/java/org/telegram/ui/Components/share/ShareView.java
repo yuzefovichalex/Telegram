@@ -10,9 +10,9 @@ import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapShader;
+import android.graphics.BlurMaskFilter;
 import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.ComposeShader;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.PathMeasure;
@@ -33,8 +33,6 @@ import android.view.animation.OvershootInterpolator;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import org.telegram.ui.ActionBar.Theme;
-
 public class ShareView extends View {
 
     private static final int DEFAULT_ITEM_SIZE = 115;
@@ -42,11 +40,12 @@ public class ShareView extends View {
     private static final int DEFAULT_PADDING = 16;
     private static final int DEFAULT_OFFSET = 25;
     private static final int SIDE_OFFSET = 15;
+    private static final int DEFAULT_SHADOW_COLOR = 0xCCCCCC;
 
     @NonNull
     private final Paint commonPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-
-    private final Paint opacityPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint opacityPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
+    private final Paint shadowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     @NonNull
     private final ValueAnimator showAnimator = ValueAnimator.ofFloat(0f, 1f);
@@ -75,12 +74,11 @@ public class ShareView extends View {
     private int padding = DEFAULT_PADDING;
     private int offset = DEFAULT_OFFSET;
 
-    private int fullWidth;
-    private int fullHeight;
     private int containerWidth;
     private int containerHeight;
     private int bounceOffset;
-    private final RectF bounds = new RectF();
+    private final RectF containerBounds = new RectF();
+    private final RectF shadowBounds = new RectF();
 
     private float anchorX = -1;
     private float anchorY = -1;
@@ -114,6 +112,11 @@ public class ShareView extends View {
 
     public ShareView(@NonNull Context context, @Nullable AttributeSet attrs) {
         super(context, attrs);
+
+        shadowPaint.setColor(DEFAULT_SHADOW_COLOR);
+        shadowPaint.setStyle(Paint.Style.STROKE);
+        shadowPaint.setStrokeWidth(1f);
+        shadowPaint.setMaskFilter(new BlurMaskFilter(4f, BlurMaskFilter.Blur.NORMAL));
 
         morphGLBitmapProcessor = new OpenGLBitmapProcessor(context);
         morphGLBitmapProcessor.onAttach();
@@ -192,12 +195,18 @@ public class ShareView extends View {
         invalidate();
     }
 
+    public void setShadowColor(int shadowColor) {
+        shadowPaint.setColor(shadowColor);
+        invalidate();
+    }
+
     private void invalidateParams() {
         if (getMeasuredWidth() == 0) {
             needsItemCountEnsure = true;
             return;
         }
 
+        int fullWidth;
         while (true) {
             containerWidth = itemSize * itemCount + padding * (itemCount + 1);
             fullWidth = containerWidth + SIDE_OFFSET * 2;
@@ -209,7 +218,7 @@ public class ShareView extends View {
         }
 
         containerHeight = itemSize + padding * 2;
-        fullHeight = containerHeight + offset + anchorSize + SIDE_OFFSET;
+        int fullHeight = containerHeight + offset + anchorSize + SIDE_OFFSET;
         itemRadius = itemSize / 2f;
         bounceOffset = containerHeight / 2;
 
@@ -227,7 +236,7 @@ public class ShareView extends View {
         morphGLBitmapProcessor.initSurface(fullWidth + bounceOffset * 2, fullHeight + bounceOffset);
     }
 
-    public void setAnchor(float x, float y, int size, Shader shader) {
+    public void setAnchor(float x, float y, int size) {
         anchorX = x;
         anchorY = y;
         anchorSize = size;
@@ -242,12 +251,9 @@ public class ShareView extends View {
             blurredBitmap.recycle();
         }
         blurredBitmap = Bitmap.createBitmap(anchorSize, anchorSize, Bitmap.Config.ARGB_8888);
+        blurredBitmapPaint.setColor(Color.BLACK);
         blurredBitmapPaint.setShader(
-            new ComposeShader(
-                new BitmapShader(blurredBitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP),
-                shader,
-                PorterDuff.Mode.ADD
-            )
+            new BitmapShader(blurredBitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
         );
 
         dstRect.set(0, 0, anchorSize, anchorSize);
@@ -281,8 +287,8 @@ public class ShareView extends View {
     }
 
     public void hide(float x, float y) {
-        float startX = bounds.left + padding * (selectedIdx + 1) + itemSize * selectedIdx;
-        float startY = bounds.top + padding;
+        float startX = containerBounds.left + padding * (selectedIdx + 1) + itemSize * selectedIdx;
+        float startY = containerBounds.top + padding;
         hideAnimationPath.reset();
         hideAnimationPath.moveTo(startX, startY);
         hideAnimationPath.quadTo(x, startY - containerHeight * 2, x, y);
@@ -292,11 +298,19 @@ public class ShareView extends View {
     }
 
     public void hide() {
+        if (hideAnimator.isRunning()) {
+            return;
+        }
+
+        showAnimator.cancel();
+        hideAnimator.cancel();
+
         float speed = 2000f / 1000f; // 2000px per 1000ms
         long duration = (long) (hideAnimationPathMeasure.getLength() / speed);
         if (duration == 0) {
-            duration = 525L;
+            duration = 250L;
         }
+
         hideAnimator.setDuration(duration);
         hideAnimator.start();
     }
@@ -339,7 +353,7 @@ public class ShareView extends View {
         float intrinsicCenterEndX = anchorX + anchorRadius + containerRadius - halfContainerWidthWithSideOffset;
 
         if (intrinsicCenterEndX - halfContainerWidthWithSideOffset < 0) {
-            outOffset = (intrinsicCenterEndX - halfContainerWidthWithSideOffset);
+            outOffset = intrinsicCenterEndX - halfContainerWidthWithSideOffset;
         } else if (intrinsicCenterEndX + halfContainerWidthWithSideOffset > getMeasuredWidth()) {
             outOffset = intrinsicCenterEndX - (getMeasuredWidth() - halfContainerWidthWithSideOffset);
         }
@@ -353,7 +367,24 @@ public class ShareView extends View {
         float rectRadius = lerp(anchorRadius, containerRadius, showProgress);
         float rectX = rectCenterX - rectWidth / 2f;
         float rectY = rectCenterY - rectHeight / 2f;
-        bounds.set(rectX, rectY, rectX + rectWidth, rectY + rectHeight);
+        containerBounds.set(rectX, rectY, rectX + rectWidth, rectY + rectHeight);
+
+        int containerAlpha = hideAnimationPath.isEmpty()
+            ? toIntAlpha(1f - hideProgress)
+            : toIntAlpha(1f - clamp(hideProgress / 0.2f, 1f, 0f));
+        int shadowAlpha = isHideRunning
+            ? containerAlpha
+            : toIntAlpha(clamp((showProgress - 0.8f) / 0.2f, 1f, 0f));
+
+        // Special coef to not increase the morph figure when rect is fully under circle
+        float radCoef = 10f * (1f - showProgress);
+
+        shadowBounds.set(
+            containerBounds.left + radCoef, containerBounds.top + radCoef,
+            containerBounds.right - radCoef, containerBounds.bottom - radCoef
+        );
+        shadowPaint.setAlpha(shadowAlpha);
+        canvas.drawRoundRect(shadowBounds, rectRadius, rectRadius, shadowPaint);
 
         commonPaint.setXfermode(clearMode);
         blurringBitmapCanvas.drawRect(0, 0, anchorRadius * 2f, anchorRadius * 2f, commonPaint);
@@ -363,17 +394,16 @@ public class ShareView extends View {
         blurringBitmapCanvas.drawRect(0, 0, anchorSize, anchorSize * (1f - showProgress), commonPaint);
 
         if (!isFullyShown) {
-            blurGLBitmapProcessor.processBitmap(blurringBitmap, blurredBitmap, lerp(64f, 16f, showProgress));
+            blurGLBitmapProcessor.processBitmap(blurringBitmap, blurredBitmap, lerp(20f, 12f, showProgress));
         }
 
-        float morphBgX = animationCenterEndX - containerWidth / 2f - bounceOffset;
+        float morphBgX = animationCenterEndX - halfContainerWidthWithSideOffset - bounceOffset;
         float morphBgY = animationCenterEndY - containerHeight / 2f - bounceOffset;
-        float radCoef = 10f * (1f - showProgress);
 
         if (!isFullyShown) {
             morphGLBitmapProcessor.drawMorph(
                 dst,
-                rectX - morphBgX + radCoef + SIDE_OFFSET,
+                rectX - morphBgX + radCoef,
                 rectY - morphBgY + radCoef,
                 rectWidth - radCoef * 2,
                 rectHeight - radCoef * 2,
@@ -386,7 +416,6 @@ public class ShareView extends View {
             );
         }
 
-        int containerAlpha = toIntAlpha(1f - clamp(hideProgress / 0.2f, 1f, 0f));
         opacityPaint.setAlpha(containerAlpha);
         canvas.drawBitmap(dst, morphBgX, morphBgY, opacityPaint);
 
@@ -419,16 +448,17 @@ public class ShareView extends View {
             Drawable d = controller.getItemDrawable(i);
             d.setBounds(0, 0, itemSize, itemSize);
             if (isHideRunning) {
-                d.setAlpha(isSelectedAndAnimated
-                    ? toIntAlpha(1f - (float) Math.pow(hideProgress, 3))
-                    : containerAlpha
+                d.setAlpha(
+                    isSelectedAndAnimated
+                        ? toIntAlpha(1f - clamp((hideProgress - 0.8f) / 0.2f, 1f, 0f))
+                        : containerAlpha
                 );
             } else {
                 d.setAlpha(selectedIdx == -1 || selectedIdx == i ? 255 : 127);
             }
 
             float offset = i - center + 0.5f;
-            float cx = rectCenterX + SIDE_OFFSET + (scaledSize + gap) * offset;
+            float cx = rectCenterX + (scaledSize + gap) * offset;
             float r = itemSize * (float) Math.pow(showProgress, Math.abs(offset) + 1f) / 2f;
             float selectionScale = selectedIdx == i && !isHideRunning
                 ? 1.1f
@@ -453,23 +483,15 @@ public class ShareView extends View {
             canvas.restore();
         }
 
-//        Paint btnPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-//        btnPaint.setShader(
-//            new LinearGradient(
-//                0f, 0f, 0f, (float) RECT_HEIGHT,
-//                new int[] {
-//                    0xff7644cb,
-//                    0xff8849b4,
-//                    0xffa751a8
-//                },
-//                null,
-//                Shader.TileMode.CLAMP
-//            )
-//        );
-//        btnPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_OVER));
-//        Path btnPath = new Path();
-//        btnPath.addCircle(animationCenterStartX, animationCenterStartY, circleRadius, Path.Direction.CW);
-//        canvas.drawPath(btnPath, btnPaint);
+        if (!isFullyShown && controller != null) {
+            canvas.save();
+            canvas.translate(
+                animationCenterStartX - anchorRadius,
+                animationCenterStartY - anchorRadius
+            );
+            controller.drawAnchorOverlay(canvas);
+            canvas.restore();
+        }
     }
 
     @Override
@@ -521,13 +543,13 @@ public class ShareView extends View {
     }
 
     private int getItemUnder(float x, float y) {
-        if (!bounds.contains(x, y)) {
+        if (!containerBounds.contains(x, y)) {
             return -1;
         }
 
-        float dw = bounds.width() / itemCount;
+        float dw = containerBounds.width() / itemCount;
         for (int i = 0; i < itemCount; i++) {
-            float l = bounds.left + dw * i;
+            float l = containerBounds.left + dw * i;
             float r = l + dw;
             if (x >= l && x <= r) {
                 return i;
@@ -538,7 +560,7 @@ public class ShareView extends View {
     }
 
     private int toIntAlpha(float floatAlpha) {
-        return round(255 * floatAlpha);
+        return (int) (255 * clamp(floatAlpha, 1f, 0f));
     }
 
     @Override
@@ -557,10 +579,13 @@ public class ShareView extends View {
 
 
     public interface Controller {
+        void onAttachedToWindow(ShareView shareView);
+        void drawAnchorOverlay(@NonNull Canvas canvas);
         @NonNull
         Drawable getItemDrawable(int idx);
         void onItemSelect(int idx);
         void onItemClick(ShareView shareView, int idx);
+        void onDetachFromWindow(ShareView shareView);
     }
 
     interface OnHideListener {

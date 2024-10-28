@@ -57,6 +57,7 @@ import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.Premium.boosts.BoostRepository;
+import org.telegram.ui.LaunchActivity;
 import org.telegram.ui.PaymentFormActivity;
 
 import java.util.ArrayList;
@@ -1050,23 +1051,59 @@ public class UndoView extends FrameLayout {
                         }
                         leftImageView.setAnimation(R.raw.saved_messages, 30, 30);
                     } else {
+                        MessagesController messagesController = MessagesController.getInstance(currentAccount);
+                        BaseFragment lastFragment = LaunchActivity.getLastFragment();
+                        SpannableStringBuilder infoText;
                         if (DialogObject.isChatDialog(did)) {
-                            TLRPC.Chat chat = MessagesController.getInstance(currentAccount).getChat(-did);
+                            TLRPC.Chat chat = messagesController.getChat(-did);
                             TLRPC.TL_forumTopic topic = (TLRPC.TL_forumTopic) infoObject2;
+
+                            String key;
+                            int textResId;
                             if (count == 1) {
-                                infoTextView.setText(AndroidUtilities.replaceTags(LocaleController.formatString("FwdMessageToGroup", R.string.FwdMessageToGroup, topic != null ? topic.title : chat.title)));
+                                key = "FwdMessageToGroup";
+                                textResId = R.string.FwdMessageToGroup;
                             } else {
-                                infoTextView.setText(AndroidUtilities.replaceTags(LocaleController.formatString("FwdMessagesToGroup", R.string.FwdMessagesToGroup, topic != null ? topic.title : chat.title)));
+                                key = "FwdMessagesToGroup";
+                                textResId = R.string.FwdMessagesToGroup;
+                            }
+
+                            if (lastFragment != null) {
+                                infoText = AndroidUtilities.replaceSingleTag(
+                                    LocaleController.formatString(key, textResId, topic != null ? topic.title : chat.title),
+                                    () -> messagesController.openChatOrProfileWith(null, chat, lastFragment, 1, false)
+                                );
+                            } else {
+                                infoText = AndroidUtilities.replaceTags(
+                                    LocaleController.formatString(key, textResId, topic != null ? topic.title : chat.title)
+                                );
                             }
                         } else {
                             TLRPC.User user = MessagesController.getInstance(currentAccount).getUser(did);
+
+                            String key;
+                            int textResId;
                             if (count == 1) {
-                                infoTextView.setText(AndroidUtilities.replaceTags(LocaleController.formatString("FwdMessageToUser", R.string.FwdMessageToUser, UserObject.getFirstName(user))));
+                                key = "FwdMessageToUser";
+                                textResId = R.string.FwdMessageToUser;
                             } else {
-                                infoTextView.setText(AndroidUtilities.replaceTags(LocaleController.formatString("FwdMessagesToUser", R.string.FwdMessagesToUser, UserObject.getFirstName(user))));
+                                key = "FwdMessagesToUser";
+                                textResId = R.string.FwdMessagesToUser;
+                            }
+
+                            if (lastFragment != null) {
+                                infoText = AndroidUtilities.replaceSingleTag(
+                                    LocaleController.formatString(key, textResId, UserObject.getFirstName(user)),
+                                    () -> messagesController.openChatOrProfileWith(user, null, lastFragment, 1, false)
+                                );
+                            } else {
+                                infoText = AndroidUtilities.replaceTags(
+                                    LocaleController.formatString(key, textResId, UserObject.getFirstName(user))
+                                );
                             }
                         }
                         leftImageView.setAnimation(R.raw.forward, 30, 30);
+                        infoTextView.setText(infoText);
                         hapticDelay = 300;
                     }
                 } else {
