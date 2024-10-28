@@ -35413,7 +35413,36 @@ public class ChatActivity extends BaseFragment implements NotificationCenter.Not
 
                     @Override
                     public void onItemClick(ShareView shareView, int idx) {
-                        shareView.hide();
+                        TLRPC.Dialog dialog = getDialog(idx);
+                        ArrayList<MessageObject> msgs = new ArrayList<>();
+                        msgs.add(messageObject);
+                        SendMessagesHelper.getInstance(currentAccount)
+                            .sendMessage(
+                                msgs,
+                                dialog.id,
+                                false,
+                                false,
+                                true,
+                                0,
+                                null
+                            );
+                        createUndoView();
+                        if (undoView == null) {
+                            shareView.hide();
+                            return;
+                        }
+                        undoView.showWithAction(dialog.id, UndoView.ACTION_FWD_MESSAGES, 1, null, null, null);
+                        if (undoView.isLaidOut() && !undoView.isLayoutRequested()) {
+                            shareView.hide(undoView.getLeft(), undoView.getTop() - undoView.getEnterOffset() - dp(51));
+                        } else {
+                            undoView.addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
+                                @Override
+                                public void onLayoutChange(View v, int left, int top, int right, int bottom, int oldLeft, int oldTop, int oldRight, int oldBottom) {
+                                    shareView.hide(undoView.getLeft(), undoView.getTop() - undoView.getEnterOffset() - dp(51));
+                                    undoView.removeOnLayoutChangeListener(this);
+                                }
+                            });
+                        }
                     }
                 };
 
@@ -35421,6 +35450,7 @@ public class ChatActivity extends BaseFragment implements NotificationCenter.Not
                 cell.getLocationOnScreen(loc);
 
                 SharePopupWindow w = new SharePopupWindow(getContext());
+                w.setColor(getThemedColor(Theme.key_dialogBackground));
                 w.setController(controller);
                 w.show(
                     fragmentView,
@@ -35428,9 +35458,8 @@ public class ChatActivity extends BaseFragment implements NotificationCenter.Not
                     new LinearGradient(
                         0f, 0f, 0f, 100,
                         new int[] {
-                            0xff7644cb,
-                            0xff8849b4,
-                            0xffa751a8
+                            getThemedColor(Theme.key_dialogBackground),
+                            getThemedColor(Theme.key_dialogBackground),
                         },
                         null,
                         Shader.TileMode.CLAMP

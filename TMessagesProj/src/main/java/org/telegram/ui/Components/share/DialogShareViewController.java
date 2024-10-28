@@ -89,4 +89,9 @@ public abstract class DialogShareViewController implements ShareView.Controller 
     public Drawable getItemDrawable(int idx) {
         return avatars.get(idx);
     }
+
+    protected TLRPC.Dialog getDialog(int idx) {
+        return recentDialogs.get(idx);
+    }
+
 }

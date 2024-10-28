@@ -18,6 +18,7 @@ import static android.opengl.GLES20.glViewport;
 
 import android.content.Context;
 import android.graphics.Bitmap;
+import android.graphics.Color;
 import android.opengl.EGL14;
 import android.opengl.EGLConfig;
 import android.opengl.EGLContext;
@@ -209,7 +210,8 @@ public class OpenGLBitmapProcessor {
         float cx,
         float cy,
         float cr,
-        float progress
+        float progress,
+        int color
     ) {
         EGL14.eglMakeCurrent(dpy, surf, surf, ctx);
         if (program == 0) {
@@ -226,6 +228,7 @@ public class OpenGLBitmapProcessor {
         GLES20.glUniform1f(GLES20.glGetUniformLocation(program, "rectRadius"), rectR);
         GLES20.glUniform3f(GLES20.glGetUniformLocation(program, "circleData"), cx, cy, cr);
         GLES20.glUniform1f(GLES20.glGetUniformLocation(program, "progress"), progress);
+        GLES20.glUniform3f(GLES20.glGetUniformLocation(program, "color"), Color.red(color) / 255f, Color.green(color) / 255f, Color.blue(color) / 255f);
 
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);

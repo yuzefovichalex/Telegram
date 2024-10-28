@@ -6,6 +6,7 @@ uniform vec2 rectPos;
 uniform float rectRadius;
 uniform vec3 circleData;
 uniform float progress;
+uniform vec3 color;
 
 varying vec2 v_TextCoord;
 
@@ -59,5 +60,5 @@ void main() {
     );
 
     float d = round_merge(circleD, rectD, 0.05);
-    gl_FragColor = vec4(1.0, 1.0, 1.0, step(0.0, -d));
+    gl_FragColor = vec4(color, step(0.0, -d));
 }

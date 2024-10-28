@@ -34,6 +34,10 @@ public class SharePopupWindow extends PopupWindow {
         shareView.setController(controller);
     }
 
+    public void setColor(int color) {
+        shareView.setColor(color);
+    }
+
     public void show(View parent, float x, float y, int size, Shader shader) {
         showAsDropDown(parent,0, 0);
         shareView.setAnchor(x, y, size, shader);

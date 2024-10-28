@@ -23,6 +23,7 @@ import android.graphics.RectF;
 import android.graphics.Shader;
 import android.graphics.drawable.Drawable;
 import android.util.AttributeSet;
+import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
@@ -31,6 +32,8 @@ import android.view.animation.OvershootInterpolator;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+
+import org.telegram.ui.ActionBar.Theme;
 
 public class ShareView extends View {
 
@@ -101,6 +104,8 @@ public class ShareView extends View {
 
     @Nullable
     private OnHideListener onHideListener;
+
+    private int color = 0xFFFFFF;
 
 
     public ShareView(@NonNull Context context) {
@@ -180,6 +185,11 @@ public class ShareView extends View {
     public void setOffset(int offset) {
         this.offset = offset;
         invalidateParams();
+    }
+
+    public void setColor(int color) {
+        this.color = color;
+        invalidate();
     }
 
     private void invalidateParams() {
@@ -371,7 +381,8 @@ public class ShareView extends View {
                 animationCenterStartX - morphBgX,
                 animationCenterStartY - morphBgY,
                 anchorRadius,
-                showProgress
+                showProgress,
+                color
             );
         }
 
@@ -475,12 +486,19 @@ public class ShareView extends View {
                 return true;
             case MotionEvent.ACTION_MOVE:
                 if (event.getEventTime() - event.getDownTime() > longPressTimeout) {
-                    selectedIdx = getItemUnder(ex, ey);
+                    int selectedIdx = getItemUnder(ex, ey);
                     if (selectedIdx != -1) {
                         if (controller != null) {
                             controller.onItemSelect(selectedIdx);
+                            if (selectedIdx != this.selectedIdx) {
+                                performHapticFeedback(
+                                    HapticFeedbackConstants.LONG_PRESS,
+                                    HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING
+                                );
+                            }
                         }
                     }
+                    this.selectedIdx = selectedIdx;
                     invalidate();
                 }
                 return true;
@@ -488,6 +506,10 @@ public class ShareView extends View {
                 selectedIdx = getItemUnder(ex, ey);
                 if (selectedIdx != -1 && controller != null) {
                     controller.onItemClick(this, selectedIdx);
+                    performHapticFeedback(
+                        HapticFeedbackConstants.VIRTUAL_KEY,
+                        HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING
+                    );
                     invalidate();
                 } else {
                     hide();
