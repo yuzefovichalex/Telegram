@@ -78,12 +78,14 @@ public class LinkActionView extends LinearLayout {
     private boolean canEdit = true;
     private final boolean isChannel;
     private final float[] point = new float[2];
+    private final boolean isManageable;
 
-    public LinkActionView(Context context, BaseFragment fragment, BottomSheet bottomSheet, long chatId, boolean permanent, boolean isChannel) {
+    public LinkActionView(Context context, BaseFragment fragment, BottomSheet bottomSheet, long chatId, boolean permanent, boolean isChannel, boolean isManageable) {
         super(context);
         this.fragment = fragment;
         this.permanent = permanent;
         this.isChannel = isChannel;
+        this.isManageable = isManageable;
 
         setOrientation(VERTICAL);
         frameLayout = new FrameLayout(context);
@@ -96,10 +98,15 @@ public class LinkActionView extends LinearLayout {
         int containerPadding = 4;
         frameLayout.addView(linkView);
         optionsView = new ImageView(context);
-        optionsView.setImageDrawable(ContextCompat.getDrawable(context, R.drawable.ic_ab_other));
+        optionsView.setImageDrawable(
+            ContextCompat.getDrawable(
+                context,
+                isManageable ? R.drawable.ic_ab_other : R.drawable.msg_qrcode
+            )
+        );
         optionsView.setContentDescription(LocaleController.getString(R.string.AccDescrMoreOptions));
         optionsView.setScaleType(ImageView.ScaleType.CENTER);
-        frameLayout.addView(optionsView, LayoutHelper.createFrame(40, 48, Gravity.RIGHT | Gravity.CENTER_VERTICAL));
+        frameLayout.addView(optionsView, LayoutHelper.createFrame(isManageable ? 40 : 48, 48, Gravity.RIGHT | Gravity.CENTER_VERTICAL));
         addView(frameLayout, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, containerPadding, 0, containerPadding, 0));
 
         LinearLayout linearLayout = new LinearLayout(context);
@@ -219,6 +226,11 @@ public class LinkActionView extends LinearLayout {
         });
 
         optionsView.setOnClickListener(view -> {
+            if (!isManageable) {
+                showQrCode();
+                return;
+            }
+
             if (actionBarPopupWindow != null) {
                 return;
             }
@@ -456,7 +468,12 @@ public class LinkActionView extends LinearLayout {
         if (hideRevokeOption != b) {
             hideRevokeOption = b;
             optionsView.setVisibility(View.VISIBLE);
-            optionsView.setImageDrawable(ContextCompat.getDrawable(optionsView.getContext(), R.drawable.ic_ab_other));
+            optionsView.setImageDrawable(
+                ContextCompat.getDrawable(
+                    optionsView.getContext(),
+                    isManageable ? R.drawable.ic_ab_other : R.drawable.msg_qrcode
+                )
+            );
         }
     }
 

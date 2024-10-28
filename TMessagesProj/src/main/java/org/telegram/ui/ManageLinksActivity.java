@@ -768,7 +768,7 @@ public class ManageLinksActivity extends BaseFragment {
                     view.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
                     break;
                 case 2:
-                    LinkActionView linkActionView = new LinkActionView(mContext, ManageLinksActivity.this, null, currentChatId, true, isChannel);
+                    LinkActionView linkActionView = new LinkActionView(mContext, ManageLinksActivity.this, null, currentChatId, true, isChannel, true);
                     linkActionView.setPermanent(true);
                     linkActionView.setDelegate(new LinkActionView.Delegate() {
                         @Override

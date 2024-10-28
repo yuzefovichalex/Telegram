@@ -29,6 +29,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
+import android.content.res.ColorStateList;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -133,6 +134,7 @@ import androidx.dynamicanimation.animation.DynamicAnimation;
 import androidx.dynamicanimation.animation.FloatValueHolder;
 import androidx.dynamicanimation.animation.SpringAnimation;
 import androidx.dynamicanimation.animation.SpringForce;
+import androidx.mediarouter.app.MediaRouteButton;
 import androidx.recyclerview.widget.DefaultItemAnimator;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.LinearSmoothScrollerEnd;
@@ -142,6 +144,7 @@ import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.ExoPlayer;
 import com.google.android.exoplayer2.analytics.AnalyticsListener;
 import com.google.android.exoplayer2.ui.AspectRatioFrameLayout;
+import com.google.android.gms.cast.framework.CastButtonFactory;
 import com.google.android.gms.vision.Frame;
 import com.google.android.gms.vision.face.Face;
 import com.google.android.gms.vision.face.FaceDetector;
@@ -333,6 +336,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
     private TextSelectionHelper.SimpleTextSelectionHelper textSelectionHelper;
     private boolean firstFrameRendered;
     private Paint surfaceBlackoutPaint;
+    private MediaRouteButton castButton;
 
     public TextureView getVideoTextureView() {
         return videoTextureView;
@@ -352,6 +356,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
         private FrameLayout titleLayout;
         SimpleTextView[] titleTextView;
         AnimatedTextView subtitleTextView;
+        MediaRouteButton castButton;
 
         public PhotoViewerActionBarContainer(Context context) {
             super(context);
@@ -391,6 +396,11 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
             subtitleTextView.setTextColor(0xffffffff);
             subtitleTextView.setEllipsizeByGradient(true);
             container.addView(subtitleTextView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 20, Gravity.LEFT | Gravity.TOP, 16, 0, 0, 0));
+
+            castButton = new MediaRouteButton(context);
+            CastButtonFactory.setUpMediaRouteButton(context, castButton);
+            castButton.setVisibility(View.VISIBLE);
+            container.addView(castButton, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.END | Gravity.CENTER_VERTICAL));
         }
 
         public void setTextShadows(boolean applyShadows) {
@@ -543,10 +553,14 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
             if (animated) {
                 rightPaddingAnimator = ValueAnimator.ofFloat(this.rightPadding, rightPadding);
                 rightPaddingAnimator.addUpdateListener(anm -> {
-                    this.rightPadding = (float) anm.getAnimatedValue();
+                    int castButtonWidth = castButton.getVisibility() == View.VISIBLE
+                        ? castButton.getWidth()
+                        : 0;
+                    this.rightPadding = (float) anm.getAnimatedValue() + castButtonWidth;
                     titleTextView[0].setRightPadding((int) rightPadding);
                     titleTextView[1].setRightPadding((int) rightPadding);
                     subtitleTextView.setRightPadding(rightPadding);
+                    setCastButtonRightMargin(rightPadding);
                 });
                 rightPaddingAnimator.addListener(new AnimatorListenerAdapter() {
                     @Override
@@ -559,9 +573,20 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
                 rightPaddingAnimator.start();
             } else {
                 this.rightPadding = rightPadding;
-                titleTextView[0].setRightPadding((int) rightPadding);
-                subtitleTextView.setRightPadding(rightPadding);
+                int castButtonWidth = castButton.getVisibility() == View.VISIBLE
+                    ? castButton.getWidth()
+                    : 0;
+                int fullOffset = (int) rightPadding + castButtonWidth;
+                titleTextView[0].setRightPadding(fullOffset);
+                subtitleTextView.setRightPadding(fullOffset);
+                setCastButtonRightMargin(rightPadding);
             }
+        }
+
+        private void setCastButtonRightMargin(float margin) {
+            FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) castButton.getLayoutParams();
+            lp.rightMargin = (int) margin;
+            castButton.setLayoutParams(lp);
         }
 
         int lastHeight;
@@ -18590,6 +18615,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
                                     "&reference=" + Utilities.bytesToHex(document.file_reference != null ? document.file_reference : new byte[0]);
                             uri = Uri.parse("tg://" + currentMessageObject.getFileName() + params);
                             isStreaming = true;
+                            TLRPC.MessageMedia t = MessageObject.getMedia(currentMessageObject);
                             checkProgress(0, false, false);
                         } catch (Exception ignore) {
 

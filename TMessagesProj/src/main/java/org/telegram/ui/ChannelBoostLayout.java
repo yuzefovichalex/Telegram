@@ -192,7 +192,7 @@ public class ChannelBoostLayout extends FrameLayout {
                     view = textCell;
                     break;
                 case LINK_VIEW_TYPE:
-                    LinkActionView linkActionView = new LinkActionView(getContext(), fragment, null, 0, false, false);
+                    LinkActionView linkActionView = new LinkActionView(getContext(), fragment, null, 0, false, false, true);
                     view = linkActionView;
                     linkActionView.hideOptions();
                     view.setPadding(AndroidUtilities.dp(11), 0, AndroidUtilities.dp(11), AndroidUtilities.dp(24));

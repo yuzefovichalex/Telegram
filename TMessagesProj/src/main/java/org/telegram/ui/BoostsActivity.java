@@ -206,7 +206,7 @@ public class BoostsActivity extends GradientHeaderActivity implements Notificati
                     view = textCell;
                     break;
                 case LINK_VIEW_TYPE:
-                    LinkActionView linkActionView = new LinkActionView(getContext(), BoostsActivity.this, null, 0, false, false);
+                    LinkActionView linkActionView = new LinkActionView(getContext(), BoostsActivity.this, null, 0, false, false, true);
                     view = linkActionView;
                     linkActionView.hideOptions();
                     view.setPadding(AndroidUtilities.dp(11), 0, AndroidUtilities.dp(11), AndroidUtilities.dp(24));

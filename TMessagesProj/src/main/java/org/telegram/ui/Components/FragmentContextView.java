@@ -172,7 +172,9 @@ public class FragmentContextView extends FrameLayout implements NotificationCent
             int currentTime = fragment.getConnectionsManager().getCurrentTime();
             int diff = call.call.schedule_date - currentTime;
             String str;
-            if (diff >= 24 * 60 * 60) {
+            if (!call.call.schedule_start_subscribed && diff > 0) {
+                str = "Notify";
+            } else if (diff >= 24 * 60 * 60) {
                 str = LocaleController.formatPluralString("Days", Math.round(diff / (24 * 60 * 60.0f)));
             } else {
                 str = AndroidUtilities.formatFullDuration(call.call.schedule_date - currentTime);
@@ -290,6 +292,32 @@ public class FragmentContextView extends FrameLayout implements NotificationCent
                 if (avatars != null && avatars.getVisibility() == VISIBLE) {
                     avatars.invalidate();
                 }
+            }
+
+            @Override
+            public boolean onTouchEvent(MotionEvent event) {
+                StaticLayout timeLayout = FragmentContextView.this.timeLayout;
+                if (timeLayout != null) {
+                    int w = timeLayout.getWidth() + AndroidUtilities.dp(24);
+                    int l = getMeasuredWidth() - w - AndroidUtilities.dp(10);
+                    int t = AndroidUtilities.dp(10);
+                    int r = l + w;
+                    int b = t + AndroidUtilities.dp(28);
+                    if (event.getX() >= l && event.getX() <= r &&
+                        event.getY() >= t && event.getY() <= b
+                    ) {
+                        ChatObject.Call call = chatActivity.getGroupCall();
+                        if (call != null && call.isScheduled() && !call.call.schedule_start_subscribed) {
+                            if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                                return true;
+                            } else if (event.getAction() == MotionEvent.ACTION_UP) {
+                                subscribeToCall(call);
+                                return true;
+                            }
+                        }
+                    }
+                }
+                return super.onTouchEvent(event);
             }
 
             @Override
@@ -751,6 +779,26 @@ public class FragmentContextView extends FrameLayout implements NotificationCent
     }
 
     private boolean slidingSpeed;
+
+    private void subscribeToCall(ChatObject.Call call) {
+        TLRPC.TL_phone_toggleGroupCallStartSubscription req = new TLRPC.TL_phone_toggleGroupCallStartSubscription();
+        req.call = call.getInputGroupCall();
+        call.call.schedule_start_subscribed = !call.call.schedule_start_subscribed;
+        req.subscribed = call.call.schedule_start_subscribed;
+        AccountInstance accountInstance = fragment.getAccountInstance();
+        accountInstance.getConnectionsManager().sendRequest(req, (response, error) -> {
+            if (response != null) {
+                accountInstance.getMessagesController().processUpdates((TLRPC.Updates) response, false);
+            }
+        });
+        updateScheduleTimeRunnable.run();
+
+        if (fragment instanceof ChatActivity) {
+            BulletinFactory.of(fragment)
+                .createSimpleBulletin(R.raw.bell, "You will be notified when the live stream starts.")
+                .show();
+        }
+    }
 
     private void createPlaybackSpeedButton() {
         if (playbackSpeedButton != null) {

@@ -32,7 +32,6 @@ import com.google.android.exoplayer2.DefaultRenderersFactory;
 import com.google.android.exoplayer2.ExoPlayer;
 import com.google.android.exoplayer2.Format;
 import com.google.android.exoplayer2.MediaItem;
-import com.google.android.exoplayer2.MediaMetadata;
 import com.google.android.exoplayer2.PlaybackException;
 import com.google.android.exoplayer2.PlaybackParameters;
 import com.google.android.exoplayer2.Player;
@@ -44,6 +43,8 @@ import com.google.android.exoplayer2.audio.AudioProcessor;
 import com.google.android.exoplayer2.audio.AudioSink;
 import com.google.android.exoplayer2.audio.DefaultAudioSink;
 import com.google.android.exoplayer2.audio.TeeAudioProcessor;
+import com.google.android.exoplayer2.ext.cast.CastPlayer;
+import com.google.android.exoplayer2.ext.cast.SessionAvailabilityListener;
 import com.google.android.exoplayer2.mediacodec.MediaCodecRenderer;
 import com.google.android.exoplayer2.source.LoopingMediaSource;
 import com.google.android.exoplayer2.source.MediaSource;
@@ -55,10 +56,11 @@ import com.google.android.exoplayer2.trackselection.DefaultTrackSelector;
 import com.google.android.exoplayer2.trackselection.MappingTrackSelector;
 import com.google.android.exoplayer2.upstream.DataSource;
 import com.google.android.exoplayer2.upstream.DefaultAllocator;
-import com.google.android.exoplayer2.util.Log;
+import com.google.android.exoplayer2.util.MimeTypes;
 import com.google.android.exoplayer2.video.SurfaceNotValidException;
 import com.google.android.exoplayer2.video.VideoListener;
 import com.google.android.exoplayer2.video.VideoSize;
+import com.google.android.gms.cast.framework.CastContext;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
@@ -73,7 +75,9 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
 @SuppressLint("NewApi")
-public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsListener, NotificationCenter.NotificationCenterDelegate {
+public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsListener,
+    NotificationCenter.NotificationCenterDelegate, SessionAvailabilityListener
+{
 
     private DispatchQueue workerQueue;
     private boolean isStory;
@@ -105,8 +109,11 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
         boolean needUpdate();
     }
 
+    private Player currentPlayer;
     public ExoPlayer player;
     private ExoPlayer audioPlayer;
+    private CastPlayer castPlayer;
+    private LocalMediaCastServer castServer;
     private MappingTrackSelector trackSelector;
     private DataSource.Factory mediaDataSourceFactory;
     private TextureView textureView;
@@ -123,6 +130,7 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
 
     private boolean videoPlayerReady;
     private boolean audioPlayerReady;
+    private boolean castPlayerReady;
     private boolean mixedPlayWhenReady;
 
     private VideoPlayerDelegate delegate;
@@ -244,6 +252,26 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
                 audioPlayer.setPlayWhenReady(autoplay);
             }
         }
+        if (castPlayer == null) {
+            CastContext castContext = CastContext.getSharedInstance(ApplicationLoader.applicationContext);
+            castPlayer = new CastPlayer(castContext);
+            castPlayer.addListener(new Player.Listener() {
+                @Override
+                public void onPlaybackStateChanged(int playbackState) {
+                    if (!castPlayerReady && playbackState == Player.STATE_READY) {
+                        castPlayerReady = true;
+                        //castPlayer.setPlayWhenReady(true);
+                        //checkPlayersReady();
+                    }
+                }
+            });
+            castPlayer.setSessionAvailabilityListener(this);
+        }
+        if (castServer == null) {
+            castServer = LocalMediaCastServer.getInstance(ApplicationLoader.applicationContext);
+        }
+
+        currentPlayer = castPlayer.isCastSessionAvailable() ? castPlayer : player;
     }
 
     public void preparePlayerLoop(Uri videoUri, String videoType, Uri audioUri, String audioType) {
@@ -256,6 +284,7 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
         mixedAudio = true;
         audioPlayerReady = false;
         videoPlayerReady = false;
+        castPlayerReady = false;
         ensurePlayerCreated();
         MediaSource mediaSource1 = null, mediaSource2 = null;
         for (int a = 0; a < 2; a++) {
@@ -277,10 +306,15 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
                 mediaSource2 = mediaSource;
             }
         }
-        player.setMediaSource(mediaSource1, true);
-        player.prepare();
-        audioPlayer.setMediaSource(mediaSource2, true);
-        audioPlayer.prepare();
+
+        if (castPlayer.isCastSessionAvailable()) {
+            prepareCastPlayer(videoUri, videoType);
+        } else {
+            player.setMediaSource(mediaSource1, true);
+            player.prepare();
+            audioPlayer.setMediaSource(mediaSource2, true);
+            audioPlayer.prepare();
+        }
     }
 
     private MediaSource mediaSourceFromUri(Uri uri, String type) {
@@ -321,14 +355,46 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
         this.loopingMediaSource = false;
 
         videoPlayerReady = false;
+        castPlayerReady = false;
         mixedAudio = false;
         currentUri = uri;
         String scheme = uri != null ? uri.getScheme() : null;
         isStreaming = scheme != null && !scheme.startsWith("file");
         ensurePlayerCreated();
-        MediaSource mediaSource = mediaSourceFromUri(uri, type);
-        player.setMediaSource(mediaSource, true);
-        player.prepare();
+
+        if (castPlayer.isCastSessionAvailable()) {
+            prepareCastPlayer(uri, type);
+        } else {
+            MediaSource mediaSource = mediaSourceFromUri(uri, type);
+            player.setMediaSource(mediaSource, true);
+            player.prepare();
+        }
+    }
+
+    private void prepareCastPlayer(Uri uri, String type) {
+        String mimeType;
+        switch (type) {
+            case "dash":
+                mimeType = MimeTypes.APPLICATION_MPD;
+                break;
+            case "hls":
+                mimeType = MimeTypes.APPLICATION_M3U8;
+                break;
+            case "ss":
+                mimeType = MimeTypes.APPLICATION_SS;
+                break;
+            default:
+                mimeType = MimeTypes.VIDEO_MP4;
+                break;
+        }
+        castServer.start();
+        castServer.setUri(uri);
+        MediaItem m = new MediaItem.Builder()
+            .setUri(castServer.getContentUri())
+            .setMimeType(mimeType)
+            .build();
+        castPlayer.setMediaItem(m, true);
+        castPlayer.setPlayWhenReady(true);
     }
 
     public boolean isPlayerPrepared() {
@@ -343,6 +409,14 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
         if (audioPlayer != null) {
             audioPlayer.release();
             audioPlayer = null;
+        }
+        if (castPlayer != null) {
+            castPlayer.setSessionAvailabilityListener(null);
+            castPlayer.release();
+            castPlayer = null;
+        }
+        if (castServer != null) {
+            castServer.stop();
         }
         if (shouldPauseOther) {
             NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.playerDidStartPlaying);
@@ -429,21 +503,30 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
                 return;
             }
         }
-        if (player != null) {
-            player.setPlayWhenReady(true);
-        }
-        if (audioPlayer != null) {
-            audioPlayer.setPlayWhenReady(true);
+
+        if (castPlayer != null && castPlayer.isCastSessionAvailable()) {
+            castPlayer.setPlayWhenReady(true);
+        } else {
+            if (player != null) {
+                player.setPlayWhenReady(true);
+            }
+            if (audioPlayer != null) {
+                audioPlayer.setPlayWhenReady(true);
+            }
         }
     }
 
     public void pause() {
         mixedPlayWhenReady = false;
-        if (player != null) {
-            player.setPlayWhenReady(false);
-        }
-        if (audioPlayer != null) {
-            audioPlayer.setPlayWhenReady(false);
+        if (castPlayer != null && castPlayer.isCastSessionAvailable()) {
+            castPlayer.setPlayWhenReady(false);
+        } else {
+            if (player != null) {
+                player.setPlayWhenReady(false);
+            }
+            if (audioPlayer != null) {
+                audioPlayer.setPlayWhenReady(false);
+            }
         }
 
         if (audioVisualizerDelegate != null) {
@@ -453,8 +536,8 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
     }
 
     public void setPlaybackSpeed(float speed) {
-        if (player != null) {
-            player.setPlaybackParameters(new PlaybackParameters(speed, speed > 1.0f ? 0.98f : 1.0f));
+        if (currentPlayer != null) {
+            currentPlayer.setPlaybackParameters(new PlaybackParameters(speed, speed > 1.0f ? 0.98f : 1.0f));
         }
     }
 
@@ -472,24 +555,29 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
             }
         }
         autoplay = playWhenReady;
-        if (player != null) {
-            player.setPlayWhenReady(playWhenReady);
-        }
-        if (audioPlayer != null) {
-            audioPlayer.setPlayWhenReady(playWhenReady);
+
+        if (castPlayer != null && castPlayer.isCastSessionAvailable()) {
+            //castPlayer.setPlayWhenReady(playWhenReady);
+        } else {
+            if (player != null) {
+                player.setPlayWhenReady(playWhenReady);
+            }
+            if (audioPlayer != null) {
+                audioPlayer.setPlayWhenReady(playWhenReady);
+            }
         }
     }
 
     public long getDuration() {
-        return player != null ? player.getDuration() : 0;
+        return currentPlayer != null ? currentPlayer.getDuration() : 0;
     }
 
     public long getCurrentPosition() {
-        return player != null ? player.getCurrentPosition() : 0;
+        return currentPlayer != null ? currentPlayer.getCurrentPosition() : 0;
     }
 
     public boolean isMuted() {
-        return player != null && player.getVolume() == 0.0f;
+        return currentPlayer != null && currentPlayer.getVolume() == 0.0f;
     }
 
     public void setMute(boolean value) {
@@ -498,6 +586,9 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
         }
         if (audioPlayer != null) {
             audioPlayer.setVolume(value ? 0.0f : 1.0f);
+        }
+        if (castPlayer != null) {
+            castPlayer.setVolume(value ? 0f : 1f);
         }
     }
 
@@ -518,6 +609,9 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
         if (audioPlayer != null) {
             audioPlayer.setVolume(volume);
         }
+        if (castPlayer != null) {
+            castPlayer.setVolume(volume);
+        }
     }
 
     public void seekTo(long positionMs) {
@@ -525,9 +619,11 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
     }
 
     public void seekTo(long positionMs, boolean fast) {
-        if (player != null) {
-            player.setSeekParameters(fast ? SeekParameters.CLOSEST_SYNC : SeekParameters.EXACT);
-            player.seekTo(positionMs);
+        if (currentPlayer != null) {
+            if (currentPlayer == player && player != null) {
+                player.setSeekParameters(fast ? SeekParameters.CLOSEST_SYNC : SeekParameters.EXACT);
+            }
+            currentPlayer.seekTo(positionMs);
         }
     }
 
@@ -540,11 +636,11 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
     }
 
     public int getBufferedPercentage() {
-        return isStreaming ? (player != null ? player.getBufferedPercentage() : 0) : 100;
+        return isStreaming ? (currentPlayer != null ? currentPlayer.getBufferedPercentage() : 0) : 100;
     }
 
     public long getBufferedPosition() {
-        return player != null ? (isStreaming ? player.getBufferedPosition() : player.getDuration()) : 0;
+        return currentPlayer != null ? (isStreaming ? currentPlayer.getBufferedPosition() : currentPlayer.getDuration()) : 0;
     }
 
     public boolean isStreaming() {
@@ -552,11 +648,11 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
     }
 
     public boolean isPlaying() {
-        return mixedAudio && mixedPlayWhenReady || player != null && player.getPlayWhenReady();
+        return mixedAudio && mixedPlayWhenReady || currentPlayer != null && currentPlayer.getPlayWhenReady();
     }
 
     public boolean isBuffering() {
-        return player != null && lastReportedPlaybackState == ExoPlayer.STATE_BUFFERING;
+        return currentPlayer != null && lastReportedPlaybackState == ExoPlayer.STATE_BUFFERING;
     }
 
 
@@ -584,8 +680,8 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
     public void setLooping(boolean looping) {
         if (this.looping != looping) {
             this.looping = looping;
-            if (player != null) {
-                player.setRepeatMode(looping ? ExoPlayer.REPEAT_MODE_ALL : ExoPlayer.REPEAT_MODE_OFF);
+            if (currentPlayer != null) {
+                currentPlayer.setRepeatMode(looping ? ExoPlayer.REPEAT_MODE_ALL : ExoPlayer.REPEAT_MODE_OFF);
             }
         }
     }
@@ -595,7 +691,9 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
     }
 
     private void checkPlayersReady() {
-        if (audioPlayerReady && videoPlayerReady && mixedPlayWhenReady) {
+        if ((castPlayer.isCastSessionAvailable() && castPlayerReady) ||
+            (audioPlayerReady && videoPlayerReady && mixedPlayWhenReady)
+        ) {
             play();
         }
     }
@@ -669,7 +767,7 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
     }
 
     public VideoSize getVideoSize() {
-        return player != null ? player.getVideoSize() : null;
+        return currentPlayer != null ? currentPlayer.getVideoSize() : null;
     }
 
     @Override
@@ -905,4 +1003,49 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
     public void setIsStory() {
         isStory = true;
     }
+
+    @Override
+    public void onCastSessionAvailable() {
+        if (castPlayer != null) {
+            setCurrentPlayer(castPlayer);
+        }
+    }
+
+    @Override
+    public void onCastSessionUnavailable() {
+        if (player != null) {
+            setCurrentPlayer(player);
+        }
+    }
+
+    private void setCurrentPlayer(Player currentPlayer) {
+        if (this.currentPlayer == currentPlayer) {
+            return;
+        }
+
+        long playbackPositionMs = C.TIME_UNSET;
+        boolean playWhenReady = false;
+
+        Player previousPlayer = this.currentPlayer;
+        if (previousPlayer != null) {
+            int playbackState = previousPlayer.getPlaybackState();
+            if (playbackState != Player.STATE_ENDED) {
+                playbackPositionMs = previousPlayer.getCurrentPosition();
+                playWhenReady = previousPlayer.getPlayWhenReady();
+            }
+            previousPlayer.stop();
+            //previousPlayer.clearMediaItems();
+        }
+
+        this.currentPlayer = currentPlayer;
+
+        currentPlayer.seekTo(playbackPositionMs);
+        if (loopingMediaSource) {
+            preparePlayerLoop(videoUri, videoType, audioUri, audioType);
+        } else {
+            preparePlayer(videoUri, videoType);
+        }
+        setPlayWhenReady(playWhenReady);
+    }
+
 }

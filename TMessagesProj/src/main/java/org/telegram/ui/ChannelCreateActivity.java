@@ -847,7 +847,7 @@ public class ChannelCreateActivity extends BaseFragment implements NotificationC
             privateContainer.setOrientation(LinearLayout.VERTICAL);
             linkContainer.addView(privateContainer, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
 
-            permanentLinkView = new LinkActionView(context, this, null, chatId, true, ChatObject.isChannel(getMessagesController().getChat(chatId)));
+            permanentLinkView = new LinkActionView(context, this, null, chatId, true, ChatObject.isChannel(getMessagesController().getChat(chatId)), true);
             //permanentLinkView.showOptions(false);
             permanentLinkView.hideRevokeOption(true);
             permanentLinkView.setUsers(0, null);

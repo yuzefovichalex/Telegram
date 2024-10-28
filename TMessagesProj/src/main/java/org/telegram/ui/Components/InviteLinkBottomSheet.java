@@ -645,7 +645,7 @@ public class InviteLinkBottomSheet extends BottomSheet {
                     view = new ShadowSectionCell(context, 12, Theme.getColor(Theme.key_windowBackgroundGray));
                     break;
                 case 3:
-                    LinkActionView linkActionView = new LinkActionView(context, fragment, InviteLinkBottomSheet.this, chatId, false, isChannel) {
+                    LinkActionView linkActionView = new LinkActionView(context, fragment, InviteLinkBottomSheet.this, chatId, false, isChannel, true) {
                         @Override
                         public void showBulletin(int resId, CharSequence str) {
                             Bulletin b = BulletinFactory.of(container, resourcesProvider).createSimpleBulletin(resId, str);

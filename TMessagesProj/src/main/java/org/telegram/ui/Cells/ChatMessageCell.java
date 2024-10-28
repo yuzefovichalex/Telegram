@@ -555,7 +555,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
         default void didPressGroupImage(ChatMessageCell cell, ImageReceiver imageReceiver, TLRPC.MessageExtendedMedia media, float x, float y) {
         }
 
-        default void didPressSideButton(ChatMessageCell cell) {
+        default void didPressSideButton(ChatMessageCell cell, float x, float y) {
         }
 
         default void didPressOther(ChatMessageCell cell, float otherX, float otherY) {
@@ -3201,7 +3201,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
             if (commentButtonPressed) {
                 if (delegate != null) {
                     if (isRepliesChat) {
-                        delegate.didPressSideButton(this);
+                        delegate.didPressSideButton(this, sideStartX, sideStartY);
                     } else {
                         delegate.didPressCommentButton(this);
                     }
@@ -4331,7 +4331,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
                             } else if (pressedSideButton == 3) {
                                 delegate.didPressCommentButton(this);
                             } else {
-                                delegate.didPressSideButton(this);
+                                delegate.didPressSideButton(this, sideStartX, sideStartY);
                             }
                         }
                         sideButtonPressed = false;
@@ -23594,7 +23594,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
                         }
                     } else if (virtualViewId == SHARE) {
                         if (delegate != null) {
-                            delegate.didPressSideButton(ChatMessageCell.this);
+                            delegate.didPressSideButton(ChatMessageCell.this, sideStartX, sideStartY);
                         }
                     } else if (virtualViewId == REPLY) {
                         if (delegate != null && (!isThreadChat || currentMessageObject.getReplyTopMsgId() != 0) && (currentMessageObject.hasValidReplyMessageObject() || hasReplyQuote || currentMessageObject.messageOwner != null && currentMessageObject.messageOwner.reply_to != null && currentMessageObject.messageOwner.reply_to.reply_from != null)) {
@@ -23613,7 +23613,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
                     } else if (virtualViewId == COMMENT) {
                         if (delegate != null) {
                             if (isRepliesChat) {
-                                delegate.didPressSideButton(ChatMessageCell.this);
+                                delegate.didPressSideButton(ChatMessageCell.this, sideStartX, sideStartY);
                             } else {
                                 delegate.didPressCommentButton(ChatMessageCell.this);
                             }

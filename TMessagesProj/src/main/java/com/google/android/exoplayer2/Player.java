@@ -384,6 +384,7 @@ public interface Player {
         COMMAND_GET_TEXT,
         COMMAND_SET_TRACK_SELECTION_PARAMETERS,
         COMMAND_GET_TRACKS,
+          COMMAND_RELEASE,
       };
 
       private final FlagSet.Builder flagsBuilder;
@@ -1457,6 +1458,7 @@ public interface Player {
     COMMAND_GET_TEXT,
     COMMAND_SET_TRACK_SELECTION_PARAMETERS,
     COMMAND_GET_TRACKS,
+      COMMAND_RELEASE
   })
   @interface Command {}
   /**
@@ -1812,6 +1814,14 @@ public interface Player {
    * #isCommandAvailable(int) available}.
    */
   int COMMAND_GET_TRACKS = 30;
+
+  /**
+   * Command to release the player.
+   *
+   * <p>The {@link #release()} method must only be called if this command is {@linkplain
+   * #isCommandAvailable(int) available}.
+   */
+  int COMMAND_RELEASE = 32;
 
   /** Represents an invalid {@link Command}. */
   int COMMAND_INVALID = -1;

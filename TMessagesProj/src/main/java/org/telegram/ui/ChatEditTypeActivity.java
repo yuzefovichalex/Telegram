@@ -458,7 +458,7 @@ public class ChatEditTypeActivity extends BaseFragment implements NotificationCe
         privateContainer.setOrientation(LinearLayout.VERTICAL);
         linkContainer.addView(privateContainer, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
 
-        permanentLinkView = new LinkActionView(context, this, null, chatId, true, ChatObject.isChannel(currentChat));
+        permanentLinkView = new LinkActionView(context, this, null, chatId, true, ChatObject.isChannel(currentChat), true);
         permanentLinkView.setDelegate(new LinkActionView.Delegate() {
             @Override
             public void revokeLink() {
