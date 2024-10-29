@@ -35334,7 +35334,7 @@ public class ChatActivity extends BaseFragment implements NotificationCenter.Not
                     public void onItemSelect(int idx) { }
 
                     @Override
-                    public void onItemClick(ShareView shareView, int idx) {
+                    public void onItemClick(@NonNull ShareView shareView, int idx) {
                         TLRPC.Dialog dialog = getDialog(idx);
                         ArrayList<MessageObject> msgs = new ArrayList<>();
                         msgs.add(messageObject);

@@ -1050,6 +1050,7 @@ public class UndoView extends FrameLayout {
                             infoTextView.setText(AndroidUtilities.replaceSingleTag(LocaleController.getString(R.string.FwdMessagesToSavedMessages), SavedMessagesController::openSavedMessages));
                         }
                         leftImageView.setAnimation(R.raw.saved_messages, 30, 30);
+                        hapticDelay = 300;
                     } else {
                         MessagesController messagesController = MessagesController.getInstance(currentAccount);
                         BaseFragment lastFragment = LaunchActivity.getLastFragment();

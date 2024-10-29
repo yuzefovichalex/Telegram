@@ -1,5 +1,6 @@
 package org.telegram.ui.Components.share;
 
+import static org.telegram.messenger.AndroidUtilities.dp;
 import static org.telegram.messenger.AndroidUtilities.lerp;
 import static org.telegram.messenger.Utilities.clamp;
 import static java.lang.Math.round;
@@ -13,6 +14,9 @@ import android.graphics.BitmapShader;
 import android.graphics.BlurMaskFilter;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.ColorMatrix;
+import android.graphics.ColorMatrixColorFilter;
+import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.PathMeasure;
@@ -22,6 +26,10 @@ import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.Shader;
 import android.graphics.drawable.Drawable;
+import android.text.Layout;
+import android.text.StaticLayout;
+import android.text.TextPaint;
+import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
@@ -33,18 +41,26 @@ import android.view.animation.OvershootInterpolator;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.LiteMode;
+import org.telegram.ui.ActionBar.Theme;
+
 public class ShareView extends View {
 
     private static final int DEFAULT_ITEM_SIZE = 115;
     private static final int DEFAULT_ITEM_COUNT = 5;
-    private static final int DEFAULT_PADDING = 16;
-    private static final int DEFAULT_OFFSET = 25;
-    private static final int SIDE_OFFSET = 15;
+    private static final int DEFAULT_CONTAINER_PADDING = 16;
+    private static final int DEFAULT_CONTAINER_OFFSET = 25;
+    private static final int DEFAULT_SIDE_OFFSET = 15;
     private static final int DEFAULT_SHADOW_COLOR = 0xCCCCCC;
+    private static final int SHOW_ANIMATION_DURATION = 525;
+    private static final int DEFAULT_HIDE_ANIMATION_DURATION = 250;
 
     @NonNull
     private final Paint commonPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    @NonNull
     private final Paint opacityPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
+    @NonNull
     private final Paint shadowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     @NonNull
@@ -53,7 +69,9 @@ public class ShareView extends View {
     private float showProgress;
     private boolean isFullyShown;
 
+    @NonNull
     private final OpenGLBitmapProcessor morphGLBitmapProcessor;
+    @NonNull
     private final OpenGLBitmapProcessor blurGLBitmapProcessor;
 
     private Bitmap blurringBitmap;
@@ -61,24 +79,31 @@ public class ShareView extends View {
     private Bitmap blurredBitmap;
     private final Paint blurredBitmapPaint;
 
-    private Bitmap dst;
+    private Bitmap morphBitmap;
+    @NonNull
     private final Rect srcRect = new Rect();
+    @NonNull
     private final RectF dstRect = new RectF();
 
+    @NonNull
     private final PorterDuffXfermode srcInMode = new PorterDuffXfermode(PorterDuff.Mode.MULTIPLY);
+    @NonNull
     private final PorterDuffXfermode clearMode = new PorterDuffXfermode(PorterDuff.Mode.CLEAR);
 
     private int itemSize = DEFAULT_ITEM_SIZE;
     private float itemRadius = itemSize / 2f;
     private int itemCount = DEFAULT_ITEM_COUNT;
-    private int padding = DEFAULT_PADDING;
-    private int offset = DEFAULT_OFFSET;
+    private int containerPadding = DEFAULT_CONTAINER_PADDING;
+    // Offset between anchor and container or container and label
+    private int elementsOffset = DEFAULT_CONTAINER_OFFSET;
 
     private int containerWidth;
     private int containerHeight;
     private int bounceOffset;
+    @NonNull
     private final RectF containerBounds = new RectF();
-    private final RectF shadowBounds = new RectF();
+    @NonNull
+    private final RectF tempRect = new RectF();
 
     private float anchorX = -1;
     private float anchorY = -1;
@@ -92,10 +117,14 @@ public class ShareView extends View {
     private final int longPressTimeout = ViewConfiguration.getLongPressTimeout();
     private int selectedIdx = -1;
 
+    @NonNull
     private final Path hideAnimationPath = new Path();
+    @NonNull
     private final PathMeasure hideAnimationPathMeasure = new PathMeasure();
+    @NonNull
     private final float[] hideAnimatedPos = new float[2];
 
+    @NonNull
     private final ValueAnimator hideAnimator = ValueAnimator.ofFloat(0f, 1f);
     private float hideProgress = 0f;
     private boolean isHideRunning;
@@ -104,6 +133,28 @@ public class ShareView extends View {
     private OnHideListener onHideListener;
 
     private int color = 0xFFFFFF;
+
+    private boolean isLongPressed;
+
+    @NonNull
+    private Paint labelBgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    @Nullable
+    private Paint labelBgBlurPaint;
+    @NonNull
+    private final TextPaint labelPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+    @Nullable
+    private StaticLayout labelLayout;
+    private int labelHorPadding = dp(12);
+    private int labelVertPadding = dp(4);
+    private int labelBlurredBackgroundWidth;
+    private int labelBlurredBackgroundHeight;
+    @Nullable
+    private BitmapShader labelBlurBitmapShader;
+    @Nullable
+    private Matrix labelBlurBitmapMatrix;
+
+    @Nullable
+    private Runnable pendingLongPressRunnable;
 
 
     public ShareView(@NonNull Context context) {
@@ -127,8 +178,15 @@ public class ShareView extends View {
         blurredBitmapPaint.setAntiAlias(true);
         blurredBitmapPaint.setDither(true);
 
+        labelBgPaint.setColor(Color.BLACK);
+        labelBgPaint.setAlpha(127);
+
+        labelPaint.setColor(Color.WHITE);
+        labelPaint.setTextSize(dp(14));
+        labelPaint.setTypeface(AndroidUtilities.bold());
+
         showAnimator.setInterpolator(new OvershootInterpolator(1.2f));
-        showAnimator.setDuration(525L);
+        showAnimator.setDuration(SHOW_ANIMATION_DURATION);
         showAnimator.addUpdateListener((animation -> {
             isFullyShown = false;
             showProgress = (float) animation.getAnimatedValue();
@@ -138,11 +196,12 @@ public class ShareView extends View {
             @Override
             public void onAnimationEnd(Animator animation) {
                 isFullyShown = true;
+                prepareLabelBlur();
             }
         });
 
         hideAnimator.setInterpolator(new AccelerateDecelerateInterpolator());
-        hideAnimator.setDuration(325L);
+        hideAnimator.setDuration(DEFAULT_HIDE_ANIMATION_DURATION);
         hideAnimator.addUpdateListener((animation -> {
             isHideRunning = true;
             hideProgress = (float) animation.getAnimatedValue();
@@ -159,6 +218,7 @@ public class ShareView extends View {
                 hideProgress = 0f;
                 isHideRunning = false;
                 hideAnimationPath.reset();
+                isLongPressed = false;
 
                 if (onHideListener != null) {
                     onHideListener.onHide();
@@ -180,13 +240,13 @@ public class ShareView extends View {
         invalidateParams();
     }
 
-    public void setPadding(int padding) {
-        this.padding = padding;
+    public void setContainerPadding(int containerPadding) {
+        this.containerPadding = containerPadding;
         invalidateParams();
     }
 
-    public void setOffset(int offset) {
-        this.offset = offset;
+    public void setElementsOffset(int elementsOffset) {
+        this.elementsOffset = elementsOffset;
         invalidateParams();
     }
 
@@ -200,6 +260,12 @@ public class ShareView extends View {
         invalidate();
     }
 
+    public void setLabelPadding(int horizontal, int vertical) {
+        labelHorPadding = horizontal;
+        labelVertPadding = vertical;
+        invalidate();
+    }
+
     private void invalidateParams() {
         if (getMeasuredWidth() == 0) {
             needsItemCountEnsure = true;
@@ -208,8 +274,8 @@ public class ShareView extends View {
 
         int fullWidth;
         while (true) {
-            containerWidth = itemSize * itemCount + padding * (itemCount + 1);
-            fullWidth = containerWidth + SIDE_OFFSET * 2;
+            containerWidth = itemSize * itemCount + containerPadding * (itemCount + 1);
+            fullWidth = containerWidth + DEFAULT_SIDE_OFFSET * 2;
             if (fullWidth <= getMeasuredWidth()) {
                 break;
             } else {
@@ -217,15 +283,15 @@ public class ShareView extends View {
             }
         }
 
-        containerHeight = itemSize + padding * 2;
-        int fullHeight = containerHeight + offset + anchorSize + SIDE_OFFSET;
+        containerHeight = itemSize + containerPadding * 2;
+        int fullHeight = containerHeight + elementsOffset + anchorSize + DEFAULT_SIDE_OFFSET;
         itemRadius = itemSize / 2f;
         bounceOffset = containerHeight / 2;
 
-        if (dst != null) {
-            dst.recycle();
+        if (morphBitmap != null) {
+            morphBitmap.recycle();
         }
-        dst = Bitmap.createBitmap(
+        morphBitmap = Bitmap.createBitmap(
             fullWidth + bounceOffset * 2,
             fullHeight + bounceOffset,
             Bitmap.Config.ARGB_8888
@@ -286,9 +352,41 @@ public class ShareView extends View {
         showAnimator.start();
     }
 
+    private void prepareLabelBlur() {
+        labelBlurredBackgroundWidth = 0;
+        labelBlurredBackgroundHeight = 0;
+        labelBlurBitmapShader = null;
+        labelBlurBitmapMatrix = null;
+
+        if (labelBgBlurPaint != null) {
+            labelBgBlurPaint.setShader(null);
+            labelBgBlurPaint.setColorFilter(null);
+        }
+
+        labelBgPaint = Theme.getThemePaint(Theme.key_paint_chatActionBackground);
+        if (LiteMode.isEnabled(LiteMode.FLAG_CHAT_BLUR)) {
+            AndroidUtilities.makeGlobalBlurBitmap(bitmap -> {
+                labelBlurredBackgroundWidth = bitmap.getWidth();
+                labelBlurredBackgroundHeight = bitmap.getHeight();
+                labelBlurBitmapShader = new BitmapShader(bitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP);
+                labelBlurBitmapMatrix = new Matrix();
+
+                ColorMatrix colorMatrix = new ColorMatrix();
+                colorMatrix.setSaturation(1.5f);
+                AndroidUtilities.adjustBrightnessColorMatrix(colorMatrix, Theme.isCurrentThemeDark() ? +.12f : -.08f);
+                if (labelBgBlurPaint == null) {
+                    labelBgBlurPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                }
+                labelBgBlurPaint.setShader(labelBlurBitmapShader);
+                labelBgBlurPaint.setColorFilter(new ColorMatrixColorFilter(colorMatrix));
+                labelBgPaint = labelBgBlurPaint;
+            }, 12f);
+        }
+    }
+
     public void hide(float x, float y) {
-        float startX = containerBounds.left + padding * (selectedIdx + 1) + itemSize * selectedIdx;
-        float startY = containerBounds.top + padding;
+        float startX = containerBounds.left + containerPadding * (selectedIdx + 1) + itemSize * selectedIdx;
+        float startY = containerBounds.top + containerPadding;
         hideAnimationPath.reset();
         hideAnimationPath.moveTo(startX, startY);
         hideAnimationPath.quadTo(x, startY - containerHeight * 2, x, y);
@@ -308,7 +406,7 @@ public class ShareView extends View {
         float speed = 2000f / 1000f; // 2000px per 1000ms
         long duration = (long) (hideAnimationPathMeasure.getLength() / speed);
         if (duration == 0) {
-            duration = 250L;
+            duration = DEFAULT_HIDE_ANIMATION_DURATION;
         }
 
         hideAnimator.setDuration(duration);
@@ -343,7 +441,7 @@ public class ShareView extends View {
 
         super.onDraw(canvas);
 
-        float halfContainerWidthWithSideOffset = containerWidth / 2f + SIDE_OFFSET;
+        float halfContainerWidthWithSideOffset = containerWidth / 2f + DEFAULT_SIDE_OFFSET;
         float anchorRadius = anchorSize / 2f;
         float containerRadius = containerHeight / 2f;
         float outOffset = 0f;
@@ -358,7 +456,7 @@ public class ShareView extends View {
             outOffset = intrinsicCenterEndX - (getMeasuredWidth() - halfContainerWidthWithSideOffset);
         }
         float animationCenterEndX = intrinsicCenterEndX - outOffset;
-        float animationCenterEndY = anchorY - anchorRadius - offset - containerHeight / 2f;
+        float animationCenterEndY = anchorY - anchorRadius - elementsOffset - containerHeight / 2f;
 
         float rectWidth = lerp(anchorSize, containerWidth, showProgress);
         float rectHeight = lerp(anchorSize, containerHeight, showProgress);
@@ -379,12 +477,12 @@ public class ShareView extends View {
         // Special coef to not increase the morph figure when rect is fully under circle
         float radCoef = 10f * (1f - showProgress);
 
-        shadowBounds.set(
+        tempRect.set(
             containerBounds.left + radCoef, containerBounds.top + radCoef,
             containerBounds.right - radCoef, containerBounds.bottom - radCoef
         );
         shadowPaint.setAlpha(shadowAlpha);
-        canvas.drawRoundRect(shadowBounds, rectRadius, rectRadius, shadowPaint);
+        canvas.drawRoundRect(tempRect, rectRadius, rectRadius, shadowPaint);
 
         commonPaint.setXfermode(clearMode);
         blurringBitmapCanvas.drawRect(0, 0, anchorRadius * 2f, anchorRadius * 2f, commonPaint);
@@ -402,7 +500,7 @@ public class ShareView extends View {
 
         if (!isFullyShown) {
             morphGLBitmapProcessor.drawMorph(
-                dst,
+                morphBitmap,
                 rectX - morphBgX + radCoef,
                 rectY - morphBgY + radCoef,
                 rectWidth - radCoef * 2,
@@ -417,7 +515,7 @@ public class ShareView extends View {
         }
 
         opacityPaint.setAlpha(containerAlpha);
-        canvas.drawBitmap(dst, morphBgX, morphBgY, opacityPaint);
+        canvas.drawBitmap(morphBitmap, morphBgX, morphBgY, opacityPaint);
 
         canvas.save();
         canvas.translate(animationCenterStartX - anchorRadius, animationCenterStartY - anchorRadius);
@@ -432,7 +530,7 @@ public class ShareView extends View {
                 round(animationCenterStartX - morphBgX + anchorRadius),
                 round(animationCenterStartY - morphBgY + anchorRadius)
             );
-            canvas.drawBitmap(dst, srcRect, dstRect, opacityPaint);
+            canvas.drawBitmap(morphBitmap, srcRect, dstRect, opacityPaint);
 
             blurredBitmapPaint.setXfermode(srcInMode);
             canvas.drawRect(0, 0, anchorSize, anchorSize, blurredBitmapPaint);
@@ -483,6 +581,42 @@ public class ShareView extends View {
             canvas.restore();
         }
 
+        if (isFullyShown && isLongPressed && selectedIdx != -1 && labelLayout != null) {
+            int labelWidth = labelLayout.getWidth() + labelHorPadding * 2;
+            int labelHalfWidth = labelWidth / 2;
+            int labelHeight = labelLayout.getHeight() + labelVertPadding * 2;
+            int labelHalfHeight = labelHeight / 2;
+
+            float offset = selectedIdx - center + 0.5f;
+            float intrinsicLabelCenterX = rectCenterX + (itemSize + containerPadding) * offset;
+            float labelOffset = 0f;
+            if (intrinsicLabelCenterX - labelHalfWidth < rectX) {
+                labelOffset = labelHalfWidth - (intrinsicLabelCenterX - rectX);
+            } else if (rectX + rectWidth - intrinsicLabelCenterX < labelHalfWidth) {
+                labelOffset = (rectX + rectWidth - intrinsicLabelCenterX) - labelHalfWidth;
+            }
+
+            float labelStartX = intrinsicLabelCenterX + labelOffset - labelHalfWidth;
+            float labelStartY = rectY - this.elementsOffset - labelHalfHeight - labelHalfHeight;
+
+            tempRect.set(
+                labelStartX, labelStartY,
+                labelStartX + labelWidth, labelStartY + labelHeight
+            );
+
+            updateLabelBlurPositionIfNeeded(tempRect);
+
+            labelBgPaint.setAlpha(containerAlpha);
+            canvas.drawRoundRect(tempRect, labelHalfHeight, labelHalfHeight, labelBgPaint);
+
+            canvas.drawText(
+                labelLayout.getText().toString(),
+                labelStartX + labelHorPadding,
+                labelStartY + labelHeight - labelVertPadding * 2,
+                labelPaint
+            );
+        }
+
         if (!isFullyShown && controller != null) {
             canvas.save();
             canvas.translate(
@@ -492,6 +626,20 @@ public class ShareView extends View {
             controller.drawAnchorOverlay(canvas);
             canvas.restore();
         }
+    }
+
+    private void updateLabelBlurPositionIfNeeded(@NonNull RectF labelBounds) {
+        if (labelBlurBitmapShader == null || labelBlurBitmapMatrix == null) {
+            return;
+        }
+
+        labelBlurBitmapMatrix.reset();
+        labelBlurBitmapMatrix.postScale(
+            AndroidUtilities.displaySize.x / (float) labelBlurredBackgroundWidth,
+            (AndroidUtilities.displaySize.y + AndroidUtilities.statusBarHeight) / (float) labelBlurredBackgroundHeight
+        );
+        labelBlurBitmapMatrix.postTranslate(0, labelBounds.height());
+        labelBlurBitmapShader.setLocalMatrix(labelBlurBitmapMatrix);
     }
 
     @Override
@@ -505,33 +653,23 @@ public class ShareView extends View {
 
         switch (event.getAction()) {
             case MotionEvent.ACTION_DOWN:
+                int targetIdx = getItemUnder(ex, ey);
+                if (targetIdx != -1) {
+                    startPendingLongPressRunnable(targetIdx);
+                }
                 return true;
             case MotionEvent.ACTION_MOVE:
                 if (event.getEventTime() - event.getDownTime() > longPressTimeout) {
+                    cancelPendingLongPressRunnable();
                     int selectedIdx = getItemUnder(ex, ey);
-                    if (selectedIdx != -1) {
-                        if (controller != null) {
-                            controller.onItemSelect(selectedIdx);
-                            if (selectedIdx != this.selectedIdx) {
-                                performHapticFeedback(
-                                    HapticFeedbackConstants.LONG_PRESS,
-                                    HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING
-                                );
-                            }
-                        }
-                    }
-                    this.selectedIdx = selectedIdx;
-                    invalidate();
+                    selectItemOnLongPress(selectedIdx);
                 }
                 return true;
             case MotionEvent.ACTION_UP:
+                cancelPendingLongPressRunnable();
                 selectedIdx = getItemUnder(ex, ey);
                 if (selectedIdx != -1 && controller != null) {
                     controller.onItemClick(this, selectedIdx);
-                    performHapticFeedback(
-                        HapticFeedbackConstants.VIRTUAL_KEY,
-                        HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING
-                    );
                     invalidate();
                 } else {
                     hide();
@@ -563,6 +701,58 @@ public class ShareView extends View {
         return (int) (255 * clamp(floatAlpha, 1f, 0f));
     }
 
+    private void makeLabelLayout(@NonNull String text) {
+        CharSequence labelText = TextUtils.ellipsize(text, labelPaint, containerWidth * 0.7f, TextUtils.TruncateAt.END);
+        float textWidth = labelPaint.measureText(labelText.toString());
+        labelLayout = new StaticLayout(
+            labelText,
+            labelPaint,
+            (int) textWidth,
+            Layout.Alignment.ALIGN_CENTER,
+            1f,
+            0f,
+            false
+        );
+    }
+
+    private void startPendingLongPressRunnable(int idx) {
+        cancelPendingLongPressRunnable();
+
+        pendingLongPressRunnable = () -> {
+            selectItemOnLongPress(idx);
+            pendingLongPressRunnable = null;
+        };
+        AndroidUtilities.runOnUIThread(pendingLongPressRunnable, longPressTimeout);
+    }
+
+    private void cancelPendingLongPressRunnable() {
+        if (pendingLongPressRunnable == null) {
+            return;
+        }
+
+        AndroidUtilities.cancelRunOnUIThread(pendingLongPressRunnable);
+        pendingLongPressRunnable = null;
+    }
+
+    private void selectItemOnLongPress(int selectedIdx) {
+        boolean invalidate = selectedIdx != this.selectedIdx;
+        if (controller != null && selectedIdx != this.selectedIdx && selectedIdx != -1) {
+            controller.onItemSelect(selectedIdx);
+            performHapticFeedback(
+                HapticFeedbackConstants.LONG_PRESS,
+                HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING
+            );
+            String label = controller.getItemLabel(selectedIdx);
+            makeLabelLayout(label);
+        }
+        this.selectedIdx = selectedIdx;
+        isLongPressed = true;
+
+        if (invalidate) {
+            invalidate();
+        }
+    }
+
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
@@ -579,13 +769,15 @@ public class ShareView extends View {
 
 
     public interface Controller {
-        void onAttachedToWindow(ShareView shareView);
+        void onAttachedToWindow(@NonNull ShareView shareView);
         void drawAnchorOverlay(@NonNull Canvas canvas);
+        @NonNull
+        String getItemLabel(int idx);
         @NonNull
         Drawable getItemDrawable(int idx);
         void onItemSelect(int idx);
-        void onItemClick(ShareView shareView, int idx);
-        void onDetachFromWindow(ShareView shareView);
+        void onItemClick(@NonNull ShareView shareView, int idx);
+        void onDetachFromWindow(@NonNull ShareView shareView);
     }
 
     interface OnHideListener {

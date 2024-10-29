@@ -16,10 +16,13 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.google.android.exoplayer2.C;
+import com.google.android.exoplayer2.upstream.DataSource;
+import com.google.android.exoplayer2.upstream.DataSpec;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.Inet4Address;
@@ -33,6 +36,7 @@ public class LocalMediaCastServer {
     private static final int PORT = 8080;
     private static final String SCHEME_FILE = "file";
     private static final String SCHEME_CONTENT = "content";
+    private static final String SCHEME_TG = "tg";
     private static final String TAG = "LocalMediaCastServer";
 
     @Nullable
@@ -40,6 +44,9 @@ public class LocalMediaCastServer {
 
     @NonNull
     private final Application application;
+
+    @NonNull
+    private final DataSource.Factory dataSourceFactory;
 
     @Nullable
     private ServerSocket serverSocket;
@@ -50,15 +57,22 @@ public class LocalMediaCastServer {
     private volatile boolean isRunning;
 
 
-    private LocalMediaCastServer(@NonNull Context context) {
+    private LocalMediaCastServer(
+        @NonNull Context context,
+        @NonNull DataSource.Factory factory
+    ) {
         this.application = (Application) context.getApplicationContext();
+        this.dataSourceFactory = factory;
     }
 
 
     @NonNull
-    public static LocalMediaCastServer getInstance(@NonNull Context context) {
+    public static LocalMediaCastServer getInstance(
+        @NonNull Context context,
+        @NonNull DataSource.Factory factory
+    ) {
         if (instance == null) {
-            instance = new LocalMediaCastServer(context);
+            instance = new LocalMediaCastServer(context, factory);
         }
         return instance;
     }
@@ -71,7 +85,7 @@ public class LocalMediaCastServer {
     @Nullable
     public Uri getContentUri() {
         String ip = getWifiIp();
-        return ip != null ? Uri.parse("http://" + ip + ":" + PORT) : null;
+        return ip != null ? Uri.parse("http://" + ip + ":" + PORT + "/" + System.currentTimeMillis()) : null;
     }
 
     @Nullable
@@ -144,18 +158,16 @@ public class LocalMediaCastServer {
 
     private void handleRequest(@NonNull Socket socket) {
         Uri uri = this.uri;
+
         OutputStream socketOutputStream = null;
-        InputStream fileInputStream = null;
         BufferedReader requestReader = null;
+        DataSource dataSource = null;
         boolean keepAlive = false;
 
         try {
             socketOutputStream = socket.getOutputStream();
 
-            if (uri != null) {
-                fileInputStream = application.getContentResolver().openInputStream(uri);
-            }
-            if (fileInputStream == null) {
+            if (uri == null) {
                 String response = "HTTP/1.1 404 Not Found\r\n\r\n";
                 socketOutputStream.write(response.getBytes());
                 return;
@@ -174,7 +186,7 @@ public class LocalMediaCastServer {
                     range = line.substring(6).trim();
                 }
                 if (line.equalsIgnoreCase("Connection: keep-alive")) {
-                    //keepAlive = true;
+                    keepAlive = true;
                 }
                 line = requestReader.readLine();
                 req += line + "\n";
@@ -188,24 +200,32 @@ public class LocalMediaCastServer {
                 long end = ranges.length > 1 ? Long.parseLong(ranges[1]) : fileLength -1;
                 long contentLength = end - start + 1;
 
+                boolean isContentLengthValid = contentLength != C.TIME_UNSET;
                 String responseHeaders = "HTTP/1.1 206 Partial Content\r\n" +
                     "Content-Type: video/mp4\r\n" +
                     "Content-Length: " + contentLength + "\r\n" +
                     "Accept-Ranges: bytes\r\n" +
                     "Content-Range: bytes " + start + "-" + end + "/" + fileLength + "\r\n" +
-                    (keepAlive ? "Connection: keep-alive\r\n" : "Connection: close\r\n") +
+                    (keepAlive && isContentLengthValid ? "Connection: keep-alive\r\n" : "Connection: close\r\n") +
                     "Access-Control-Allow-Origin: *\r\n" +
                     "\r\n";
                 //Log.i(TAG, responseHeaders);
                 socketOutputStream.write(responseHeaders.getBytes());
 
-                fileInputStream.skip(start);
-                byte[] buffer = new byte[4096];
-                long bytesSent = 0;
-                int bytesRead;
-                while (bytesSent < contentLength && (bytesRead = fileInputStream.read(buffer)) != -1) {
-                    socketOutputStream.write(buffer, 0, bytesRead);
-                    bytesSent += bytesRead;
+                if (isContentLengthValid) {
+                    DataSpec dataSpec = new DataSpec(uri, start, contentLength);
+                    dataSource = dataSourceFactory.createDataSource();
+                    dataSource.open(dataSpec);
+
+                    byte[] buffer = new byte[4096];
+                    long bytesSent = 0;
+                    int bytesRead;
+                    while (bytesSent < contentLength && (bytesRead = dataSource.read(buffer, 0, buffer.length)) != -1) {
+                        socketOutputStream.write(buffer, 0, bytesRead);
+                        bytesSent += bytesRead;
+                    }
+                } else {
+                    keepAlive = false;
                 }
             } else {
                 String responseHeaders = "HTTP/1.1 200 OK\r\n" +
@@ -219,9 +239,9 @@ public class LocalMediaCastServer {
 
                 byte[] buffer = new byte[4096];
                 int bytesRead;
-                while ((bytesRead = fileInputStream.read(buffer)) != -1) {
-                    socketOutputStream.write(buffer, 0, bytesRead);
-                }
+//                while ((bytesRead = fileInputStream.read(buffer)) != -1) {
+//                    socketOutputStream.write(buffer, 0, bytesRead);
+//                }
             }
 
             if (!keepAlive) {
@@ -231,14 +251,14 @@ public class LocalMediaCastServer {
             Log.e(TAG, "Error handling request", e);
         } finally {
             try {
-                if (fileInputStream != null) {
-                    fileInputStream.close();
-                }
                 if (socketOutputStream != null) {
                     socketOutputStream.close();
                 }
                 if (requestReader != null) {
                     requestReader.close();
+                }
+                if (dataSource != null) {
+                    dataSource.close();
                 }
             } catch (IOException e) {
                 Log.w(TAG, "Can't close streams");
@@ -265,6 +285,13 @@ public class LocalMediaCastServer {
                 case SCHEME_FILE:
                     File file = new File(uri.getPath());
                     return file.length();
+                case SCHEME_TG:
+                    try {
+                        return Long.parseLong(uri.getQueryParameter("size"));
+                    } catch (NumberFormatException nfe) {
+                        Log.w(TAG, "Unable to parse file size from tg uri");
+                        return 0;
+                    }
             }
         }
 

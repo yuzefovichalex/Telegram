@@ -9157,6 +9157,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
                     }
                 }
                 PipVideoOverlay.onVideoCompleted();
+                PipVideoOverlay.onVideoCompleted();
             }
         }
         PipVideoOverlay.updatePlayButton();
@@ -9273,7 +9274,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
                 playerInjected = true;
                 updatePlayerState(videoPlayer.getPlayWhenReady(), videoPlayer.getPlaybackState());
             } else {
-                videoPlayer = new VideoPlayer() {
+                videoPlayer = new VideoPlayer(true, false, true) {
                     @Override
                     public void play() {
                         super.play();
@@ -9704,7 +9705,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
                 final float progress = videoPlayer.getCurrentPosition() / (float) videoPlayer.getDuration();
                 savedVideoPositions.put(shouldSavePositionForCurrentVideoShortTerm, new SavedVideoPosition(progress, SystemClock.elapsedRealtime()));
             }
-            videoPlayer.releasePlayer(true);
+            videoPlayer.releasePlayer(true, onClose);
             videoPlayer = null;
         } else {
             playerWasPlaying = false;
@@ -12123,7 +12124,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
         if (videoPlayer == null && (photoViewerWebView == null || !photoViewerWebView.isControllable())) {
             return;
         }
-        boolean playing = videoPlayer != null ? isPlaying : photoViewerWebView.isPlaying();
+        boolean playing = videoPlayer != null ? videoPlayer.isPlaying() : photoViewerWebView.isPlaying();
         cancelVideoPlayRunnable();
         AndroidUtilities.cancelRunOnUIThread(hideActionBarRunnable);
         if (playing) {
@@ -12142,6 +12143,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
             playVideoOrWeb();
         }
         containerView.invalidate();
+        updatePlayerState(playing, videoPlayer.getPlaybackState());
     }
 
     private String getFileName(int index) {

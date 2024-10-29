@@ -23,6 +23,7 @@ import android.view.Surface;
 import android.view.SurfaceView;
 import android.view.TextureView;
 import android.view.ViewGroup;
+import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 
@@ -112,6 +113,7 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
     private Player currentPlayer;
     public ExoPlayer player;
     private ExoPlayer audioPlayer;
+    @Nullable
     private CastPlayer castPlayer;
     private LocalMediaCastServer castServer;
     private MappingTrackSelector trackSelector;
@@ -123,6 +125,7 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
     private boolean autoplay;
     private boolean mixedAudio;
     public boolean allowMultipleInstances;
+    private final boolean isCastSupported;
 
     private boolean triedReinit;
 
@@ -154,13 +157,21 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
 
     boolean audioDisabled;
 
+    static int playerCounter = 0;
+
+    private static boolean wasUnsupportedMessageShown;
+
     public VideoPlayer() {
         this(true, false);
     }
 
-    static int playerCounter = 0;
     public VideoPlayer(boolean pauseOther, boolean audioDisabled) {
+        this(pauseOther, audioDisabled, false);
+    }
+
+    public VideoPlayer(boolean pauseOther, boolean audioDisabled, boolean isCastSupported) {
         this.audioDisabled = audioDisabled;
+        this.isCastSupported = isCastSupported;
         mediaDataSourceFactory = new ExtendedDefaultDataSourceFactory(ApplicationLoader.applicationContext, "Mozilla/5.0 (X11; Linux x86_64; rv:10.0) Gecko/20150101 Firefox/47.0 (Chrome)");
         trackSelector = new DefaultTrackSelector(ApplicationLoader.applicationContext);
         if (audioDisabled) {
@@ -252,26 +263,39 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
                 audioPlayer.setPlayWhenReady(autoplay);
             }
         }
-        if (castPlayer == null) {
+        if (isCastSupported && castPlayer == null) {
             CastContext castContext = CastContext.getSharedInstance(ApplicationLoader.applicationContext);
             castPlayer = new CastPlayer(castContext);
             castPlayer.addListener(new Player.Listener() {
                 @Override
                 public void onPlaybackStateChanged(int playbackState) {
+                    // TODO remove when re-encoding implemented
+                    if (castPlayerReady &&
+                        playbackState == Player.STATE_IDLE &&
+                        getDuration() == C.TIME_UNSET &&
+                        !wasUnsupportedMessageShown
+                    ) {
+                        Toast.makeText(
+                            ApplicationLoader.applicationContext,
+                            "The video resolution is not supported by your chromecast device",
+                            Toast.LENGTH_SHORT
+                        ).show();
+                        wasUnsupportedMessageShown = true;
+                    }
+
+                    maybeReportPlayerState();
                     if (!castPlayerReady && playbackState == Player.STATE_READY) {
                         castPlayerReady = true;
-                        //castPlayer.setPlayWhenReady(true);
-                        //checkPlayersReady();
                     }
                 }
             });
             castPlayer.setSessionAvailabilityListener(this);
         }
-        if (castServer == null) {
-            castServer = LocalMediaCastServer.getInstance(ApplicationLoader.applicationContext);
+        if (isCastSupported && castServer == null) {
+            castServer = LocalMediaCastServer.getInstance(ApplicationLoader.applicationContext, mediaDataSourceFactory);
         }
 
-        currentPlayer = castPlayer.isCastSessionAvailable() ? castPlayer : player;
+        currentPlayer = castPlayer != null && castPlayer.isCastSessionAvailable() ? castPlayer : player;
     }
 
     public void preparePlayerLoop(Uri videoUri, String videoType, Uri audioUri, String audioType) {
@@ -307,7 +331,7 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
             }
         }
 
-        if (castPlayer.isCastSessionAvailable()) {
+        if (castPlayer != null && castPlayer.isCastSessionAvailable()) {
             prepareCastPlayer(videoUri, videoType);
         } else {
             player.setMediaSource(mediaSource1, true);
@@ -362,7 +386,7 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
         isStreaming = scheme != null && !scheme.startsWith("file");
         ensurePlayerCreated();
 
-        if (castPlayer.isCastSessionAvailable()) {
+        if (castPlayer != null && castPlayer.isCastSessionAvailable()) {
             prepareCastPlayer(uri, type);
         } else {
             MediaSource mediaSource = mediaSourceFromUri(uri, type);
@@ -372,6 +396,10 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
     }
 
     private void prepareCastPlayer(Uri uri, String type) {
+        if (castPlayer == null) {
+            return;
+        }
+
         String mimeType;
         switch (type) {
             case "dash":
@@ -393,6 +421,8 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
             .setUri(castServer.getContentUri())
             .setMimeType(mimeType)
             .build();
+        castPlayer.setRepeatMode(Player.REPEAT_MODE_ALL);
+        castPlayer.setPlayWhenReady(false);
         castPlayer.setMediaItem(m, true);
         castPlayer.setPlayWhenReady(true);
     }
@@ -402,6 +432,10 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
     }
 
     public void releasePlayer(boolean async) {
+        releasePlayer(async, true);
+    }
+
+    public void releasePlayer(boolean async, boolean releaseCast) {
         if (player != null) {
             player.release();
             player = null;
@@ -410,17 +444,21 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
             audioPlayer.release();
             audioPlayer = null;
         }
-        if (castPlayer != null) {
-            castPlayer.setSessionAvailabilityListener(null);
-            castPlayer.release();
-            castPlayer = null;
-        }
-        if (castServer != null) {
-            castServer.stop();
+        if (releaseCast) {
+            if (castPlayer != null) {
+                castPlayer.setSessionAvailabilityListener(null);
+                castPlayer.release();
+                castPlayer = null;
+            }
+            if (castServer != null) {
+                castServer.stop();
+                castServer = null;
+            }
         }
         if (shouldPauseOther) {
             NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.playerDidStartPlaying);
         }
+        wasUnsupportedMessageShown = false;
         playerCounter--;
     }
 
@@ -479,11 +517,11 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
     }
 
     public boolean getPlayWhenReady() {
-        return player.getPlayWhenReady();
+        return currentPlayer.getPlayWhenReady();
     }
 
     public int getPlaybackState() {
-        return player.getPlaybackState();
+        return currentPlayer.getPlaybackState();
     }
 
     public Uri getCurrentUri() {
@@ -557,7 +595,7 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
         autoplay = playWhenReady;
 
         if (castPlayer != null && castPlayer.isCastSessionAvailable()) {
-            //castPlayer.setPlayWhenReady(playWhenReady);
+            castPlayer.setPlayWhenReady(playWhenReady);
         } else {
             if (player != null) {
                 player.setPlayWhenReady(playWhenReady);
@@ -620,7 +658,7 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
 
     public void seekTo(long positionMs, boolean fast) {
         if (currentPlayer != null) {
-            if (currentPlayer == player && player != null) {
+            if (currentPlayer == player) {
                 player.setSeekParameters(fast ? SeekParameters.CLOSEST_SYNC : SeekParameters.EXACT);
             }
             currentPlayer.seekTo(positionMs);
@@ -680,8 +718,8 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
     public void setLooping(boolean looping) {
         if (this.looping != looping) {
             this.looping = looping;
-            if (currentPlayer != null) {
-                currentPlayer.setRepeatMode(looping ? ExoPlayer.REPEAT_MODE_ALL : ExoPlayer.REPEAT_MODE_OFF);
+            if (player != null) {
+                player.setRepeatMode(looping ? ExoPlayer.REPEAT_MODE_ALL : ExoPlayer.REPEAT_MODE_OFF);
             }
         }
     }
@@ -691,7 +729,7 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
     }
 
     private void checkPlayersReady() {
-        if ((castPlayer.isCastSessionAvailable() && castPlayerReady) ||
+        if ((castPlayer != null && castPlayer.isCastSessionAvailable() && castPlayerReady) ||
             (audioPlayerReady && videoPlayerReady && mixedPlayWhenReady)
         ) {
             play();
@@ -704,7 +742,7 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
         if (playWhenReady && playbackState == Player.STATE_READY && !isMuted() && shouldPauseOther) {
             NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.playerDidStartPlaying, this);
         }
-        if (!videoPlayerReady && playbackState == Player.STATE_READY) {
+        if (currentPlayer == player && !videoPlayerReady && playbackState == Player.STATE_READY) {
             videoPlayerReady = true;
             checkPlayersReady();
         }
@@ -797,11 +835,11 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
     }
 
     private void maybeReportPlayerState() {
-        if (player == null) {
+        if (currentPlayer == null) {
             return;
         }
-        boolean playWhenReady = player.getPlayWhenReady();
-        int playbackState = player.getPlaybackState();
+        boolean playWhenReady = currentPlayer.getPlayWhenReady();
+        int playbackState = currentPlayer.getPlaybackState();
         if (lastReportedPlayWhenReady != playWhenReady || lastReportedPlaybackState != playbackState) {
             delegate.onStateChanged(playWhenReady, playbackState);
             lastReportedPlayWhenReady = playWhenReady;

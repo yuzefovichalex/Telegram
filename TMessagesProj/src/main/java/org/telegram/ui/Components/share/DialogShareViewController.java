@@ -6,7 +6,9 @@ import androidx.annotation.NonNull;
 
 import org.telegram.messenger.ChatObject;
 import org.telegram.messenger.DialogObject;
+import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.R;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.UserObject;
 import org.telegram.ui.Components.AvatarDrawable;
@@ -16,10 +18,14 @@ import java.util.ArrayList;
 
 public abstract class DialogShareViewController implements ShareView.Controller {
 
+    private final int currentAccount;
+
     private final ArrayList<TLRPC.Dialog> recentDialogs = new ArrayList<TLRPC.Dialog>();
     private final ArrayList<ShareDrawable> avatars = new ArrayList<>();
 
     public DialogShareViewController(int currentAccount, int dialogCount) {
+        this.currentAccount = currentAccount;
+
         int remain = dialogCount;
         if (!MessagesController.getInstance(currentAccount).dialogsForward.isEmpty()) {
             TLRPC.Dialog dialog = MessagesController.getInstance(currentAccount).dialogsForward.get(0);
@@ -90,7 +96,24 @@ public abstract class DialogShareViewController implements ShareView.Controller 
     }
 
     @Override
-    public void onAttachedToWindow(ShareView shareView) { }
+    public void onAttachedToWindow(@NonNull ShareView shareView) { }
+
+    @NonNull
+    @Override
+    public String getItemLabel(int idx) {
+        TLRPC.Dialog dialog = recentDialogs.get(idx);
+        TLRPC.User user = MessagesController.getInstance(currentAccount).getUser(dialog.id);
+        TLRPC.Chat chat = MessagesController.getInstance(currentAccount).getChat(-dialog.id);
+        if (UserObject.isUserSelf(user)) {
+            return LocaleController.getString(R.string.SavedMessages);
+        } else if (user != null) {
+            return user.first_name;
+        } else if (chat != null) {
+            return chat.title;
+        } else {
+            return "noname";
+        }
+    }
 
     @NonNull
     @Override
@@ -103,6 +126,6 @@ public abstract class DialogShareViewController implements ShareView.Controller 
     }
 
     @Override
-    public void onDetachFromWindow(ShareView shareView) { }
+    public void onDetachFromWindow(@NonNull ShareView shareView) { }
 
 }
