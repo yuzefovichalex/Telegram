@@ -62,6 +62,8 @@ public class ShareView extends View {
     private final Paint opacityPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
     @NonNull
     private final Paint shadowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    @NonNull
+    private final Paint chatBgPaint = Theme.getThemePaint(Theme.key_paint_chatActionBackground);
 
     @NonNull
     private final ValueAnimator showAnimator = ValueAnimator.ofFloat(0f, 1f);
@@ -363,7 +365,7 @@ public class ShareView extends View {
             labelBgBlurPaint.setColorFilter(null);
         }
 
-        labelBgPaint = Theme.getThemePaint(Theme.key_paint_chatActionBackground);
+        labelBgPaint = chatBgPaint;
         if (LiteMode.isEnabled(LiteMode.FLAG_CHAT_BLUR)) {
             AndroidUtilities.makeGlobalBlurBitmap(bitmap -> {
                 labelBlurredBackgroundWidth = bitmap.getWidth();
@@ -606,9 +608,14 @@ public class ShareView extends View {
 
             updateLabelBlurPositionIfNeeded(tempRect);
 
+            int oldAlpha = chatBgPaint.getAlpha();
             labelBgPaint.setAlpha(containerAlpha);
             canvas.drawRoundRect(tempRect, labelHalfHeight, labelHalfHeight, labelBgPaint);
+            if (labelBgPaint == chatBgPaint) {
+                chatBgPaint.setAlpha(oldAlpha);
+            }
 
+            labelPaint.setAlpha(containerAlpha);
             canvas.drawText(
                 labelLayout.getText().toString(),
                 labelStartX + labelHorPadding,
