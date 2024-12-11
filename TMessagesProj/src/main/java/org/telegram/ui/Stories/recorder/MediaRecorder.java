@@ -1,11 +1,13 @@
 package org.telegram.ui.Stories.recorder;
 
+import static org.telegram.messenger.AndroidUtilities.dp;
 import static org.telegram.messenger.AndroidUtilities.lerp;
 import static org.telegram.messenger.Utilities.clamp;
 
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -15,7 +17,9 @@ import android.graphics.RectF;
 import android.os.Build;
 import android.view.Gravity;
 import android.view.MotionEvent;
+import android.view.VelocityTracker;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.ViewOutlineProvider;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
@@ -33,6 +37,9 @@ public class MediaRecorder extends FrameLayout {
 
     private static final long OPEN_ANIMATION_DURATION = 350L;
     private static final long CLOSE_ANIMATION_DURATION = 220L;
+    private static final int MIN_FLING_VELOCITY = 2000;
+    private static final float CLOSE_ON_DRAG_ANCHOR_PERCENTAGE = 0.15f;
+    private static final long MIN_DRAG_RESET_ANIMATION_DURATION = 50L;
 
 
     @NonNull
@@ -47,7 +54,9 @@ public class MediaRecorder extends FrameLayout {
 
     @NonNull
     private final ValueAnimator openCloseAnimator = new ValueAnimator();
+    private boolean isOpenCloseAnimationRunning;
     private float openCloseProgress;
+    private boolean isOpenOrOpening;
 
 
     @NonNull
@@ -72,7 +81,19 @@ public class MediaRecorder extends FrameLayout {
     private final Path clipPath = new Path();
 
 
-    private boolean isOpenOrOpening;
+    private final int touchSlop;
+    private final int dragTouchSlop;
+    private final int maxDragRadius = dp(32f);
+    private float dragStartY;
+    private float dragProgress;
+    private int lastDragPointerId;
+    private boolean maybeStartDrag;
+
+    @Nullable
+    private VelocityTracker velocityTracker;
+
+    @NonNull
+    private final ValueAnimator resetDragAnimator = new ValueAnimator();
 
 
     public MediaRecorder(@NonNull Context context) {
@@ -85,13 +106,26 @@ public class MediaRecorder extends FrameLayout {
         });
         openCloseAnimator.addListener(new AnimatorListenerAdapter() {
             @Override
+            public void onAnimationStart(Animator animation) {
+                isOpenCloseAnimationRunning = true;
+            }
+
+            @Override
             public void onAnimationEnd(Animator animation) {
+                isOpenCloseAnimationRunning = false;
+                dragProgress = 0f;
                 int visibility = isOpenOrOpening
                     ? View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_FULLSCREEN
                     : View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN;
                 setSystemUiVisibility(visibility);
             }
         });
+
+        ViewConfiguration viewConfiguration = ViewConfiguration.get(context);
+        touchSlop = viewConfiguration.getScaledTouchSlop();
+        dragTouchSlop = viewConfiguration.getScaledPagingTouchSlop();
+
+        resetDragAnimator.addUpdateListener(animation -> setDragProgress((float) animation.getAnimatedValue()));
 
         placeholder = new ImageView(context);
         placeholder.setScaleType(ImageView.ScaleType.CENTER_CROP);
@@ -115,6 +149,18 @@ public class MediaRecorder extends FrameLayout {
 
     public boolean isOpenOrOpening() {
         return isOpenOrOpening;
+    }
+
+    private float getDragRadius() {
+        return lerp(0f, maxDragRadius, dragProgress);
+    }
+
+    private float getDragScale() {
+        return lerp(1f, .8f, dragProgress);
+    }
+
+    private float getDragTranslationY() {
+        return dragProgress * getMeasuredHeight();
     }
 
     public void setPreviewSize(float previewSize) {
@@ -176,32 +222,31 @@ public class MediaRecorder extends FrameLayout {
     }
 
     private void invalidateInternal() {
-        lerp(previewRect, fullSizeRect, openCloseProgress, currentRect);
-        currentRadii[0] = currentRadii[1] = lerp(previewRadius[0], 0f, openCloseProgress);
-        currentRadii[2] = currentRadii[3] = lerp(previewRadius[1], 0f, openCloseProgress);
-        currentRadii[4] = currentRadii[5] = lerp(previewRadius[2], 0f, openCloseProgress);
-        currentRadii[6] = currentRadii[7] = lerp(previewRadius[3], 0f, openCloseProgress);
-
-        clipPath.reset();
-        clipPath.addRoundRect(currentRect, currentRadii, Path.Direction.CW);
-
+        float outerScale = lerp(1f, getDragScale(), openCloseProgress);
+        setScaleX(outerScale);
+        setScaleY(outerScale);
         setTranslationX(lerp(previewAbsoluteX, 0f, openCloseProgress));
-        setTranslationY(lerp(previewAbsoluteY, 0f, openCloseProgress));
+        setTranslationY(lerp(previewAbsoluteY, getDragTranslationY(), openCloseProgress));
 
         if (getMeasuredWidth() != 0) {
-            float scale = lerp(previewSize / getMeasuredWidth(), 1f, openCloseProgress);
-            setPlaceholderScale(scale);
-            setTextureViewScale(scale);
+            float innerScale = lerp(previewSize / getMeasuredWidth(), 1f, openCloseProgress);
+            setPlaceholderScale(innerScale);
+            setTextureViewScale(innerScale);
         }
 
         float invertedProgress = 1f - openCloseProgress;
         cameraIcon.setAlpha(invertedProgress * invertedProgress);
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            invalidateOutline();
-        } else {
-            invalidate();
-        }
+        lerp(previewRect, fullSizeRect, openCloseProgress, currentRect);
+
+        float dragRadius = getDragRadius();
+        setClipRadius(
+            lerp(previewRadius[0], dragRadius, openCloseProgress),
+            lerp(previewRadius[1], dragRadius, openCloseProgress),
+            lerp(previewRadius[2], dragRadius, openCloseProgress),
+            lerp(previewRadius[3], dragRadius, openCloseProgress)
+        );
+        invalidateClipPath();
     }
 
     private void setPlaceholderScale(float scale) {
@@ -213,6 +258,64 @@ public class MediaRecorder extends FrameLayout {
         if (cameraView != null) {
             cameraView.getTextureView().setScaleX(scale);
             cameraView.getTextureView().setScaleY(scale);
+        }
+    }
+
+    private void setDragProgress(float dragProgress) {
+        if (isOpenCloseAnimationRunning) {
+            return;
+        }
+
+        this.dragProgress = dragProgress;
+
+        float scale = getDragScale();
+        setScaleX(scale);
+        setScaleY(scale);
+        setTranslationY(getDragTranslationY());
+
+        float dragRadius = getDragRadius();
+        setClipRadius(dragRadius, dragRadius, dragRadius, dragRadius);
+        invalidateClipPath();
+    }
+
+    private void resetDragProgress() {
+        if (isOpenCloseAnimationRunning || dragProgress == 0f) {
+            return;
+        }
+
+        resetDragAnimator.cancel();
+
+        float remainingHeight = getMeasuredHeight() * (1f - dragProgress);
+        long duration = Math.max(
+            (long) (200f / getMeasuredWidth() * remainingHeight),
+            MIN_DRAG_RESET_ANIMATION_DURATION
+        );
+        resetDragAnimator.setFloatValues(dragProgress, 0f);
+        resetDragAnimator.setDuration(duration);
+        resetDragAnimator.start();
+
+        maybeStartDrag = false;
+    }
+
+    private void setClipRadius(
+        float topLeft,
+        float topRight,
+        float bottomRight,
+        float bottomLeft
+    ) {
+        currentRadii[0] = currentRadii[1] = topLeft;
+        currentRadii[2] = currentRadii[3] = topRight;
+        currentRadii[4] = currentRadii[5] = bottomRight;
+        currentRadii[6] = currentRadii[7] = bottomLeft;
+    }
+
+    private void invalidateClipPath() {
+        clipPath.reset();
+        clipPath.addRoundRect(currentRect, currentRadii, Path.Direction.CW);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            invalidateOutline();
+        } else {
+            invalidate();
         }
     }
 
@@ -239,7 +342,7 @@ public class MediaRecorder extends FrameLayout {
         addView(cameraView, 1, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
     }
 
-    public void open() {
+    public void openCamera() {
         if (fullSizeRect.isEmpty() || isOpenOrOpening) {
             return;
         }
@@ -251,11 +354,12 @@ public class MediaRecorder extends FrameLayout {
         isOpenOrOpening = true;
     }
 
-    public void close() {
-        if (!isOpenOrOpening) {
+    public void closeCamera() {
+        if (!isOpenOrOpening || isOpenCloseAnimationRunning) {
             return;
         }
 
+        resetDragAnimator.cancel();
         openCloseAnimator.cancel();
         openCloseAnimator.setFloatValues(openCloseProgress, 0f);
         openCloseAnimator.setDuration(CLOSE_ANIMATION_DURATION);
@@ -308,11 +412,103 @@ public class MediaRecorder extends FrameLayout {
 
     @Override
     public boolean dispatchTouchEvent(MotionEvent ev) {
-        if (isOpenOrOpening) {
+        if (isOpenOrOpening && !isOpenCloseAnimationRunning) {
             return super.dispatchTouchEvent(ev);
         } else {
             return false;
         }
+    }
+
+    @Override
+    public boolean onInterceptTouchEvent(@NonNull MotionEvent ev) {
+        if (resetDragAnimator.isRunning()) {
+            return false;
+        }
+
+        int action = ev.getAction();
+        switch (action) {
+            case MotionEvent.ACTION_DOWN:
+                lastDragPointerId = ev.getPointerId(0);
+                dragStartY = ev.getRawY();
+                maybeStartDrag = true;
+                if (velocityTracker == null) {
+                    velocityTracker = VelocityTracker.obtain();
+                } else {
+                    velocityTracker.clear();
+                }
+                velocityTracker.addMovement(ev);
+                break;
+
+            case MotionEvent.ACTION_MOVE:
+                float dy = ev.getRawY() - dragStartY;
+                boolean isDragging = Math.abs(dy) > touchSlop &&
+                    lastDragPointerId == ev.getPointerId(0) &&
+                    maybeStartDrag;
+                if (!isDragging && velocityTracker != null) {
+                    velocityTracker.clear();
+                }
+                return isDragging;
+
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_CANCEL:
+                resetDragProgress();
+        }
+
+        return false;
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        if (resetDragAnimator.isRunning()) {
+            return false;
+        }
+
+        int action = event.getAction();
+        switch (action) {
+            case MotionEvent.ACTION_MOVE:
+                if (event.getPointerId(0) != lastDragPointerId) {
+                    return false;
+                }
+
+                float distance = event.getRawY() - dragStartY - dragTouchSlop;
+                dragProgress = clamp(
+                    distance / getMeasuredHeight(),
+                    1f,
+                    0f
+                );
+                setDragProgress(dragProgress);
+
+                if (velocityTracker == null) {
+                    velocityTracker = VelocityTracker.obtain();
+                }
+                velocityTracker.addMovement(event);
+                return true;
+
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_CANCEL:
+                if (velocityTracker == null) {
+                    velocityTracker = VelocityTracker.obtain();
+                }
+                velocityTracker.addMovement(event);
+                velocityTracker.computeCurrentVelocity(1000);
+
+                float velocityY = velocityTracker.getYVelocity();
+                if (dragProgress > CLOSE_ON_DRAG_ANCHOR_PERCENTAGE ||
+                    velocityY > MIN_FLING_VELOCITY
+                ) {
+                    closeCamera();
+                } else {
+                    resetDragProgress();
+                }
+                return true;
+
+            case MotionEvent.ACTION_POINTER_UP:
+                resetDragProgress();
+                return true;
+        }
+
+        return false;
     }
 
     @Override
