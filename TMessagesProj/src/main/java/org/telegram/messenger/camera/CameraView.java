@@ -501,13 +501,6 @@ public class CameraView extends FrameLayout implements TextureView.SurfaceTextur
         checkPreviewMatrix();
         lastWidth = width;
         lastHeight = height;
-
-        pixelW = getMeasuredWidth();
-        pixelH = getMeasuredHeight();
-        if (pixelDualW <= 0) {
-            pixelDualW = getMeasuredWidth();
-            pixelDualH = getMeasuredHeight();
-        }
     }
 
     public float getTextureHeight(float width, float height) {
@@ -1158,7 +1151,6 @@ public class CameraView extends FrameLayout implements TextureView.SurfaceTextur
     private VideoRecorder videoEncoder;
 
     private volatile float pixelW, pixelH;
-    private volatile float pixelDualW, pixelDualH;
     private volatile float lastShapeTo;
     private volatile float shapeValue;
 
@@ -1669,6 +1661,9 @@ public class CameraView extends FrameLayout implements TextureView.SurfaceTextur
             egl10.eglQuerySurface(eglDisplay, eglSurface, EGL10.EGL_HEIGHT, array);
             int drawnHeight = array[0];
 
+            pixelW = drawnWidth;
+            pixelH = drawnHeight;
+
             GLES20.glViewport(0, 0, drawnWidth, drawnHeight);
             if (dual) {
                 GLES20.glClearColor(0.f, 0.f, 0.f, 1.f);
@@ -1716,11 +1711,10 @@ public class CameraView extends FrameLayout implements TextureView.SurfaceTextur
 
                 GLES20.glUniformMatrix4fv(textureMatrixHandle, 1, false, mSTMatrix[i], 0);
                 GLES20.glUniformMatrix4fv(vertexMatrixHandle, 1, false, mMVPMatrix[i], 0);
+                GLES20.glUniform2f(pixelHandle, pixelW, pixelH);
                 if (i == 0) {
-                    GLES20.glUniform2f(pixelHandle, pixelW, pixelH);
                     GLES20.glUniform1f(dualHandle, dual ? 1 : 0);
                 } else {
-                    GLES20.glUniform2f(pixelHandle, pixelDualW, pixelDualH);
                     GLES20.glUniform1f(dualHandle, 1f);
                 }
                 GLES20.glUniform1f(blurHandle, i == 0 ? camera1Blur : 0f);
@@ -2738,11 +2732,10 @@ public class CameraView extends FrameLayout implements TextureView.SurfaceTextur
                 GLES20.glUniformMatrix4fv(textureMatrixHandle, 1, false, mSTMatrix[i], 0);
 
                 GLES20.glUniform1f(blurHandle, 0);
+                GLES20.glUniform2f(pixelHandle, pixelW, pixelH);
                 if (i == 0) {
-                    GLES20.glUniform2f(pixelHandle, pixelW, pixelH);
                     GLES20.glUniform1f(dualHandle, isDual ? 1f : 0f);
                 } else {
-                    GLES20.glUniform2f(pixelHandle, pixelDualW, pixelDualH);
                     GLES20.glUniform1f(dualHandle, 1f);
                 }
                 if (i == 1) {
