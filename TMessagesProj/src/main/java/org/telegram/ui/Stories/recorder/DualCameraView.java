@@ -593,7 +593,7 @@ public class DualCameraView extends CameraView {
     }
 
 
-    private Matrix getSavedDualMatrix() {
+    public Matrix getSavedDualMatrix() {
         String str = MessagesController.getGlobalMainSettings().getString("dualmatrix", null);
         if (str == null) {
             return null;

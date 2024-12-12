@@ -10,6 +10,7 @@ import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Matrix;
 import android.graphics.Outline;
 import android.graphics.Path;
 import android.graphics.RectF;
@@ -43,6 +44,9 @@ public class MediaRecorder extends FrameLayout {
     @NonNull
     private final ScaleGestureDetector scaleGestureDetector;
 
+    private boolean isScaling;
+    private boolean isDragging;
+
 
     public MediaRecorder(@NonNull Context context) {
         super(context);
@@ -63,23 +67,36 @@ public class MediaRecorder extends FrameLayout {
 
             @Override
             public boolean onScroll(@Nullable MotionEvent e1, @NonNull MotionEvent e2, float distanceX, float distanceY) {
-                return contentView.onScroll(e1, e2, distanceX, distanceY);
+                if (!isScaling && contentView.onDrag(distanceY)) {
+                    isDragging = true;
+                    return true;
+                }
+                return false;
             }
 
             @Override
             public boolean onFling(@Nullable MotionEvent e1, @NonNull MotionEvent e2, float velocityX, float velocityY) {
-                return contentView.onFling(e1, e2, velocityX, velocityY);
+                return contentView.onFling(velocityY);
             }
         });
         scaleGestureDetector = new ScaleGestureDetector(context, new ScaleGestureDetector.SimpleOnScaleGestureListener() {
             @Override
             public boolean onScaleBegin(@NonNull ScaleGestureDetector detector) {
+                if (!isDragging) {
+                    isScaling = true;
+                    return true;
+                }
                 return false;
             }
 
             @Override
             public boolean onScale(@NonNull ScaleGestureDetector detector) {
-                return false;
+                return contentView.onScale(detector);
+            }
+
+            @Override
+            public void onScaleEnd(@NonNull ScaleGestureDetector detector) {
+                isScaling = false;
             }
         });
     }
@@ -147,10 +164,26 @@ public class MediaRecorder extends FrameLayout {
     @Override
     public boolean dispatchTouchEvent(MotionEvent ev) {
         if (contentView.isOpenOrOpening && !contentView.isOpenCloseAnimationRunning) {
-            if (!contentView.isAtDual(ev)) {
+            if (!isScaling && !isDragging && contentView.isNotAtDual(ev)) {
+                if (ev.getPointerCount() == 1) {
+                    gestureDetector.onTouchEvent(ev);
+                } else {
+                    scaleGestureDetector.onTouchEvent(ev);
+                }
+            } else if (isScaling) {
                 scaleGestureDetector.onTouchEvent(ev);
+            } else if (isDragging) {
                 gestureDetector.onTouchEvent(ev);
             }
+
+            if (isDragging &&
+                (ev.getActionMasked() == MotionEvent.ACTION_UP ||
+                    ev.getActionMasked() == MotionEvent.ACTION_CANCEL)
+            ) {
+                isDragging = false;
+                contentView.resetDragProgress();
+            }
+
             return super.dispatchTouchEvent(ev);
         } else {
             return false;
@@ -213,6 +246,11 @@ public class MediaRecorder extends FrameLayout {
         private final ValueAnimator resetDragAnimator = new ValueAnimator();
 
 
+        @Nullable
+        private Matrix dualCameraMatrix;
+        private float cameraZoom;
+
+
         private ContentView(@NonNull Context context) {
             super(context);
 
@@ -224,6 +262,13 @@ public class MediaRecorder extends FrameLayout {
             openCloseAnimator.addListener(new AnimatorListenerAdapter() {
                 @Override
                 public void onAnimationStart(Animator animation) {
+                    if (isOpenOrOpening && cameraView != null && cameraView.isDual()) {
+                        if (dualCameraMatrix == null) {
+                            dualCameraMatrix = new Matrix();
+                        }
+                        dualCameraMatrix.set(cameraView.getDualPosition());
+                    }
+                    isOpenOrOpening = !isOpenOrOpening;
                     isOpenCloseAnimationRunning = true;
                 }
 
@@ -356,6 +401,17 @@ public class MediaRecorder extends FrameLayout {
                 lerp(previewRadius[3], dragRadius, openCloseProgress)
             );
             invalidateClipPath();
+
+            invalidateDualCameraScale();
+        }
+
+        private void invalidateDualCameraScale() {
+            if (cameraView != null && cameraView.isDual() && dualCameraMatrix != null) {
+                Matrix m = cameraView.getDualPosition();
+                m.set(dualCameraMatrix);
+                m.postScale(openCloseProgress, openCloseProgress);
+                cameraView.updateDualPosition();
+            }
         }
 
         private void setPlaceholderScale(float scale) {
@@ -446,19 +502,21 @@ public class MediaRecorder extends FrameLayout {
                     });
             });
             cameraView.setContentDescription(LocaleController.getString(R.string.AccDescrInstantCamera));
+
+            dualCameraMatrix = cameraView.getSavedDualMatrix();
+            invalidateDualCameraScale();
+
             addView(cameraView, 1, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
         }
 
         private void openCamera() {
-            if (fullSizeRect.isEmpty() || isOpenOrOpening) {
+            if (fullSizeRect.isEmpty() || isOpenOrOpening || isOpenCloseAnimationRunning) {
                 return;
             }
 
-            openCloseAnimator.cancel();
             openCloseAnimator.setFloatValues(openCloseProgress, 1f);
             openCloseAnimator.setDuration(OPEN_ANIMATION_DURATION);
             openCloseAnimator.start();
-            isOpenOrOpening = true;
         }
 
         private void closeCamera() {
@@ -467,20 +525,31 @@ public class MediaRecorder extends FrameLayout {
             }
 
             resetDragAnimator.cancel();
-            openCloseAnimator.cancel();
+
             openCloseAnimator.setFloatValues(openCloseProgress, 0f);
             openCloseAnimator.setDuration(CLOSE_ANIMATION_DURATION);
             openCloseAnimator.start();
-            isOpenOrOpening = false;
         }
 
         private void destroyCamera(boolean async) {
             if (cameraView != null) {
                 cameraView.setDelegate(null);
+                if (dualCameraMatrix != null) {
+                    Matrix m = cameraView.getDualPosition();
+                    m.set(dualCameraMatrix);
+                }
                 cameraView.destroy(async, null);
                 removeView(cameraView);
                 cameraView = null;
+                dualCameraMatrix = null;
                 placeholder.setVisibility(View.VISIBLE);
+            }
+        }
+
+        private void setCameraZoom(float cameraZoom) {
+            this.cameraZoom = clamp(cameraZoom, 1f, 0f);
+            if (cameraView != null) {
+                cameraView.setZoom(this.cameraZoom);
             }
         }
 
@@ -536,7 +605,7 @@ public class MediaRecorder extends FrameLayout {
         }
 
         private boolean onSingleTapConfirmed(@NonNull MotionEvent e) {
-            if (cameraView != null && !isAtDual(e)) {
+            if (cameraView != null && isNotAtDual(e)) {
                 cameraView.focusToPoint((int) e.getRawX(), (int) e.getRawY());
                 return true;
             }
@@ -544,19 +613,14 @@ public class MediaRecorder extends FrameLayout {
         }
 
         private boolean onDoubleTap(@NonNull MotionEvent e) {
-            if (cameraView != null && !isAtDual(e)) {
+            if (cameraView != null && isNotAtDual(e)) {
                 cameraView.switchCamera();
                 return true;
             }
             return false;
         }
 
-        private boolean onScroll(
-            @Nullable MotionEvent e1,
-            @NonNull MotionEvent e2,
-            float distanceX,
-            float distanceY
-        ) {
+        private boolean onDrag(float distanceY) {
             if (distanceY != 0) {
                 float updatedDragProgress = dragProgress - distanceY / getMeasuredHeight();
                 setDragProgress(updatedDragProgress);
@@ -566,12 +630,7 @@ public class MediaRecorder extends FrameLayout {
             return false;
         }
 
-        private boolean onFling(
-            @Nullable MotionEvent e1,
-            @NonNull MotionEvent e2,
-            float velocityX,
-            float velocityY
-        ) {
+        private boolean onFling(float velocityY) {
             if (dragProgress > CLOSE_ON_DRAG_ANCHOR_PERCENTAGE || velocityY > MIN_FLING_VELOCITY) {
                 closeCamera();
                 return true;
@@ -579,8 +638,18 @@ public class MediaRecorder extends FrameLayout {
             return false;
         }
 
-        private boolean isAtDual(@NonNull MotionEvent event) {
-            return cameraView != null && cameraView.isAtDual(event.getX(), event.getY());
+        private boolean onScale(@NonNull ScaleGestureDetector detector) {
+            float updatedZoom = cameraZoom + (detector.getScaleFactor() - 1.0f) * .75f;
+            setCameraZoom(updatedZoom);
+            return true;
+        }
+
+        private boolean isNotAtDual(@NonNull MotionEvent event) {
+            return cameraView == null ||
+                !cameraView.isAtDual(
+                    event.getX() + getTranslationX(),
+                    event.getY() + getTranslationY()
+                );
         }
 
     }
