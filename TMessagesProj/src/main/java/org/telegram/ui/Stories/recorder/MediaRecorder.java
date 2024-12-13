@@ -2,6 +2,7 @@ package org.telegram.ui.Stories.recorder;
 
 import static org.telegram.messenger.AndroidUtilities.dp;
 import static org.telegram.messenger.AndroidUtilities.lerp;
+import static org.telegram.messenger.LocaleController.getString;
 import static org.telegram.messenger.Utilities.clamp;
 
 import android.animation.Animator;
@@ -10,10 +11,14 @@ import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.Outline;
 import android.graphics.Path;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffColorFilter;
 import android.graphics.RectF;
+import android.hardware.Camera;
 import android.os.Build;
 import android.view.GestureDetector;
 import android.view.Gravity;
@@ -27,11 +32,19 @@ import android.widget.ImageView;
 import androidx.annotation.DrawableRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.content.res.ResourcesCompat;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 
+import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.LocaleController;
+import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.R;
+import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.CubicBezierInterpolator;
 import org.telegram.ui.Components.LayoutHelper;
+
+import java.util.ArrayList;
 
 public class MediaRecorder extends FrameLayout {
 
@@ -163,8 +176,8 @@ public class MediaRecorder extends FrameLayout {
 
     @Override
     public boolean dispatchTouchEvent(MotionEvent ev) {
-        if (contentView.isOpenOrOpening && !contentView.isOpenCloseAnimationRunning) {
-            if (!isScaling && !isDragging && contentView.isNotAtDual(ev)) {
+        if (contentView.isOpen()) {
+            if (!isScaling && !isDragging && isNotOnControls(ev)) {
                 if (ev.getPointerCount() == 1) {
                     gestureDetector.onTouchEvent(ev);
                 } else {
@@ -190,6 +203,15 @@ public class MediaRecorder extends FrameLayout {
         }
     }
 
+    private boolean isNotOnControls(@NonNull MotionEvent event) {
+        boolean isNotOnStatusBar = event.getY() > AndroidUtilities.statusBarHeight;
+        boolean isOnLeftControls = event.getY() < AndroidUtilities.statusBarHeight + dp(56) &&
+            event.getX() < dp(56);
+        boolean isOnRightControls = event.getY() < AndroidUtilities.statusBarHeight + dp(56) &&
+            event.getX() > getMeasuredWidth() - dp(112);
+        return contentView.isNotAtDual(event) && isNotOnStatusBar && !isOnLeftControls && !isOnRightControls;
+    }
+
 
     private static class ContentView extends FrameLayout {
 
@@ -198,6 +220,7 @@ public class MediaRecorder extends FrameLayout {
         private static final int MIN_FLING_VELOCITY = 2000;
         private static final float CLOSE_ON_DRAG_ANCHOR_PERCENTAGE = 0.15f;
         private static final long MIN_DRAG_RESET_ANIMATION_DURATION = 50L;
+        private static final int SELECTOR_BACKGROUND_COLOR = 0x20FFFFFF;
 
 
         @NonNull
@@ -208,6 +231,15 @@ public class MediaRecorder extends FrameLayout {
 
         @NonNull
         private final ImageView cameraIcon;
+
+        @NonNull
+        private final FlashViews.ImageViewInvertable backButton;
+
+        @NonNull
+        private final ToggleButton2 flashButton;
+
+        @NonNull
+        private final ToggleButton dualButton;
 
 
         @NonNull
@@ -249,6 +281,8 @@ public class MediaRecorder extends FrameLayout {
         @Nullable
         private Matrix dualCameraMatrix;
         private float cameraZoom;
+        private int frontCameraFlashMode = -1;
+        private ArrayList<String> frontCameraFlashModes = new ArrayList<>();
 
 
         private ContentView(@NonNull Context context) {
@@ -293,7 +327,54 @@ public class MediaRecorder extends FrameLayout {
             cameraIcon.setImageResource(R.drawable.instant_camera);
             addView(cameraIcon, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER));
 
+            backButton = new FlashViews.ImageViewInvertable(context);
+            backButton.setContentDescription(getString(R.string.AccDescrGoBack));
+            backButton.setScaleType(ImageView.ScaleType.CENTER);
+            backButton.setImageResource(R.drawable.msg_photo_back);
+            backButton.setColorFilter(new PorterDuffColorFilter(Color.WHITE, PorterDuff.Mode.MULTIPLY));
+            backButton.setBackground(Theme.createSelectorDrawable(SELECTOR_BACKGROUND_COLOR));
+            backButton.setOnClickListener(v -> {
+                if (isOpen()) {
+                    closeCamera();
+                }
+            });
+            addView(backButton, LayoutHelper.createFrame(56, 56));
+
+            flashButton = new ToggleButton2(context);
+            flashButton.setBackground(Theme.createSelectorDrawable(SELECTOR_BACKGROUND_COLOR));
+            flashButton.setOnClickListener(v -> toggleFlashMode());
+            addView(flashButton, LayoutHelper.createFrame(56, 56, Gravity.RIGHT));
+
+            dualButton = new ToggleButton(context, R.drawable.media_dual_camera2_shadow, R.drawable.media_dual_camera2);
+            dualButton.setOnClickListener(v -> {
+                if (cameraView == null) {
+                    return;
+                }
+                cameraView.toggleDual();
+                dualButton.setValue(cameraView.isDual());
+            });
+            final boolean dualCameraAvailable = DualCameraView.dualAvailableStatic(context);
+            dualButton.setVisibility(dualCameraAvailable ? View.VISIBLE : View.GONE);
+            dualButton.setAlpha(dualCameraAvailable ? 1f : 0f);
+            //flashViews.add(dualButton);
+            addView(dualButton, LayoutHelper.createFrame(56, 56, Gravity.RIGHT));
+
+            checkActionButtonsPosition();
+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                applyWindowInsets(WindowInsetsCompat.CONSUMED);
+                ViewCompat.setOnApplyWindowInsetsListener(this, new androidx.core.view.OnApplyWindowInsetsListener() {
+                    @NonNull
+                    @Override
+                    public WindowInsetsCompat onApplyWindowInsets(
+                        @NonNull View v,
+                        @NonNull WindowInsetsCompat insets
+                    ) {
+                        applyWindowInsets(insets);
+                        return insets;
+                    }
+                });
+
                 setOutlineProvider(new ViewOutlineProvider() {
                     @Override
                     public void getOutline(View view, Outline outline) {
@@ -304,6 +385,10 @@ public class MediaRecorder extends FrameLayout {
             }
         }
 
+
+        private boolean isOpen() {
+            return isOpenOrOpening && !isOpenCloseAnimationRunning;
+        }
 
         private float getDragRadius() {
             return lerp(0f, maxDragRadius, dragProgress);
@@ -500,6 +585,7 @@ public class MediaRecorder extends FrameLayout {
                             placeholder.setVisibility(View.GONE);
                         }
                     });
+                initFlashModes();
             });
             cameraView.setContentDescription(LocaleController.getString(R.string.AccDescrInstantCamera));
 
@@ -553,12 +639,121 @@ public class MediaRecorder extends FrameLayout {
             }
         }
 
+        private void initFlashModes() {
+            if (frontCameraFlashMode == -1) {
+                frontCameraFlashMode = clamp(
+                    MessagesController.getGlobalMainSettings().getInt("frontflash", 1),
+                    2,
+                    0
+                );
+            }
+
+            if (frontCameraFlashModes.isEmpty()) {
+                frontCameraFlashModes.add(Camera.Parameters.FLASH_MODE_OFF);
+                frontCameraFlashModes.add(Camera.Parameters.FLASH_MODE_AUTO);
+                frontCameraFlashModes.add(Camera.Parameters.FLASH_MODE_ON);
+            }
+
+            String flashMode = getLastSavedFlashMode();
+            setCameraFlashMode(flashMode, false);
+        }
+
+        @NonNull
+        private String getLastSavedFlashMode() {
+            String flashMode = Camera.Parameters.FLASH_MODE_OFF;
+            if (cameraView != null) {
+                if (cameraView.isFrontface()) {
+                    flashMode = frontCameraFlashModes.get(frontCameraFlashMode);
+                } else {
+                    if (cameraView.getCameraSession() != null) {
+                        String backCameraFlashMode = cameraView.getCameraSession().getCurrentFlashMode();
+                        if (backCameraFlashMode != null) {
+                            flashMode = backCameraFlashMode;
+                        }
+                    }
+                }
+            }
+            return flashMode;
+        }
+
+        private void toggleFlashMode() {
+            String nextFlashMode = getNextFlashMode();
+            if (nextFlashMode != null) {
+                setCameraFlashMode(nextFlashMode, true);
+            }
+        }
+
+        private void setCameraFlashMode(@NonNull String mode, boolean animated) {
+            setCurrentFlashMode(mode);
+            setCurrentFlashModeIcon(mode, false);
+        }
+
+        @Nullable
+        private String getNextFlashMode() {
+            if (cameraView == null || cameraView.getCameraSession() == null) {
+                return null;
+            }
+            if (cameraView.isFrontface() && !cameraView.getCameraSession().hasFlashModes()) {
+                int nextIndex = frontCameraFlashMode + 1 < frontCameraFlashModes.size()
+                    ? frontCameraFlashMode + 1
+                    : 0;
+                return frontCameraFlashModes.get(nextIndex);
+            }
+            return cameraView.getCameraSession().getNextFlashMode();
+        }
+
+        private void setCurrentFlashMode(@NonNull String mode) {
+            if (cameraView == null || cameraView.getCameraSession() == null) {
+                return;
+            }
+            if (cameraView.isFrontface() && !cameraView.getCameraSession().hasFlashModes()) {
+                int index = frontCameraFlashModes.indexOf(mode);
+                if (index >= 0) {
+                    frontCameraFlashMode = index;
+                    MessagesController.getGlobalMainSettings()
+                        .edit()
+                        .putInt("frontflash", frontCameraFlashMode)
+                        .apply();
+                }
+                return;
+            }
+            cameraView.getCameraSession().setCurrentFlashMode(mode);
+        }
+
+        private void setCurrentFlashModeIcon(@NonNull String mode, boolean animated) {
+            int iconResId = ResourcesCompat.ID_NULL;
+            switch (mode) {
+                case Camera.Parameters.FLASH_MODE_ON:
+                    iconResId = R.drawable.media_photo_flash_on2;
+                    flashButton.setContentDescription(getString(R.string.AccDescrCameraFlashOn));
+                    break;
+                case Camera.Parameters.FLASH_MODE_AUTO:
+                    iconResId = R.drawable.media_photo_flash_auto2;
+                    flashButton.setContentDescription(getString(R.string.AccDescrCameraFlashAuto));
+                    break;
+                case Camera.Parameters.FLASH_MODE_OFF:
+                    iconResId = R.drawable.media_photo_flash_off2;
+                    flashButton.setContentDescription(getString(R.string.AccDescrCameraFlashOff));
+                    break;
+            }
+            flashButton.setIcon(iconResId, animated);
+        }
+
         @Nullable
         private Bitmap getCameraBitmap() {
             if (cameraView != null) {
                 return cameraView.getTextureView().getBitmap();
             }
             return null;
+        }
+
+        @Override
+        protected void onAttachedToWindow() {
+            super.onAttachedToWindow();
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                requestApplyInsets();
+                //applyWindowInsets(WindowInsetsCompat.toWindowInsetsCompat(getRootWindowInsets()));
+            }
         }
 
         @Override
@@ -650,6 +845,41 @@ public class MediaRecorder extends FrameLayout {
                     event.getX() + getTranslationX(),
                     event.getY() + getTranslationY()
                 );
+        }
+
+
+        private void applyWindowInsets(@NonNull WindowInsetsCompat insets) {
+            int statusBarInset = AndroidUtilities.statusBarHeight;//insets
+                //.getInsetsIgnoringVisibility(WindowInsetsCompat.Type.statusBars())
+                //.top;
+
+            int navigationBarInset = insets
+                .getInsetsIgnoringVisibility(WindowInsetsCompat.Type.navigationBars())
+                .bottom;
+
+            updateMargin(backButton, 0, statusBarInset, 0, 0);
+            updateMargin(flashButton, 0, statusBarInset, 0, 0);
+            updateMargin(dualButton, 0, statusBarInset, 0, 0);
+        }
+
+        private void updateMargin(
+            @NonNull View view,
+            int left,
+            int top,
+            int right,
+            int bottom
+        ) {
+            LayoutParams lp = (LayoutParams) view.getLayoutParams();
+            lp.setMargins(left, top, right, bottom);
+            view.setLayoutParams(lp);
+        }
+
+        private void checkActionButtonsPosition() {
+            int right = 0;
+            flashButton.setTranslationX(right);
+
+            right -= dp(56);
+            dualButton.setTranslationX(right);
         }
 
     }
