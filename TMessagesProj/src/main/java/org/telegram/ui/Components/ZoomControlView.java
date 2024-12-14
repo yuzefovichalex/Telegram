@@ -50,6 +50,7 @@ public class ZoomControlView extends View {
 
     public interface ZoomControlViewDelegate {
         void didSetZoom(float zoom);
+        void onTapUp();
     }
 
     public final Property<ZoomControlView, Float> ZOOM_PROPERTY = new AnimationProperties.FloatProperty<ZoomControlView>("clipProgress") {
@@ -192,6 +193,9 @@ public class ZoomControlView extends View {
             pressed = false;
             knobPressed = false;
             invalidate();
+            if (delegate != null) {
+                delegate.onTapUp();
+            }
         }
         return handled || pressed || knobPressed || super.onTouchEvent(event);
     }

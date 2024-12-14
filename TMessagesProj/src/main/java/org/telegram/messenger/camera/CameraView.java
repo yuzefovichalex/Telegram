@@ -57,6 +57,7 @@ import android.widget.FrameLayout;
 import android.widget.ImageView;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.core.graphics.ColorUtils;
 
 import org.telegram.messenger.AndroidUtilities;
@@ -383,6 +384,20 @@ public class CameraView extends FrameLayout implements TextureView.SurfaceTextur
         void onCameraInit();
     }
 
+    public interface Callback {
+        void onCameraSwitch();
+    }
+
+    private boolean isCameraSwitchRequested;
+
+    @Nullable
+    private Callback callback;
+
+    public void setCallback(@Nullable Callback callback) {
+        this.callback = callback;
+    }
+
+
     public CameraView(Context context, boolean frontface) {
         this(context, frontface, false);
     }
@@ -626,6 +641,7 @@ public class CameraView extends FrameLayout implements TextureView.SurfaceTextur
             cameraSession[0] = null;
         }
         isFrontface = !isFrontface;
+        isCameraSwitchRequested = true;
     }
 
     public void resetCamera() {
@@ -781,6 +797,10 @@ public class CameraView extends FrameLayout implements TextureView.SurfaceTextur
         if (!inited && cameraSession[0] != null && cameraSession[0].isInitiated()) {
             if (delegate != null) {
                 delegate.onCameraInit();
+            }
+            if (isCameraSwitchRequested && callback != null) {
+                isCameraSwitchRequested = false;
+                callback.onCameraSwitch();
             }
             inited = true;
             if (lazy) {

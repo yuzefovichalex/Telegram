@@ -2803,11 +2803,17 @@ public class StoryRecorder implements NotificationCenter.NotificationCenterDeleg
         zoomControlView.enabledTouch = false;
         zoomControlView.setAlpha(0.0f);
         controlContainer.addView(zoomControlView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 50, Gravity.CENTER_HORIZONTAL | Gravity.BOTTOM, 0, 0, 0, 100 + 8));
-        zoomControlView.setDelegate(zoom -> {
-            if (cameraView != null) {
-                cameraView.setZoom(cameraZoom = zoom);
+        zoomControlView.setDelegate(new ZoomControlView.ZoomControlViewDelegate() {
+            @Override
+            public void didSetZoom(float zoom) {
+                if (cameraView != null) {
+                    cameraView.setZoom(cameraZoom = zoom);
+                }
+                showZoomControls(true, true);
             }
-            showZoomControls(true, true);
+
+            @Override
+            public void onTapUp() { }
         });
         zoomControlView.setZoom(cameraZoom = 0, false);
 

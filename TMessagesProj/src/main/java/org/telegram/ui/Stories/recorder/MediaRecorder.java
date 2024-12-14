@@ -38,13 +38,13 @@ import androidx.core.view.WindowInsetsCompat;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.LocaleController;
-import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.R;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.CubicBezierInterpolator;
+import org.telegram.ui.Components.ItemOptions;
 import org.telegram.ui.Components.LayoutHelper;
-
-import java.util.ArrayList;
+import org.telegram.ui.Components.ZoomControlView;
+import org.telegram.ui.Stories.DarkThemeResourceProvider;
 
 public class MediaRecorder extends FrameLayout {
 
@@ -177,7 +177,7 @@ public class MediaRecorder extends FrameLayout {
     @Override
     public boolean dispatchTouchEvent(MotionEvent ev) {
         if (contentView.isOpen()) {
-            if (!isScaling && !isDragging && isNotOnControls(ev)) {
+            if (!isScaling && !isDragging && contentView.isNotOnControls(ev)) {
                 if (ev.getPointerCount() == 1) {
                     gestureDetector.onTouchEvent(ev);
                 } else {
@@ -203,17 +203,10 @@ public class MediaRecorder extends FrameLayout {
         }
     }
 
-    private boolean isNotOnControls(@NonNull MotionEvent event) {
-        boolean isNotOnStatusBar = event.getY() > AndroidUtilities.statusBarHeight;
-        boolean isOnLeftControls = event.getY() < AndroidUtilities.statusBarHeight + dp(56) &&
-            event.getX() < dp(56);
-        boolean isOnRightControls = event.getY() < AndroidUtilities.statusBarHeight + dp(56) &&
-            event.getX() > getMeasuredWidth() - dp(112);
-        return contentView.isNotAtDual(event) && isNotOnStatusBar && !isOnLeftControls && !isOnRightControls;
-    }
 
-
-    private static class ContentView extends FrameLayout {
+    private static class ContentView extends FrameLayout implements CameraController.Callback,
+        RecordControl.Delegate
+    {
 
         private static final long OPEN_ANIMATION_DURATION = 350L;
         private static final long CLOSE_ANIMATION_DURATION = 220L;
@@ -221,6 +214,13 @@ public class MediaRecorder extends FrameLayout {
         private static final float CLOSE_ON_DRAG_ANCHOR_PERCENTAGE = 0.15f;
         private static final long MIN_DRAG_RESET_ANIMATION_DURATION = 50L;
         private static final int SELECTOR_BACKGROUND_COLOR = 0x20FFFFFF;
+
+
+        @NonNull
+        private final Theme.ResourcesProvider resourcesProvider = new DarkThemeResourceProvider();
+
+        @NonNull
+        private final CameraController cameraController;
 
 
         @NonNull
@@ -233,6 +233,9 @@ public class MediaRecorder extends FrameLayout {
         private final ImageView cameraIcon;
 
         @NonNull
+        private final FlashViews flashViews;
+
+        @NonNull
         private final FlashViews.ImageViewInvertable backButton;
 
         @NonNull
@@ -240,6 +243,12 @@ public class MediaRecorder extends FrameLayout {
 
         @NonNull
         private final ToggleButton dualButton;
+
+        @NonNull
+        private final ZoomControlView zoomControlView;
+
+        @NonNull
+        private final RecordControl recordControl;
 
 
         @NonNull
@@ -280,13 +289,20 @@ public class MediaRecorder extends FrameLayout {
 
         @Nullable
         private Matrix dualCameraMatrix;
-        private float cameraZoom;
-        private int frontCameraFlashMode = -1;
-        private ArrayList<String> frontCameraFlashModes = new ArrayList<>();
+
+        private boolean isZoomControlVisible;
+        private boolean isZoomControlAnimationRunning;
+
+        @NonNull
+        private final Runnable hideZoomControlRunnable =
+            () -> setZoomControlVisibility(false, null);
 
 
         private ContentView(@NonNull Context context) {
             super(context);
+
+            cameraController = new CameraController(context);
+            cameraController.setCallback(this);
 
             openCloseAnimator.setInterpolator(CubicBezierInterpolator.DEFAULT);
             openCloseAnimator.addUpdateListener(animation -> {
@@ -327,6 +343,10 @@ public class MediaRecorder extends FrameLayout {
             cameraIcon.setImageResource(R.drawable.instant_camera);
             addView(cameraIcon, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER));
 
+            flashViews = new FlashViews(context, null, null, null);
+            addView(flashViews.backgroundView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+            addView(flashViews.foregroundView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+
             backButton = new FlashViews.ImageViewInvertable(context);
             backButton.setContentDescription(getString(R.string.AccDescrGoBack));
             backButton.setScaleType(ImageView.ScaleType.CENTER);
@@ -338,30 +358,50 @@ public class MediaRecorder extends FrameLayout {
                     closeCamera();
                 }
             });
+            flashViews.add(backButton);
             addView(backButton, LayoutHelper.createFrame(56, 56));
 
             flashButton = new ToggleButton2(context);
             flashButton.setBackground(Theme.createSelectorDrawable(SELECTOR_BACKGROUND_COLOR));
-            flashButton.setOnClickListener(v -> toggleFlashMode());
+            flashButton.setOnClickListener(v -> cameraController.toggleFlashMode());
+            flashButton.setOnLongClickListener(v -> startFrontFlashPreview());
+            flashViews.add(flashButton);
             addView(flashButton, LayoutHelper.createFrame(56, 56, Gravity.RIGHT));
 
             dualButton = new ToggleButton(context, R.drawable.media_dual_camera2_shadow, R.drawable.media_dual_camera2);
-            dualButton.setOnClickListener(v -> {
-                if (cameraView == null) {
-                    return;
-                }
-                cameraView.toggleDual();
-                dualButton.setValue(cameraView.isDual());
-            });
+            dualButton.setOnClickListener(v -> toggleDual());
             final boolean dualCameraAvailable = DualCameraView.dualAvailableStatic(context);
             dualButton.setVisibility(dualCameraAvailable ? View.VISIBLE : View.GONE);
             dualButton.setAlpha(dualCameraAvailable ? 1f : 0f);
-            //flashViews.add(dualButton);
+            flashViews.add(dualButton);
             addView(dualButton, LayoutHelper.createFrame(56, 56, Gravity.RIGHT));
 
             checkActionButtonsPosition();
 
+            zoomControlView = new ZoomControlView(context);
+            zoomControlView.setDelegate(new ZoomControlView.ZoomControlViewDelegate() {
+                @Override
+                public void didSetZoom(float zoom) {
+                    cameraController.setZoom(zoom);
+                }
+
+                @Override
+                public void onTapUp() {
+                    AndroidUtilities.runOnUIThread(hideZoomControlRunnable, 2000);
+                }
+            });
+            zoomControlView.setAlpha(0f);
+            zoomControlView.setVisibility(View.GONE);
+            addView(zoomControlView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 50, Gravity.BOTTOM));
+
+            recordControl = new RecordControl(context);
+            recordControl.setDelegate(this);
+            recordControl.startAsVideo(false);
+            flashViews.add(recordControl);
+            addView(recordControl, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 100, Gravity.BOTTOM));
+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                // TODO deal with insets
                 applyWindowInsets(WindowInsetsCompat.CONSUMED);
                 ViewCompat.setOnApplyWindowInsetsListener(this, new androidx.core.view.OnApplyWindowInsetsListener() {
                     @NonNull
@@ -585,7 +625,7 @@ public class MediaRecorder extends FrameLayout {
                             placeholder.setVisibility(View.GONE);
                         }
                     });
-                initFlashModes();
+                cameraController.attachCameraView(cameraView);
             });
             cameraView.setContentDescription(LocaleController.getString(R.string.AccDescrInstantCamera));
 
@@ -629,114 +669,8 @@ public class MediaRecorder extends FrameLayout {
                 cameraView = null;
                 dualCameraMatrix = null;
                 placeholder.setVisibility(View.VISIBLE);
+                cameraController.detachCameraView();
             }
-        }
-
-        private void setCameraZoom(float cameraZoom) {
-            this.cameraZoom = clamp(cameraZoom, 1f, 0f);
-            if (cameraView != null) {
-                cameraView.setZoom(this.cameraZoom);
-            }
-        }
-
-        private void initFlashModes() {
-            if (frontCameraFlashMode == -1) {
-                frontCameraFlashMode = clamp(
-                    MessagesController.getGlobalMainSettings().getInt("frontflash", 1),
-                    2,
-                    0
-                );
-            }
-
-            if (frontCameraFlashModes.isEmpty()) {
-                frontCameraFlashModes.add(Camera.Parameters.FLASH_MODE_OFF);
-                frontCameraFlashModes.add(Camera.Parameters.FLASH_MODE_AUTO);
-                frontCameraFlashModes.add(Camera.Parameters.FLASH_MODE_ON);
-            }
-
-            String flashMode = getLastSavedFlashMode();
-            setCameraFlashMode(flashMode, false);
-        }
-
-        @NonNull
-        private String getLastSavedFlashMode() {
-            String flashMode = Camera.Parameters.FLASH_MODE_OFF;
-            if (cameraView != null) {
-                if (cameraView.isFrontface()) {
-                    flashMode = frontCameraFlashModes.get(frontCameraFlashMode);
-                } else {
-                    if (cameraView.getCameraSession() != null) {
-                        String backCameraFlashMode = cameraView.getCameraSession().getCurrentFlashMode();
-                        if (backCameraFlashMode != null) {
-                            flashMode = backCameraFlashMode;
-                        }
-                    }
-                }
-            }
-            return flashMode;
-        }
-
-        private void toggleFlashMode() {
-            String nextFlashMode = getNextFlashMode();
-            if (nextFlashMode != null) {
-                setCameraFlashMode(nextFlashMode, true);
-            }
-        }
-
-        private void setCameraFlashMode(@NonNull String mode, boolean animated) {
-            setCurrentFlashMode(mode);
-            setCurrentFlashModeIcon(mode, false);
-        }
-
-        @Nullable
-        private String getNextFlashMode() {
-            if (cameraView == null || cameraView.getCameraSession() == null) {
-                return null;
-            }
-            if (cameraView.isFrontface() && !cameraView.getCameraSession().hasFlashModes()) {
-                int nextIndex = frontCameraFlashMode + 1 < frontCameraFlashModes.size()
-                    ? frontCameraFlashMode + 1
-                    : 0;
-                return frontCameraFlashModes.get(nextIndex);
-            }
-            return cameraView.getCameraSession().getNextFlashMode();
-        }
-
-        private void setCurrentFlashMode(@NonNull String mode) {
-            if (cameraView == null || cameraView.getCameraSession() == null) {
-                return;
-            }
-            if (cameraView.isFrontface() && !cameraView.getCameraSession().hasFlashModes()) {
-                int index = frontCameraFlashModes.indexOf(mode);
-                if (index >= 0) {
-                    frontCameraFlashMode = index;
-                    MessagesController.getGlobalMainSettings()
-                        .edit()
-                        .putInt("frontflash", frontCameraFlashMode)
-                        .apply();
-                }
-                return;
-            }
-            cameraView.getCameraSession().setCurrentFlashMode(mode);
-        }
-
-        private void setCurrentFlashModeIcon(@NonNull String mode, boolean animated) {
-            int iconResId = ResourcesCompat.ID_NULL;
-            switch (mode) {
-                case Camera.Parameters.FLASH_MODE_ON:
-                    iconResId = R.drawable.media_photo_flash_on2;
-                    flashButton.setContentDescription(getString(R.string.AccDescrCameraFlashOn));
-                    break;
-                case Camera.Parameters.FLASH_MODE_AUTO:
-                    iconResId = R.drawable.media_photo_flash_auto2;
-                    flashButton.setContentDescription(getString(R.string.AccDescrCameraFlashAuto));
-                    break;
-                case Camera.Parameters.FLASH_MODE_OFF:
-                    iconResId = R.drawable.media_photo_flash_off2;
-                    flashButton.setContentDescription(getString(R.string.AccDescrCameraFlashOff));
-                    break;
-            }
-            flashButton.setIcon(iconResId, animated);
         }
 
         @Nullable
@@ -810,6 +744,7 @@ public class MediaRecorder extends FrameLayout {
         private boolean onDoubleTap(@NonNull MotionEvent e) {
             if (cameraView != null && isNotAtDual(e)) {
                 cameraView.switchCamera();
+                recordControl.rotateFlip(180);
                 return true;
             }
             return false;
@@ -834,9 +769,25 @@ public class MediaRecorder extends FrameLayout {
         }
 
         private boolean onScale(@NonNull ScaleGestureDetector detector) {
-            float updatedZoom = cameraZoom + (detector.getScaleFactor() - 1.0f) * .75f;
-            setCameraZoom(updatedZoom);
+            cameraController.setZoomBy((detector.getScaleFactor() - 1.0f) * .75f);
             return true;
+        }
+
+        private boolean isNotOnControls(@NonNull MotionEvent event) {
+            boolean isOnControls = isOnHitRect(backButton, event) ||
+                isOnHitRect(dualButton, event) ||
+                isOnHitRect(flashButton, event) ||
+                zoomControlView.getVisibility() == View.VISIBLE && isOnHitRect(zoomControlView, event) ||
+                isOnHitRect(recordControl, event);
+            return !isOnControls &&
+                isNotAtDual(event) &&
+                !zoomControlView.isTouch() &&
+                !recordControl.isTouch();
+        }
+
+        private boolean isOnHitRect(@NonNull View view, @NonNull MotionEvent event) {
+            view.getHitRect(AndroidUtilities.rectTmp2);
+            return AndroidUtilities.rectTmp2.contains((int) event.getX(), (int) event.getY());
         }
 
         private boolean isNotAtDual(@NonNull MotionEvent event) {
@@ -853,13 +804,15 @@ public class MediaRecorder extends FrameLayout {
                 //.getInsetsIgnoringVisibility(WindowInsetsCompat.Type.statusBars())
                 //.top;
 
-            int navigationBarInset = insets
-                .getInsetsIgnoringVisibility(WindowInsetsCompat.Type.navigationBars())
-                .bottom;
+            int navigationBarInset = AndroidUtilities.navigationBarHeight;//insets
+                //.getInsetsIgnoringVisibility(WindowInsetsCompat.Type.navigationBars())
+                //.bottom;
 
             updateMargin(backButton, 0, statusBarInset, 0, 0);
             updateMargin(flashButton, 0, statusBarInset, 0, 0);
             updateMargin(dualButton, 0, statusBarInset, 0, 0);
+            updateMargin(zoomControlView, 0, 0, 0, navigationBarInset + dp(108));
+            updateMargin(recordControl, 0, 0, 0, navigationBarInset);
         }
 
         private void updateMargin(
@@ -880,6 +833,199 @@ public class MediaRecorder extends FrameLayout {
 
             right -= dp(56);
             dualButton.setTranslationX(right);
+        }
+
+        @Override
+        public void onZoomChanged(float zoom, boolean silent) {
+            zoomControlView.setZoom(zoom, false);
+            if (!silent) {
+                AndroidUtilities.cancelRunOnUIThread(hideZoomControlRunnable);
+                setZoomControlVisibility(true, () -> {
+                    if (!zoomControlView.isTouch()) {
+                        AndroidUtilities.runOnUIThread(hideZoomControlRunnable, 2000);
+                    }
+                });
+            }
+        }
+
+        private void setZoomControlVisibility(
+            boolean isVisible,
+            @Nullable Runnable onAnimationEnd
+        ) {
+            if (isZoomControlVisible == isVisible || isZoomControlAnimationRunning) {
+                if (onAnimationEnd != null) {
+                    onAnimationEnd.run();
+                }
+                return;
+            }
+
+            zoomControlView.animate().cancel();
+
+            float alpha = isVisible ? 1f : 0f;
+            zoomControlView.animate()
+                .alpha(alpha)
+                .setDuration(180)
+                .withStartAction(() -> {
+                    isZoomControlAnimationRunning = true;
+                    if (isVisible) {
+                        zoomControlView.setVisibility(View.VISIBLE);
+                    }
+                })
+                .withEndAction(() -> {
+                    isZoomControlVisible = isVisible;
+                    isZoomControlAnimationRunning = false;
+                    if (!isVisible) {
+                        zoomControlView.setVisibility(View.GONE);
+                    }
+                    if (onAnimationEnd != null) {
+                        onAnimationEnd.run();
+                    }
+                });
+        }
+
+        @Override
+        public void onFlashModeChanged(@NonNull String flashMode, boolean isFront) {
+            setCurrentFlashModeIcon(flashMode, true);
+        }
+
+        private void setCurrentFlashModeIcon(@NonNull String mode, boolean animated) {
+            int iconResId = ResourcesCompat.ID_NULL;
+            switch (mode) {
+                case Camera.Parameters.FLASH_MODE_ON:
+                    iconResId = R.drawable.media_photo_flash_on2;
+                    flashButton.setContentDescription(getString(R.string.AccDescrCameraFlashOn));
+                    break;
+                case Camera.Parameters.FLASH_MODE_AUTO:
+                    iconResId = R.drawable.media_photo_flash_auto2;
+                    flashButton.setContentDescription(getString(R.string.AccDescrCameraFlashAuto));
+                    break;
+                case Camera.Parameters.FLASH_MODE_OFF:
+                    iconResId = R.drawable.media_photo_flash_off2;
+                    flashButton.setContentDescription(getString(R.string.AccDescrCameraFlashOff));
+                    break;
+            }
+            flashButton.setIcon(iconResId, animated);
+        }
+
+        @Override
+        public void onFrontFlashWarmthChanged(float warmth) {
+            flashViews.setWarmth(warmth);
+        }
+
+        @Override
+        public void onFrontFlashIntensityChanged(float intensity) {
+            flashViews.setIntensity(intensity);
+        }
+
+        @Override
+        public void onPhotoShoot() {
+
+        }
+
+        @Override
+        public void onVideoRecordStart(boolean byLongPress, Runnable whenStarted) {
+
+        }
+
+        @Override
+        public void onVideoRecordPause() {
+
+        }
+
+        @Override
+        public void onVideoRecordResume() {
+
+        }
+
+        @Override
+        public void onVideoRecordEnd(boolean byDuration) {
+
+        }
+
+        @Override
+        public void onVideoDuration(long duration) {
+
+        }
+
+        @Override
+        public void onGalleryClick() {
+
+        }
+
+        @Override
+        public void onFlipClick() {
+            if (cameraView != null) {
+                cameraView.switchCamera();
+            }
+        }
+
+        @Override
+        public void onFlipLongClick() {
+            if (cameraView != null) {
+                cameraView.toggleDual();
+            }
+        }
+
+        @Override
+        public void onZoom(float zoom) {
+            cameraController.setZoom(zoom);
+        }
+
+        @Override
+        public void onVideoRecordLocked() {
+
+        }
+
+        @Override
+        public boolean canRecordAudio() {
+            return false;
+        }
+
+        @Override
+        public void onCheckClick() {
+
+        }
+
+        private void toggleDual() {
+            if (cameraView == null) {
+                return;
+            }
+            cameraView.toggleDual();
+            dualButton.setValue(cameraView.isDual());
+        }
+
+        private boolean startFrontFlashPreview() {
+            if (cameraView == null || !cameraView.isFrontface()) {
+                return false;
+            }
+
+            flashButton.setSelected(true);
+            flashViews.previewStart();
+            ItemOptions.makeOptions(this, resourcesProvider, flashButton)
+                .addView(
+                    new SliderView(getContext(), SliderView.TYPE_WARMTH)
+                        .setValue(cameraController.getFrontFlashWarmth())
+                        .setOnValueChange(cameraController::setFrontFlashWarmth)
+                )
+                .addSpaceGap()
+                .addView(
+                    new SliderView(getContext(), SliderView.TYPE_INTENSITY)
+                        .setMinMax(.65f, 1f)
+                        .setValue(cameraController.getFrontFlashIntensity())
+                        .setOnValueChange(cameraController::setFrontFlashIntensity)
+                )
+                .setDimAlpha(0)
+                .setGravity(Gravity.RIGHT)
+                .translate(dp(46), -dp(4))
+                .setBackgroundColor(0xbb1b1b1b)
+                .setOnDismiss(() -> {
+                    cameraController.saveCurrentFrontFlashParams();
+                    flashViews.previewEnd();
+                    flashButton.setSelected(false);
+                })
+                .show();
+
+            return true;
         }
 
     }
