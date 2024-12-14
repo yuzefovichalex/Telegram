@@ -58,7 +58,8 @@ public class MediaRecorder extends FrameLayout {
     private final ScaleGestureDetector scaleGestureDetector;
 
     private boolean isScaling;
-    private boolean isDragging;
+    private boolean isDraggingHorizontally;
+    private boolean isDraggingVertically;
 
 
     public MediaRecorder(@NonNull Context context) {
@@ -80,22 +81,31 @@ public class MediaRecorder extends FrameLayout {
 
             @Override
             public boolean onScroll(@Nullable MotionEvent e1, @NonNull MotionEvent e2, float distanceX, float distanceY) {
-                if (!isScaling && contentView.onDrag(distanceY)) {
-                    isDragging = true;
-                    return true;
+                if (!isScaling) {
+                    if (isDraggingHorizontally) {
+                        return contentView.onHorizontalDrag(distanceX);
+                    } else if (isDraggingVertically) {
+                        return contentView.onVerticalDrag(distanceY);
+                    } else if (Math.abs(distanceX) > Math.abs(distanceY)) {
+                        isDraggingHorizontally = true;
+                        return contentView.onHorizontalDrag(distanceX);
+                    } else {
+                        isDraggingVertically = true;
+                        return contentView.onVerticalDrag(distanceY);
+                    }
                 }
                 return false;
             }
 
             @Override
             public boolean onFling(@Nullable MotionEvent e1, @NonNull MotionEvent e2, float velocityX, float velocityY) {
-                return contentView.onFling(velocityY);
+                return contentView.onFling(velocityX, velocityY);
             }
         });
         scaleGestureDetector = new ScaleGestureDetector(context, new ScaleGestureDetector.SimpleOnScaleGestureListener() {
             @Override
             public boolean onScaleBegin(@NonNull ScaleGestureDetector detector) {
-                if (!isDragging) {
+                if (!isDraggingHorizontally && !isDraggingVertically) {
                     isScaling = true;
                     return true;
                 }
@@ -117,6 +127,10 @@ public class MediaRecorder extends FrameLayout {
 
     public boolean isOpenOrOpening() {
         return contentView.isOpenOrOpening;
+    }
+
+    private boolean isDragging() {
+        return isDraggingHorizontally || isDraggingVertically;
     }
 
     public void setPreviewSize(float previewSize) {
@@ -177,7 +191,7 @@ public class MediaRecorder extends FrameLayout {
     @Override
     public boolean dispatchTouchEvent(MotionEvent ev) {
         if (contentView.isOpen()) {
-            if (!isScaling && !isDragging && contentView.isNotOnControls(ev)) {
+            if (!isScaling && !isDragging() && contentView.isNotOnControls(ev)) {
                 if (ev.getPointerCount() == 1) {
                     gestureDetector.onTouchEvent(ev);
                 } else {
@@ -185,16 +199,20 @@ public class MediaRecorder extends FrameLayout {
                 }
             } else if (isScaling) {
                 scaleGestureDetector.onTouchEvent(ev);
-            } else if (isDragging) {
+            } else if (isDragging()) {
                 gestureDetector.onTouchEvent(ev);
             }
 
-            if (isDragging &&
-                (ev.getActionMasked() == MotionEvent.ACTION_UP ||
-                    ev.getActionMasked() == MotionEvent.ACTION_CANCEL)
+            if (ev.getActionMasked() == MotionEvent.ACTION_UP ||
+                ev.getActionMasked() == MotionEvent.ACTION_CANCEL
             ) {
-                isDragging = false;
-                contentView.resetDragProgress();
+                if (isDraggingHorizontally) {
+                    isDraggingHorizontally = false;
+                    contentView.onHorizontalDragEnd();
+                } else if (isDraggingVertically) {
+                    isDraggingVertically = false;
+                    contentView.onVerticalDragEnd();
+                }
             }
 
             return super.dispatchTouchEvent(ev);
@@ -249,6 +267,9 @@ public class MediaRecorder extends FrameLayout {
 
         @NonNull
         private final RecordControl recordControl;
+
+        @NonNull
+        private final PhotoVideoSwitcherView photoVideoSwitcherView;
 
 
         @NonNull
@@ -333,7 +354,7 @@ public class MediaRecorder extends FrameLayout {
                 }
             });
 
-            resetDragAnimator.addUpdateListener(animation -> setDragProgress((float) animation.getAnimatedValue()));
+            resetDragAnimator.addUpdateListener(animation -> setVerticalDragProgress((float) animation.getAnimatedValue()));
 
             placeholder = new ImageView(context);
             placeholder.setScaleType(ImageView.ScaleType.CENTER_CROP);
@@ -399,6 +420,12 @@ public class MediaRecorder extends FrameLayout {
             recordControl.startAsVideo(false);
             flashViews.add(recordControl);
             addView(recordControl, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 100, Gravity.BOTTOM));
+
+            photoVideoSwitcherView = new PhotoVideoSwitcherView(context);
+            photoVideoSwitcherView.setOnSwitchModeListener(this::switchMode);
+            photoVideoSwitcherView.setOnSwitchingModeListener(recordControl::startAsVideoT);
+            flashViews.add(photoVideoSwitcherView);
+            addView(photoVideoSwitcherView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 48, Gravity.BOTTOM));
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 // TODO deal with insets
@@ -551,7 +578,7 @@ public class MediaRecorder extends FrameLayout {
             }
         }
 
-        private void setDragProgress(float dragProgress) {
+        private void setVerticalDragProgress(float dragProgress) {
             if (isOpenCloseAnimationRunning) {
                 return;
             }
@@ -568,7 +595,7 @@ public class MediaRecorder extends FrameLayout {
             invalidateClipPath();
         }
 
-        private void resetDragProgress() {
+        private void resetVerticalDragProgress() {
             if (isOpenCloseAnimationRunning || dragProgress == 0f) {
                 return;
             }
@@ -750,18 +777,40 @@ public class MediaRecorder extends FrameLayout {
             return false;
         }
 
-        private boolean onDrag(float distanceY) {
-            if (distanceY != 0) {
-                float updatedDragProgress = dragProgress - distanceY / getMeasuredHeight();
-                setDragProgress(updatedDragProgress);
+        private boolean onHorizontalDrag(float distance) {
+            if (distance != 0) {
+                photoVideoSwitcherView.scrollX(distance);
                 return true;
             }
 
             return false;
         }
 
-        private boolean onFling(float velocityY) {
-            if (dragProgress > CLOSE_ON_DRAG_ANCHOR_PERCENTAGE || velocityY > MIN_FLING_VELOCITY) {
+        private void onHorizontalDragEnd() {
+            photoVideoSwitcherView.stopScroll(0);
+        }
+
+        private boolean onVerticalDrag(float distance) {
+            if (distance != 0) {
+                float updatedDragProgress = dragProgress - distance / getMeasuredHeight();
+                setVerticalDragProgress(updatedDragProgress);
+                return true;
+            }
+
+            return false;
+        }
+
+        private void onVerticalDragEnd() {
+            resetVerticalDragProgress();
+        }
+
+        private boolean onFling(float velocityX, float velocityY) {
+            if (velocityX > MIN_FLING_VELOCITY) {
+                photoVideoSwitcherView.stopScroll(velocityX);
+                return true;
+            } else if (dragProgress > CLOSE_ON_DRAG_ANCHOR_PERCENTAGE ||
+                velocityY > MIN_FLING_VELOCITY
+            ) {
                 closeCamera();
                 return true;
             }
@@ -778,11 +827,13 @@ public class MediaRecorder extends FrameLayout {
                 isOnHitRect(dualButton, event) ||
                 isOnHitRect(flashButton, event) ||
                 zoomControlView.getVisibility() == View.VISIBLE && isOnHitRect(zoomControlView, event) ||
-                isOnHitRect(recordControl, event);
+                isOnHitRect(recordControl, event) ||
+                isOnHitRect(photoVideoSwitcherView, event);
             return !isOnControls &&
                 isNotAtDual(event) &&
                 !zoomControlView.isTouch() &&
-                !recordControl.isTouch();
+                !recordControl.isTouch() &&
+                !photoVideoSwitcherView.isTouch();
         }
 
         private boolean isOnHitRect(@NonNull View view, @NonNull MotionEvent event) {
@@ -811,8 +862,9 @@ public class MediaRecorder extends FrameLayout {
             updateMargin(backButton, 0, statusBarInset, 0, 0);
             updateMargin(flashButton, 0, statusBarInset, 0, 0);
             updateMargin(dualButton, 0, statusBarInset, 0, 0);
-            updateMargin(zoomControlView, 0, 0, 0, navigationBarInset + dp(108));
-            updateMargin(recordControl, 0, 0, 0, navigationBarInset);
+            updateMargin(zoomControlView, 0, 0, 0, navigationBarInset + dp(172));
+            updateMargin(recordControl, 0, 0, 0, navigationBarInset + dp(64));
+            updateMargin(photoVideoSwitcherView, 0, 0, 0, navigationBarInset + dp(16));
         }
 
         private void updateMargin(
@@ -1026,6 +1078,16 @@ public class MediaRecorder extends FrameLayout {
                 .show();
 
             return true;
+        }
+
+        private void switchMode(boolean isVideo) {
+//            if (takingPhoto || takingVideo) {
+//                return;
+//            }
+
+           // isVideo = newIsVideo;
+           // showVideoTimer(isVideo && !collageListView.isVisible(), true);
+            recordControl.startAsVideo(isVideo);
         }
 
     }
