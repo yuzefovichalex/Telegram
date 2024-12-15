@@ -46,6 +46,8 @@ import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.ZoomControlView;
 import org.telegram.ui.Stories.DarkThemeResourceProvider;
 
+import java.io.File;
+
 public class MediaRecorder extends FrameLayout {
 
     @NonNull
@@ -133,6 +135,10 @@ public class MediaRecorder extends FrameLayout {
         return isDraggingHorizontally || isDraggingVertically;
     }
 
+    public void setCallback(@Nullable Callback callback) {
+        contentView.setCallback(callback);
+    }
+
     public void setPreviewSize(float previewSize) {
         contentView.setPreviewSize(previewSize);
     }
@@ -165,6 +171,14 @@ public class MediaRecorder extends FrameLayout {
 
     public void setPlaceholder(@DrawableRes int resId) {
         contentView.setPlaceholder(resId);
+    }
+
+    public void startCameraPreview() {
+        contentView.startCameraPreview();
+    }
+
+    public void stopCameraPreview() {
+        contentView.stopCameraPreview();
     }
 
     public void startCamera() {
@@ -222,7 +236,7 @@ public class MediaRecorder extends FrameLayout {
     }
 
 
-    private static class ContentView extends FrameLayout implements CameraController.Callback,
+    private static class ContentView extends FrameLayout implements MediaRecorderController.Callback,
         RecordControl.Delegate
     {
 
@@ -238,7 +252,7 @@ public class MediaRecorder extends FrameLayout {
         private final Theme.ResourcesProvider resourcesProvider = new DarkThemeResourceProvider();
 
         @NonNull
-        private final CameraController cameraController;
+        private final MediaRecorderController mediaRecorderController;
 
 
         @NonNull
@@ -318,12 +332,15 @@ public class MediaRecorder extends FrameLayout {
         private final Runnable hideZoomControlRunnable =
             () -> setZoomControlVisibility(false, null);
 
+        @Nullable
+        private Callback callback;
+
 
         private ContentView(@NonNull Context context) {
             super(context);
 
-            cameraController = new CameraController(context);
-            cameraController.setCallback(this);
+            mediaRecorderController = new MediaRecorderController(context);
+            mediaRecorderController.setCallback(this);
 
             openCloseAnimator.setInterpolator(CubicBezierInterpolator.DEFAULT);
             openCloseAnimator.addUpdateListener(animation -> {
@@ -375,7 +392,7 @@ public class MediaRecorder extends FrameLayout {
             backButton.setColorFilter(new PorterDuffColorFilter(Color.WHITE, PorterDuff.Mode.MULTIPLY));
             backButton.setBackground(Theme.createSelectorDrawable(SELECTOR_BACKGROUND_COLOR));
             backButton.setOnClickListener(v -> {
-                if (isOpen()) {
+                if (isOpen() && !mediaRecorderController.isBusy()) {
                     closeCamera();
                 }
             });
@@ -384,13 +401,13 @@ public class MediaRecorder extends FrameLayout {
 
             flashButton = new ToggleButton2(context);
             flashButton.setBackground(Theme.createSelectorDrawable(SELECTOR_BACKGROUND_COLOR));
-            flashButton.setOnClickListener(v -> cameraController.toggleFlashMode());
+            flashButton.setOnClickListener(v -> mediaRecorderController.toggleFlashMode());
             flashButton.setOnLongClickListener(v -> startFrontFlashPreview());
             flashViews.add(flashButton);
             addView(flashButton, LayoutHelper.createFrame(56, 56, Gravity.RIGHT));
 
             dualButton = new ToggleButton(context, R.drawable.media_dual_camera2_shadow, R.drawable.media_dual_camera2);
-            dualButton.setOnClickListener(v -> toggleDual());
+            dualButton.setOnClickListener(v -> mediaRecorderController.toggleDual());
             final boolean dualCameraAvailable = DualCameraView.dualAvailableStatic(context);
             dualButton.setVisibility(dualCameraAvailable ? View.VISIBLE : View.GONE);
             dualButton.setAlpha(dualCameraAvailable ? 1f : 0f);
@@ -403,7 +420,7 @@ public class MediaRecorder extends FrameLayout {
             zoomControlView.setDelegate(new ZoomControlView.ZoomControlViewDelegate() {
                 @Override
                 public void didSetZoom(float zoom) {
-                    cameraController.setZoom(zoom);
+                    mediaRecorderController.setZoom(zoom);
                 }
 
                 @Override
@@ -467,6 +484,10 @@ public class MediaRecorder extends FrameLayout {
 
         private float getDragTranslationY() {
             return dragProgress * getMeasuredHeight();
+        }
+
+        private void setCallback(@Nullable Callback callback) {
+            this.callback = callback;
         }
 
         private void setPreviewSize(float previewSize) {
@@ -652,7 +673,7 @@ public class MediaRecorder extends FrameLayout {
                             placeholder.setVisibility(View.GONE);
                         }
                     });
-                cameraController.attachCameraView(cameraView);
+                mediaRecorderController.attachCameraView(cameraView);
             });
             cameraView.setContentDescription(LocaleController.getString(R.string.AccDescrInstantCamera));
 
@@ -696,25 +717,13 @@ public class MediaRecorder extends FrameLayout {
                 cameraView = null;
                 dualCameraMatrix = null;
                 placeholder.setVisibility(View.VISIBLE);
-                cameraController.detachCameraView();
+                mediaRecorderController.detachCameraView();
             }
         }
 
         @Nullable
         private Bitmap getCameraBitmap() {
-            if (cameraView != null) {
-                return cameraView.getTextureView().getBitmap();
-            }
-            return null;
-        }
-
-        @Override
-        protected void onAttachedToWindow() {
-            super.onAttachedToWindow();
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                requestApplyInsets();
-                //applyWindowInsets(WindowInsetsCompat.toWindowInsetsCompat(getRootWindowInsets()));
-            }
+            return mediaRecorderController.getLastFrame();
         }
 
         @Override
@@ -748,37 +757,30 @@ public class MediaRecorder extends FrameLayout {
                 canvas.save();
                 canvas.clipPath(clipPath);
                 super.dispatchDraw(canvas);
-                drawInternal(canvas);
                 canvas.restore();
             } else {
                 super.dispatchDraw(canvas);
-                drawInternal(canvas);
             }
         }
 
-        private void drawInternal(@NonNull Canvas canvas) {
-
-        }
-
         private boolean onSingleTapConfirmed(@NonNull MotionEvent e) {
-            if (cameraView != null && isNotAtDual(e)) {
-                cameraView.focusToPoint((int) e.getRawX(), (int) e.getRawY());
+            if (isNotAtDual(e)) {
+                mediaRecorderController.focusToPoint((int) e.getRawX(), (int) e.getRawY());
                 return true;
             }
             return false;
         }
 
         private boolean onDoubleTap(@NonNull MotionEvent e) {
-            if (cameraView != null && isNotAtDual(e)) {
-                cameraView.switchCamera();
-                recordControl.rotateFlip(180);
+            if (isNotAtDual(e)) {
+                mediaRecorderController.switchCamera();
                 return true;
             }
             return false;
         }
 
         private boolean onHorizontalDrag(float distance) {
-            if (distance != 0) {
+            if (distance != 0 && !mediaRecorderController.isBusy()) {
                 photoVideoSwitcherView.scrollX(distance);
                 return true;
             }
@@ -791,7 +793,7 @@ public class MediaRecorder extends FrameLayout {
         }
 
         private boolean onVerticalDrag(float distance) {
-            if (distance != 0) {
+            if (distance != 0 && !mediaRecorderController.isBusy()) {
                 float updatedDragProgress = dragProgress - distance / getMeasuredHeight();
                 setVerticalDragProgress(updatedDragProgress);
                 return true;
@@ -805,6 +807,10 @@ public class MediaRecorder extends FrameLayout {
         }
 
         private boolean onFling(float velocityX, float velocityY) {
+            if (mediaRecorderController.isBusy()) {
+                return false;
+            }
+
             if (velocityX > MIN_FLING_VELOCITY) {
                 photoVideoSwitcherView.stopScroll(velocityX);
                 return true;
@@ -814,11 +820,12 @@ public class MediaRecorder extends FrameLayout {
                 closeCamera();
                 return true;
             }
+
             return false;
         }
 
         private boolean onScale(@NonNull ScaleGestureDetector detector) {
-            cameraController.setZoomBy((detector.getScaleFactor() - 1.0f) * .75f);
+            mediaRecorderController.setZoomBy((detector.getScaleFactor() - 1.0f) * .75f);
             return true;
         }
 
@@ -970,8 +977,67 @@ public class MediaRecorder extends FrameLayout {
         }
 
         @Override
-        public void onPhotoShoot() {
+        public void onDualToggle(boolean isDual) {
+            dualButton.setValue(isDual);
+        }
 
+        @Override
+        public void onCameraSwitch() {
+            recordControl.rotateFlip(180);
+        }
+
+        @Override
+        public void onTakePictureSuccess(
+            @NonNull File outputFile,
+            int width,
+            int height,
+            int orientation,
+            boolean isSameTakePictureOrientation,
+            boolean wasFrontFlashUsed
+        ) {
+            if (wasFrontFlashUsed) {
+                flashViews.flashOut(() ->
+                    notifyTakePictureSuccess(
+                        outputFile,
+                        width, height,
+                        orientation, isSameTakePictureOrientation
+                    )
+                );
+            } else {
+                notifyTakePictureSuccess(
+                    outputFile,
+                    width, height,
+                    orientation, isSameTakePictureOrientation
+                );
+            }
+        }
+
+        private void notifyTakePictureSuccess(
+            @NonNull File outputFile,
+            int width,
+            int height,
+            int orientation,
+            boolean isSameTakePictureOrientation
+        ) {
+            if (callback != null) {
+                callback.onTakePictureSuccess(
+                    outputFile,
+                    width, height,
+                    orientation, isSameTakePictureOrientation
+                );
+            }
+        }
+
+        @Override
+        public void onPhotoShoot() {
+            if (mediaRecorderController.shouldUseDisplayFlash()) {
+                mediaRecorderController.setPreparing(true);
+                flashViews.flashIn(() ->
+                    mediaRecorderController.takePicture(false, true)
+                );
+            } else {
+                mediaRecorderController.takePicture(false, false);
+            }
         }
 
         @Override
@@ -1006,21 +1072,17 @@ public class MediaRecorder extends FrameLayout {
 
         @Override
         public void onFlipClick() {
-            if (cameraView != null) {
-                cameraView.switchCamera();
-            }
+            mediaRecorderController.switchCamera();
         }
 
         @Override
         public void onFlipLongClick() {
-            if (cameraView != null) {
-                cameraView.toggleDual();
-            }
+            mediaRecorderController.toggleDual();
         }
 
         @Override
         public void onZoom(float zoom) {
-            cameraController.setZoom(zoom);
+            mediaRecorderController.setZoom(zoom);
         }
 
         @Override
@@ -1038,16 +1100,16 @@ public class MediaRecorder extends FrameLayout {
 
         }
 
-        private void toggleDual() {
-            if (cameraView == null) {
-                return;
-            }
-            cameraView.toggleDual();
-            dualButton.setValue(cameraView.isDual());
+        private void startCameraPreview() {
+            mediaRecorderController.startPreview();
+        }
+
+        private void stopCameraPreview() {
+            mediaRecorderController.stopPreview();
         }
 
         private boolean startFrontFlashPreview() {
-            if (cameraView == null || !cameraView.isFrontface()) {
+            if (!mediaRecorderController.isFrontface() || mediaRecorderController.isBusy()) {
                 return false;
             }
 
@@ -1056,22 +1118,22 @@ public class MediaRecorder extends FrameLayout {
             ItemOptions.makeOptions(this, resourcesProvider, flashButton)
                 .addView(
                     new SliderView(getContext(), SliderView.TYPE_WARMTH)
-                        .setValue(cameraController.getFrontFlashWarmth())
-                        .setOnValueChange(cameraController::setFrontFlashWarmth)
+                        .setValue(mediaRecorderController.getFrontFlashWarmth())
+                        .setOnValueChange(mediaRecorderController::setFrontFlashWarmth)
                 )
                 .addSpaceGap()
                 .addView(
                     new SliderView(getContext(), SliderView.TYPE_INTENSITY)
                         .setMinMax(.65f, 1f)
-                        .setValue(cameraController.getFrontFlashIntensity())
-                        .setOnValueChange(cameraController::setFrontFlashIntensity)
+                        .setValue(mediaRecorderController.getFrontFlashIntensity())
+                        .setOnValueChange(mediaRecorderController::setFrontFlashIntensity)
                 )
                 .setDimAlpha(0)
                 .setGravity(Gravity.RIGHT)
                 .translate(dp(46), -dp(4))
                 .setBackgroundColor(0xbb1b1b1b)
                 .setOnDismiss(() -> {
-                    cameraController.saveCurrentFrontFlashParams();
+                    mediaRecorderController.saveCurrentFrontFlashParams();
                     flashViews.previewEnd();
                     flashButton.setSelected(false);
                 })
@@ -1090,6 +1152,17 @@ public class MediaRecorder extends FrameLayout {
             recordControl.startAsVideo(isVideo);
         }
 
+    }
+
+
+    public interface Callback {
+        void onTakePictureSuccess(
+            @NonNull File outputFile,
+            int width,
+            int height,
+            int orientation,
+            boolean isSameTakePictureOrientation
+        );
     }
 
 }

@@ -144,8 +144,12 @@ public class FlashViews {
     }
 
     public void flashOut() {
+        flashOut(null);
+    }
+
+    public void flashOut(@Nullable Runnable done) {
         setScreenBrightness(-1f);
-        flashTo(0f, 240, null);
+        flashTo(0f, 240, done);
     }
 
     private float invert = 0f;
