@@ -117,9 +117,9 @@ public class RecordControl extends View implements FlashViews.Invertable {
     private boolean dual;
     private final AnimatedFloat dualT = new AnimatedFloat(this, 0, 330, CubicBezierInterpolator.EASE_OUT_QUINT);
 
-    private static final long MAX_DURATION = 60 * 1000L;
     private long recordingStart;
     private long lastDuration;
+    private long maxDuration = -1L;
 
     private final Path checkPath = new Path();
     private final Point check1 = new Point(-dpf2(29/3.0f), dpf2(7/3.0f));
@@ -181,6 +181,10 @@ public class RecordControl extends View implements FlashViews.Invertable {
         pauseDrawable.setColorFilter(new PorterDuffColorFilter(0xffffffff, PorterDuff.Mode.MULTIPLY));
 
         updateGalleryImage();
+    }
+
+    public void setMaxDuration(long maxDuration) {
+        this.maxDuration = maxDuration;
     }
 
     public void updateGalleryImage() {
@@ -434,16 +438,16 @@ public class RecordControl extends View implements FlashViews.Invertable {
 
         long duration = System.currentTimeMillis() - recordingStart;
         float recordEndT = recording ? 0 : 1f - recordingLongT;
-        float sweepAngle = duration / (float) MAX_DURATION * 360;
+        float sweepAngle = maxDuration > -1L ? duration / (float) maxDuration * 360 : 90;
 
         float recordingLoading = this.recordingLoadingT.set(this.recordingLoading);
 
         outlineFilledPaint.setStrokeWidth(strokeWidth);
         outlineFilledPaint.setAlpha((int) (0xFF * Math.max(.7f * recordingLoading, 1f - recordEndT)));
 
-        if (recordingLoading <= 0) {
+        if (recordingLoading <= 0 && maxDuration > -1L) {
             canvas.drawArc(AndroidUtilities.rectTmp, -90, sweepAngle, false, outlineFilledPaint);
-        } else {
+        } else if (recordingLoading > 0) {
             final long now = SystemClock.elapsedRealtime();
             CircularProgressDrawable.getSegments((now - recordingLoadingStart) % 5400, loadingSegments);
             invalidate();
@@ -466,7 +470,7 @@ public class RecordControl extends View implements FlashViews.Invertable {
             if (duration / 1000L != lastDuration / 1000L) {
                 delegate.onVideoDuration(duration / 1000L);
             }
-            if (duration >= MAX_DURATION) {
+            if (maxDuration > -1L && duration >= maxDuration) {
                 post(() -> {
                     recording = false;
                     longpressRecording = false;

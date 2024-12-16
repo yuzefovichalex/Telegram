@@ -135,6 +135,10 @@ public class MediaRecorder extends FrameLayout {
         return isDraggingHorizontally || isDraggingVertically;
     }
 
+    public void setSecretChat(boolean isSecretChat) {
+        contentView.setSecretChat(isSecretChat);
+    }
+
     public void setCallback(@Nullable Callback callback) {
         contentView.setCallback(callback);
     }
@@ -335,11 +339,13 @@ public class MediaRecorder extends FrameLayout {
         @Nullable
         private Callback callback;
 
+        private boolean isSecretChat;
+
 
         private ContentView(@NonNull Context context) {
             super(context);
 
-            mediaRecorderController = new MediaRecorderController(context);
+            mediaRecorderController = new MediaRecorderController();
             mediaRecorderController.setCallback(this);
 
             openCloseAnimator.setInterpolator(CubicBezierInterpolator.DEFAULT);
@@ -488,6 +494,10 @@ public class MediaRecorder extends FrameLayout {
 
         private void setCallback(@Nullable Callback callback) {
             this.callback = callback;
+        }
+
+        public void setSecretChat(boolean isSecretChat) {
+            this.isSecretChat = isSecretChat;
         }
 
         private void setPreviewSize(float previewSize) {
@@ -945,12 +955,20 @@ public class MediaRecorder extends FrameLayout {
         @Override
         public void onFlashModeChanged(@NonNull String flashMode, boolean isFront) {
             setCurrentFlashModeIcon(flashMode, true);
+            if (isFront && mediaRecorderController.isRecordingVideo()) {
+                if (mediaRecorderController.shouldUseDisplayFlash()) {
+                    flashViews.flashIn();
+                } else {
+                    flashViews.flashOut();
+                }
+            }
         }
 
         private void setCurrentFlashModeIcon(@NonNull String mode, boolean animated) {
             int iconResId = ResourcesCompat.ID_NULL;
             switch (mode) {
                 case Camera.Parameters.FLASH_MODE_ON:
+                case Camera.Parameters.FLASH_MODE_TORCH:
                     iconResId = R.drawable.media_photo_flash_on2;
                     flashButton.setContentDescription(getString(R.string.AccDescrCameraFlashOn));
                     break;
@@ -977,13 +995,19 @@ public class MediaRecorder extends FrameLayout {
         }
 
         @Override
-        public void onDualToggle(boolean isDual) {
-            dualButton.setValue(isDual);
-        }
+        public void onPhotoShoot() {
+            if (mediaRecorderController.isBusy()) {
+                return;
+            }
 
-        @Override
-        public void onCameraSwitch() {
-            recordControl.rotateFlip(180);
+            if (mediaRecorderController.shouldUseDisplayFlash()) {
+                mediaRecorderController.setPreparing(true);
+                flashViews.flashIn(() ->
+                    mediaRecorderController.takePicture(false, false)
+                );
+            } else {
+                mediaRecorderController.takePicture(false, true);
+            }
         }
 
         @Override
@@ -992,57 +1016,33 @@ public class MediaRecorder extends FrameLayout {
             int width,
             int height,
             int orientation,
-            boolean isSameTakePictureOrientation,
-            boolean wasFrontFlashUsed
+            boolean isSameTakePictureOrientation
         ) {
-            if (wasFrontFlashUsed) {
-                flashViews.flashOut(() ->
-                    notifyTakePictureSuccess(
+            flashViews.flashOut(() -> {
+                if (callback != null) {
+                    callback.onTakePictureSuccess(
                         outputFile,
                         width, height,
                         orientation, isSameTakePictureOrientation
-                    )
-                );
-            } else {
-                notifyTakePictureSuccess(
-                    outputFile,
-                    width, height,
-                    orientation, isSameTakePictureOrientation
-                );
-            }
-        }
-
-        private void notifyTakePictureSuccess(
-            @NonNull File outputFile,
-            int width,
-            int height,
-            int orientation,
-            boolean isSameTakePictureOrientation
-        ) {
-            if (callback != null) {
-                callback.onTakePictureSuccess(
-                    outputFile,
-                    width, height,
-                    orientation, isSameTakePictureOrientation
-                );
-            }
-        }
-
-        @Override
-        public void onPhotoShoot() {
-            if (mediaRecorderController.shouldUseDisplayFlash()) {
-                mediaRecorderController.setPreparing(true);
-                flashViews.flashIn(() ->
-                    mediaRecorderController.takePicture(false, true)
-                );
-            } else {
-                mediaRecorderController.takePicture(false, false);
-            }
+                    );
+                }
+            });
         }
 
         @Override
         public void onVideoRecordStart(boolean byLongPress, Runnable whenStarted) {
+            if (mediaRecorderController.isBusy()) {
+                return;
+            }
 
+            if (mediaRecorderController.shouldUseDisplayFlash()) {
+                mediaRecorderController.setPreparing(true);
+                flashViews.flashIn(() ->
+                    mediaRecorderController.startVideoRecord(false, false, whenStarted)
+                );
+            } else {
+                mediaRecorderController.startVideoRecord(false, false, whenStarted);
+            }
         }
 
         @Override
@@ -1057,12 +1057,38 @@ public class MediaRecorder extends FrameLayout {
 
         @Override
         public void onVideoRecordEnd(boolean byDuration) {
-
+            mediaRecorderController.stopVideoRecord();
         }
 
         @Override
         public void onVideoDuration(long duration) {
 
+        }
+
+        @Override
+        public void onRecordVideoSuccess(
+            @NonNull File outputFile,
+            @NonNull String thumbPath,
+            int width,
+            int height,
+            long duration
+        ) {
+            recordControl.stopRecordingLoading(true);
+            notifyRecordVideoSuccess(outputFile, thumbPath, width, height, duration);
+        }
+
+        private void notifyRecordVideoSuccess(
+            @NonNull File outputFile,
+            @NonNull String thumbPath,
+            int width,
+            int height,
+            long duration
+        ) {
+            flashViews.flashOut(() -> {
+                if (callback != null) {
+                    callback.onRecordVideoSuccess(outputFile, thumbPath, width, height, duration);
+                }
+            });
         }
 
         @Override
@@ -1072,12 +1098,36 @@ public class MediaRecorder extends FrameLayout {
 
         @Override
         public void onFlipClick() {
+            if (mediaRecorderController.isRecordingVideo() &&
+                mediaRecorderController.isFrontface()
+            ) {
+                flashViews.flashOut();
+            }
             mediaRecorderController.switchCamera();
+        }
+
+        @Override
+        public void onCameraSwitchRequest() {
+            recordControl.rotateFlip(180);
+        }
+
+        @Override
+        public void onCameraSwitchDone() {
+            if (mediaRecorderController.isRecordingVideo() &&
+                mediaRecorderController.shouldUseDisplayFlash()
+            ) {
+                flashViews.flashIn();
+            }
         }
 
         @Override
         public void onFlipLongClick() {
             mediaRecorderController.toggleDual();
+        }
+
+        @Override
+        public void onDualToggle(boolean isDual) {
+            dualButton.setValue(isDual);
         }
 
         @Override
@@ -1092,7 +1142,7 @@ public class MediaRecorder extends FrameLayout {
 
         @Override
         public boolean canRecordAudio() {
-            return false;
+            return true;
         }
 
         @Override
@@ -1118,15 +1168,15 @@ public class MediaRecorder extends FrameLayout {
             ItemOptions.makeOptions(this, resourcesProvider, flashButton)
                 .addView(
                     new SliderView(getContext(), SliderView.TYPE_WARMTH)
-                        .setValue(mediaRecorderController.getFrontFlashWarmth())
-                        .setOnValueChange(mediaRecorderController::setFrontFlashWarmth)
+                        .setValue(mediaRecorderController.getDisplayFlashWarmth())
+                        .setOnValueChange(mediaRecorderController::setDisplayFlashWarmth)
                 )
                 .addSpaceGap()
                 .addView(
                     new SliderView(getContext(), SliderView.TYPE_INTENSITY)
                         .setMinMax(.65f, 1f)
-                        .setValue(mediaRecorderController.getFrontFlashIntensity())
-                        .setOnValueChange(mediaRecorderController::setFrontFlashIntensity)
+                        .setValue(mediaRecorderController.getDisplayFlashIntensity())
+                        .setOnValueChange(mediaRecorderController::setDisplayFlashIntensity)
                 )
                 .setDimAlpha(0)
                 .setGravity(Gravity.RIGHT)
@@ -1162,6 +1212,13 @@ public class MediaRecorder extends FrameLayout {
             int height,
             int orientation,
             boolean isSameTakePictureOrientation
+        );
+        void onRecordVideoSuccess(
+            @NonNull File outputFile,
+            @NonNull String thumbPath,
+            int width,
+            int height,
+            long duration
         );
     }
 

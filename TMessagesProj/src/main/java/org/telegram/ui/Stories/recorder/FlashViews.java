@@ -138,6 +138,10 @@ public class FlashViews {
         flashTo(0, 240, null);
     }
 
+    public void flashIn() {
+        flashIn(null);
+    }
+
     public void flashIn(Runnable done) {
         setScreenBrightness(intensityValue());
         flashTo(1f, 320, done);
@@ -153,9 +157,17 @@ public class FlashViews {
     }
 
     private float invert = 0f;
+    private float targetInvert;
     private ValueAnimator animator;
 
     private void flashTo(float value, long duration, Runnable whenDone) {
+        if (value == targetInvert && animator != null && animator.isRunning()) {
+            if (whenDone != null) {
+                whenDone.run();
+            }
+            return;
+        }
+
         if (animator != null) {
             animator.cancel();
             animator = null;
@@ -167,6 +179,7 @@ public class FlashViews {
                 whenDone.run();
             }
         } else {
+            targetInvert = value;
             animator = ValueAnimator.ofFloat(invert, value);
             animator.addUpdateListener(anm -> {
                 invert = (float) anm.getAnimatedValue();

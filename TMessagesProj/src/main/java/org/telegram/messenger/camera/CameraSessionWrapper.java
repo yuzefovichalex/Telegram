@@ -99,11 +99,15 @@ public class CameraSessionWrapper {
     }
 
     public String getNextFlashMode() {
+        return getNextFlashMode(false);
+    }
+
+    public String getNextFlashMode(boolean useTorch) {
         if (camera2Session != null) {
             // TODO
             return Camera.Parameters.FLASH_MODE_OFF;
         } else if (camera1Session != null) {
-            return camera1Session.getNextFlashMode();
+            return camera1Session.getNextFlashMode(useTorch);
         }
         return null;
     }

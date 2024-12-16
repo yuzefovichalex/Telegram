@@ -54,6 +54,7 @@ public class CameraSession {
     private boolean destroyed;
 
     public ArrayList<String> availableFlashModes = new ArrayList<>();
+    public boolean isTorchModeSupported;
 
     private int infoCameraId = -1;
     Camera.CameraInfo info = new Camera.CameraInfo();
@@ -148,7 +149,12 @@ public class CameraSession {
     }
 
     public void setCurrentFlashMode(String mode) {
-        currentFlashMode = mode;
+        if (mode.equals(Camera.Parameters.FLASH_MODE_TORCH) && !isTorchModeSupported) {
+            currentFlashMode = Camera.Parameters.FLASH_MODE_ON;
+        } else {
+            currentFlashMode = mode;
+        }
+
         if (isRound) {
             configureRoundCamera(false);
         } else {
@@ -176,15 +182,24 @@ public class CameraSession {
     }
 
     public String getNextFlashMode() {
+        return getNextFlashMode(false);
+    }
+
+    public String getNextFlashMode(boolean useTorch) {
+        if (currentFlashMode.equals(Camera.Parameters.FLASH_MODE_TORCH)) {
+            return Camera.Parameters.FLASH_MODE_OFF;
+        }
+
         ArrayList<String> modes = availableFlashModes;
         for (int a = 0; a < modes.size(); a++) {
             String mode = modes.get(a);
             if (mode.equals(currentFlashMode)) {
-                if (a < modes.size() - 1) {
-                    return modes.get(a + 1);
-                } else {
-                    return modes.get(0);
-                }
+                String newMode = a < modes.size() - 1
+                    ? modes.get(a + 1)
+                    : modes.get(0);
+                return isTorchModeSupported && useTorch && newMode.equals(Camera.Parameters.FLASH_MODE_ON)
+                    ? Camera.Parameters.FLASH_MODE_TORCH
+                    : newMode;
             }
         }
         return currentFlashMode;

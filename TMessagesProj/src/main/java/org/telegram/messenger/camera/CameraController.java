@@ -556,11 +556,14 @@ public class CameraController implements MediaRecorder.OnInfoListener {
 
                 List<String> rawFlashModes = params.getSupportedFlashModes();
                 session.availableFlashModes.clear();
+                session.isTorchModeSupported = false;
                 if (rawFlashModes != null) {
                     for (int a = 0; a < rawFlashModes.size(); a++) {
                         String rawFlashMode = rawFlashModes.get(a);
                         if (rawFlashMode.equals(Camera.Parameters.FLASH_MODE_OFF) || rawFlashMode.equals(Camera.Parameters.FLASH_MODE_ON) || rawFlashMode.equals(Camera.Parameters.FLASH_MODE_AUTO)) {
                             session.availableFlashModes.add(rawFlashMode);
+                        } else if (rawFlashMode.equals(Camera.Parameters.FLASH_MODE_TORCH)) {
+                            session.isTorchModeSupported = true;
                         }
                     }
                     if (!TextUtils.equals(session.getCurrentFlashMode(), params.getFlashMode()) || !session.availableFlashModes.contains(session.getCurrentFlashMode())) {
@@ -607,11 +610,14 @@ public class CameraController implements MediaRecorder.OnInfoListener {
 
                 List<String> rawFlashModes = params.getSupportedFlashModes();
                 session.availableFlashModes.clear();
+                session.isTorchModeSupported = false;
                 if (rawFlashModes != null) {
                     for (int a = 0; a < rawFlashModes.size(); a++) {
                         String rawFlashMode = rawFlashModes.get(a);
                         if (rawFlashMode.equals(Camera.Parameters.FLASH_MODE_OFF) || rawFlashMode.equals(Camera.Parameters.FLASH_MODE_ON) || rawFlashMode.equals(Camera.Parameters.FLASH_MODE_AUTO)) {
                             session.availableFlashModes.add(rawFlashMode);
+                        } else if (rawFlashMode.equals(Camera.Parameters.FLASH_MODE_TORCH)) {
+                            session.isTorchModeSupported = true;
                         }
                     }
                     if (!TextUtils.equals(session.getCurrentFlashMode(), params.getFlashMode()) || !session.availableFlashModes.contains(session.getCurrentFlashMode())) {

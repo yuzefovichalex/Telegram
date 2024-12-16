@@ -385,10 +385,22 @@ public class CameraView extends FrameLayout implements TextureView.SurfaceTextur
     }
 
     public interface Callback {
-        void onCameraSwitch();
+        void onCameraSwitchRequest();
+        void onCameraSwitchDone();
     }
 
     private boolean isCameraSwitchRequested;
+
+    @NonNull
+    private final Runnable cameraSwitchNotifier = new Runnable() {
+        @Override
+        public void run() {
+            if (isCameraSwitchRequested && callback != null) {
+                callback.onCameraSwitchDone();
+            }
+            isCameraSwitchRequested = false;
+        }
+    };
 
     @Nullable
     private Callback callback;
@@ -593,6 +605,7 @@ public class CameraView extends FrameLayout implements TextureView.SurfaceTextur
     private long lastDualSwitchTime;
 
     public void switchCamera() {
+        AndroidUtilities.cancelRunOnUIThread(cameraSwitchNotifier);
         if (flipping || System.currentTimeMillis() < toggleDualUntil && !dualCameraAppeared) {
             return;
         }
@@ -618,11 +631,17 @@ public class CameraView extends FrameLayout implements TextureView.SurfaceTextur
             cameraSession[1] = cameraSession0;
 
             isFrontface = !isFrontface;
+            isCameraSwitchRequested = true;
 
             Handler handler = cameraThread.getHandler();
             if (handler != null) {
                 handler.sendMessage(handler.obtainMessage(cameraThread.DO_DUAL_FLIP));
             }
+
+            if (callback != null) {
+                callback.onCameraSwitchRequest();
+            }
+            AndroidUtilities.runOnUIThread(cameraSwitchNotifier, 600);
             return;
         }
         startSwitchingAnimation();
@@ -642,6 +661,9 @@ public class CameraView extends FrameLayout implements TextureView.SurfaceTextur
         }
         isFrontface = !isFrontface;
         isCameraSwitchRequested = true;
+        if (callback != null) {
+            callback.onCameraSwitchRequest();
+        }
     }
 
     public void resetCamera() {
@@ -798,15 +820,12 @@ public class CameraView extends FrameLayout implements TextureView.SurfaceTextur
             if (delegate != null) {
                 delegate.onCameraInit();
             }
-            if (isCameraSwitchRequested && callback != null) {
-                isCameraSwitchRequested = false;
-                callback.onCameraSwitch();
-            }
             inited = true;
             if (lazy) {
                 textureView.setAlpha(0);
                 showTexture(true, true);
             }
+            cameraSwitchNotifier.run();
         }
     }
 

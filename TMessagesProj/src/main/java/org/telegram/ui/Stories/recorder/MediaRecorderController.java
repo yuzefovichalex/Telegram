@@ -2,7 +2,6 @@ package org.telegram.ui.Stories.recorder;
 
 import static org.telegram.messenger.Utilities.clamp;
 
-import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.hardware.Camera;
@@ -12,21 +11,20 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.FileLog;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.camera.CameraController;
 import org.telegram.messenger.camera.CameraSessionWrapper;
 import org.telegram.messenger.camera.CameraView;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.util.ArrayList;
 
 public class MediaRecorderController implements CameraView.Callback {
 
     private static final String NO_FLASH_MODE = "no_flash_mode";
 
-
-    @NonNull
-    private Context context;
 
     @Nullable
     private CameraView cameraView;
@@ -35,26 +33,22 @@ public class MediaRecorderController implements CameraView.Callback {
     private Callback callback;
 
     @NonNull
-    private final ArrayList<String> frontFlashModes = new ArrayList<>();
+    private final ArrayList<String> displayFlashModes = new ArrayList<>();
 
     private float zoom;
 
     @NonNull
     private String frontFlashMode = NO_FLASH_MODE;
-    private float frontFlashWarmth = -1f;
-    private float frontFlashIntensity = -1f;
+    private float displayFlashWarmth = -1f;
+    private float displayFlashIntensity = -1f;
 
     @NonNull
     private String backFlashMode = NO_FLASH_MODE;
 
+    private boolean isCameraSwitchInProgress;
     private boolean isPreparing;
     private boolean isTakingPicture;
     private boolean isRecordingVideo;
-
-
-    public MediaRecorderController(@NonNull Context context) {
-        this.context = context;
-    }
 
 
     public boolean isTakingPicture() {
@@ -62,7 +56,7 @@ public class MediaRecorderController implements CameraView.Callback {
     }
 
     public boolean isRecordingVideo() {
-        return isRecordingVideo;
+        return isPreparing || isRecordingVideo;
     }
 
     public boolean isBusy() {
@@ -73,12 +67,12 @@ public class MediaRecorderController implements CameraView.Callback {
         return cameraView != null && cameraView.isFrontface();
     }
 
-    public float getFrontFlashWarmth() {
-        return frontFlashWarmth;
+    public float getDisplayFlashWarmth() {
+        return displayFlashWarmth;
     }
 
-    public float getFrontFlashIntensity() {
-        return frontFlashIntensity;
+    public float getDisplayFlashIntensity() {
+        return displayFlashIntensity;
     }
 
     public void setPreparing(boolean preparing) {
@@ -95,53 +89,91 @@ public class MediaRecorderController implements CameraView.Callback {
             cameraView.setCallback(this);
             checkFlashModes();
             checkFrontFlashParams();
+            checkDual();
             setZoom(this.zoom, true, true);
         }
     }
 
     private void checkFlashModes() {
-        if (frontFlashModes.isEmpty()) {
-            frontFlashModes.add(Camera.Parameters.FLASH_MODE_OFF);
-            frontFlashModes.add(Camera.Parameters.FLASH_MODE_AUTO);
-            frontFlashModes.add(Camera.Parameters.FLASH_MODE_ON);
+        if (displayFlashModes.isEmpty()) {
+            displayFlashModes.add(Camera.Parameters.FLASH_MODE_OFF);
+            displayFlashModes.add(Camera.Parameters.FLASH_MODE_AUTO);
+            displayFlashModes.add(Camera.Parameters.FLASH_MODE_ON);
         }
 
         if (frontFlashMode.equals(NO_FLASH_MODE)) {
             int frontFlashModeIdx = clamp(
-                MessagesController.getGlobalMainSettings().getInt("frontflash", 1),
+                MessagesController.getGlobalMainSettings().getInt("frontflash", 0),
                 2,
                 0
             );
-            frontFlashMode = frontFlashModes.get(frontFlashModeIdx);
+            frontFlashMode = displayFlashModes.get(frontFlashModeIdx);
         }
 
         if (backFlashMode.equals(NO_FLASH_MODE)) {
             backFlashMode = Camera.Parameters.FLASH_MODE_OFF;
-            if (cameraView != null && !cameraView.isFrontface()) {
-                CameraSessionWrapper cameraSession = cameraView.getCameraSession();
-                if (cameraSession != null) {
-                    cameraSession.setCurrentFlashMode(backFlashMode);
+        }
+
+        checkActiveFlashMode();
+    }
+
+    private void checkActiveFlashMode() {
+        if (cameraView != null) {
+            if (isRecordingVideo) {
+                frontFlashMode = shouldUseDisplayFlash()
+                    ? Camera.Parameters.FLASH_MODE_TORCH
+                    : Camera.Parameters.FLASH_MODE_OFF;
+                backFlashMode = shouldUseBackFlash()
+                    ? Camera.Parameters.FLASH_MODE_TORCH
+                    : Camera.Parameters.FLASH_MODE_OFF;
+            } else {
+                frontFlashMode = frontFlashMode.equals(Camera.Parameters.FLASH_MODE_TORCH)
+                    ? Camera.Parameters.FLASH_MODE_ON
+                    : frontFlashMode;
+                backFlashMode = backFlashMode.equals(Camera.Parameters.FLASH_MODE_TORCH)
+                    ? Camera.Parameters.FLASH_MODE_ON
+                    : backFlashMode;
+            }
+
+            CameraSessionWrapper cameraSession = cameraView.getCameraSession();
+            if (cameraSession != null) {
+                boolean isFrontface = cameraView.isFrontface();
+                String activeFlashMode = isFrontface ? frontFlashMode : backFlashMode;
+                boolean changed;
+
+                if (!isFrontface || cameraSession.hasFlashModes()) {
+                    changed = setFlashMode(cameraSession, activeFlashMode, isFrontface);
+                } else {
+                    changed = setFrontFlashMode(activeFlashMode);
+                }
+
+                if (!changed && callback != null && !activeFlashMode.equals(NO_FLASH_MODE)) {
+                    callback.onFlashModeChanged(activeFlashMode, cameraView.isFrontface());
                 }
             }
         }
-
-        notifyCurrentFlashMode();
     }
 
     private void checkFrontFlashParams() {
-        if (frontFlashWarmth == -1f) {
-            frontFlashWarmth = MessagesController.getGlobalMainSettings()
+        if (displayFlashWarmth == -1f) {
+            displayFlashWarmth = MessagesController.getGlobalMainSettings()
                 .getFloat("frontflash_warmth", .9f);
         }
 
-        if (frontFlashIntensity == -1f) {
-            frontFlashIntensity = MessagesController.getGlobalMainSettings()
+        if (displayFlashIntensity == -1f) {
+            displayFlashIntensity = MessagesController.getGlobalMainSettings()
                 .getFloat("frontflash_intensity", 1);
         }
 
         if (callback != null) {
-            callback.onFrontFlashWarmthChanged(frontFlashWarmth);
-            callback.onFrontFlashIntensityChanged(frontFlashIntensity);
+            callback.onFrontFlashWarmthChanged(displayFlashWarmth);
+            callback.onFrontFlashIntensityChanged(displayFlashIntensity);
+        }
+    }
+
+    private void checkDual() {
+        if (cameraView != null && callback != null) {
+            callback.onDualToggle(cameraView.isDual());
         }
     }
 
@@ -152,9 +184,10 @@ public class MediaRecorderController implements CameraView.Callback {
         cameraView = null;
         zoom = 0f;
         frontFlashMode = NO_FLASH_MODE;
-        frontFlashWarmth = -1f;
-        frontFlashIntensity = -1f;
+        displayFlashWarmth = -1f;
+        displayFlashIntensity = -1f;
         backFlashMode = NO_FLASH_MODE;
+        isCameraSwitchInProgress = false;
         isPreparing = false;
         isTakingPicture = false;
         isRecordingVideo = false;
@@ -190,22 +223,37 @@ public class MediaRecorderController implements CameraView.Callback {
 
 
     public void toggleFlashMode() {
-        if (!isTakingPicture() && cameraView != null) {
-            if (cameraView.isFrontface()) {
-                int currentIdx = frontFlashModes.indexOf(frontFlashMode);
-                int nextIdx = currentIdx + 1 < frontFlashModes.size() ? currentIdx + 1 : 0;
-                setFrontFlashMode(frontFlashModes.get(nextIdx));
-            } else {
-                CameraSessionWrapper cameraSession = cameraView.getCameraSession();
-                if (cameraSession != null) {
-                    setBackFlashMode(cameraSession.getNextFlashMode());
+        if (!isCameraSwitchInProgress && !isTakingPicture() && cameraView != null) {
+            CameraSessionWrapper cameraSession = cameraView.getCameraSession();
+            if (cameraSession != null) {
+                if (!cameraView.isFrontface() || cameraSession.hasFlashModes()) {
+                    String mode = cameraSession.getNextFlashMode(isRecordingVideo);
+                    setFlashMode(
+                        cameraSession,
+                        filterVideoRecordingAutoFlashMode(mode),
+                        cameraView.isFrontface()
+                    );
+                } else {
+                    int currentIdx = displayFlashModes.indexOf(frontFlashMode);
+                    int nextIdx = currentIdx + 1 < displayFlashModes.size() ? currentIdx + 1 : 0;
+                    String mode = displayFlashModes.get(nextIdx);
+                    setFrontFlashMode(filterVideoRecordingAutoFlashMode(mode));
                 }
             }
         }
     }
 
+    @NonNull
+    public String filterVideoRecordingAutoFlashMode(@NonNull String mode) {
+        return isRecordingVideo && mode.equals(Camera.Parameters.FLASH_MODE_AUTO)
+            ? Camera.Parameters.FLASH_MODE_TORCH
+            : mode;
+    }
+
     private boolean setFrontFlashMode(@NonNull String flashMode) {
-        int modeIdx = frontFlashModes.indexOf(flashMode);
+        int modeIdx = flashMode.equals(Camera.Parameters.FLASH_MODE_TORCH)
+            ? displayFlashModes.indexOf(Camera.Parameters.FLASH_MODE_ON)
+            : displayFlashModes.indexOf(flashMode);
         if (modeIdx != -1 && !frontFlashMode.equals(flashMode)) {
             frontFlashMode = flashMode;
             MessagesController.getGlobalMainSettings()
@@ -220,49 +268,43 @@ public class MediaRecorderController implements CameraView.Callback {
         return false;
     }
 
-    private boolean setBackFlashMode(@NonNull String flashMode) {
-        if (cameraView != null) {
-            CameraSessionWrapper cameraSession = cameraView.getCameraSession();
-            if (cameraSession != null &&
-                !cameraSession.getCurrentFlashMode().equals(flashMode)
-            ) {
+    private boolean setFlashMode(
+        @NonNull CameraSessionWrapper cameraSession,
+        @NonNull String flashMode,
+        boolean isFront
+    ) {
+        if (!cameraSession.getCurrentFlashMode().equals(flashMode)) {
+            cameraSession.setCurrentFlashMode(flashMode);
+            if (isFront) {
+                frontFlashMode = flashMode;
+            } else {
                 backFlashMode = flashMode;
-                cameraSession.setCurrentFlashMode(flashMode);
-                if (callback != null) {
-                    callback.onFlashModeChanged(flashMode, false);
-                }
-                return true;
             }
+            if (callback != null) {
+                callback.onFlashModeChanged(flashMode, isFront);
+            }
+            return true;
         }
         return false;
     }
 
-    private void notifyCurrentFlashMode() {
-        if (cameraView != null) {
-            String activeFlashMode = cameraView.isFrontface() ? frontFlashMode : backFlashMode;
-            if (!activeFlashMode.equals(NO_FLASH_MODE) && callback != null) {
-                callback.onFlashModeChanged(activeFlashMode, cameraView.isFrontface());
-            }
-        }
-    }
-
-    public void setFrontFlashWarmth(float warmth) {
-        if (frontFlashWarmth == warmth) {
+    public void setDisplayFlashWarmth(float warmth) {
+        if (displayFlashWarmth == warmth) {
             return;
         }
 
-        frontFlashWarmth = warmth;
+        displayFlashWarmth = warmth;
         if (callback != null) {
             callback.onFrontFlashWarmthChanged(warmth);
         }
     }
 
-    public void setFrontFlashIntensity(float intensity) {
-        if (frontFlashIntensity == intensity) {
+    public void setDisplayFlashIntensity(float intensity) {
+        if (displayFlashIntensity == intensity) {
             return;
         }
 
-        frontFlashIntensity = intensity;
+        displayFlashIntensity = intensity;
         if (callback != null) {
             callback.onFrontFlashIntensityChanged(intensity);
         }
@@ -270,13 +312,13 @@ public class MediaRecorderController implements CameraView.Callback {
 
     public void saveCurrentFrontFlashParams() {
         if (!frontFlashMode.equals(NO_FLASH_MODE) &&
-            frontFlashWarmth != -1f &&
-            frontFlashIntensity != -1f
+            displayFlashWarmth != -1f &&
+            displayFlashIntensity != -1f
         ) {
             MessagesController.getGlobalMainSettings()
                 .edit()
-                .putFloat("frontflash_warmth", frontFlashWarmth)
-                .putFloat("frontflash_intensity", frontFlashIntensity)
+                .putFloat("frontflash_warmth", displayFlashWarmth)
+                .putFloat("frontflash_intensity", displayFlashIntensity)
                 .apply();
         }
     }
@@ -291,6 +333,7 @@ public class MediaRecorderController implements CameraView.Callback {
     public void toggleDual() {
         if (!isTakingPicture() && cameraView != null) {
             cameraView.toggleDual();
+            checkActiveFlashMode();
             if (callback != null) {
                 callback.onDualToggle(cameraView.isDual());
             }
@@ -298,10 +341,10 @@ public class MediaRecorderController implements CameraView.Callback {
     }
 
     public void switchCamera() {
-        if (!isTakingPicture() && cameraView != null) {
+        if (!isCameraSwitchInProgress && !isTakingPicture() && cameraView != null) {
             cameraView.switchCamera();
             if (callback != null) {
-                callback.onCameraSwitch();
+                callback.onCameraSwitchRequest();
             }
         }
     }
@@ -310,7 +353,16 @@ public class MediaRecorderController implements CameraView.Callback {
         return cameraView != null &&
             cameraView.isFrontface() &&
             (frontFlashMode.equals(Camera.Parameters.FLASH_MODE_ON) ||
+                frontFlashMode.equals(Camera.Parameters.FLASH_MODE_TORCH) ||
                 frontFlashMode.equals(Camera.Parameters.FLASH_MODE_AUTO) && isLastFrameDark());
+    }
+
+    private boolean shouldUseBackFlash() {
+        return cameraView != null &&
+            !cameraView.isFrontface() &&
+            (backFlashMode.equals(Camera.Parameters.FLASH_MODE_ON) ||
+                backFlashMode.equals(Camera.Parameters.FLASH_MODE_TORCH) ||
+                backFlashMode.equals(Camera.Parameters.FLASH_MODE_AUTO) && isLastFrameDark());
     }
 
     public void startPreview() {
@@ -325,10 +377,7 @@ public class MediaRecorderController implements CameraView.Callback {
         }
     }
 
-    public void takePicture(
-        boolean isSecretChat,
-        boolean wasFrontFlashUsed
-    ) {
+    public void takePicture(boolean isSecretChat, boolean showCameraAnimation) {
         isPreparing = false;
 
         if (cameraView == null || isTakingPicture) {
@@ -346,30 +395,114 @@ public class MediaRecorderController implements CameraView.Callback {
             return;
         }
 
-        isTakingPicture = CameraController.getInstance().takePicture(outputFile, false, cameraView.getCameraSessionObject(), orientation -> {
+        checkActiveFlashMode();
+
+        if (showCameraAnimation) {
+            cameraView.startTakePictureAnimation(true);
+        }
+
+        if (cameraView.isDual()) {
+            isTakingPicture = true;
+            // TODO stucks after returning from photoviewer
+            //cameraView.pauseAsTakingPicture();
+            Bitmap lastFrame = getLastFrame();
+            if (lastFrame != null) {
+                try (FileOutputStream out = new FileOutputStream(outputFile.getAbsoluteFile())) {
+                    lastFrame.compress(Bitmap.CompressFormat.JPEG, 100, out);
+                    // TODO wrong orientation
+                    onPictureReady(outputFile, cameraSession.getCurrentOrientation(), isSameTakePictureOrientation);
+                } catch (Exception e) {
+                    FileLog.e(e);
+                }
+                lastFrame.recycle();
+            }
             isTakingPicture = false;
+        } else {
+            isTakingPicture = CameraController.getInstance().takePicture(outputFile, false, cameraView.getCameraSessionObject(), orientation -> {
+                isTakingPicture = false;
+                try {
+                    onPictureReady(outputFile, orientation, isSameTakePictureOrientation);
+                } catch (Exception ignore) {
+
+                }
+            });
+        }
+    }
+
+    private void onPictureReady(
+        @NonNull File outputFile,
+        int orientation,
+        boolean isSameTakePictureOrientation
+    ) {
+        if (callback != null) {
+            BitmapFactory.Options options = decodeBitmap(outputFile.getAbsolutePath());
+            callback.onTakePictureSuccess(
+                outputFile,
+                options.outWidth,
+                options.outHeight,
+                orientation,
+                isSameTakePictureOrientation
+            );
+        }
+    }
+
+    public void startVideoRecord(
+        boolean isSecretChat,
+        boolean mirror,
+        @Nullable Runnable onStart
+    ) {
+        isPreparing = false;
+
+        if (cameraView == null || isRecordingVideo) {
+            return;
+        }
+
+        File outputFile = AndroidUtilities.generateVideoPath(isSecretChat);
+        if (outputFile == null) {
+            return;
+        }
+
+        checkActiveFlashMode();
+
+        CameraController.getInstance().recordVideo(cameraView.getCameraSessionObject(), outputFile, mirror, ((thumbPath, duration) -> {
+            isRecordingVideo = false;
+            checkActiveFlashMode();
             try {
-                BitmapFactory.Options options = new BitmapFactory.Options();
-                options.inJustDecodeBounds = true;
-                BitmapFactory.decodeFile(outputFile.getAbsolutePath(), options);
+                BitmapFactory.Options options = decodeBitmap(thumbPath);
                 if (callback != null) {
-                    callback.onTakePictureSuccess(
+                    callback.onRecordVideoSuccess(
                         outputFile,
+                        thumbPath,
                         options.outWidth,
                         options.outHeight,
-                        orientation,
-                        isSameTakePictureOrientation,
-                        wasFrontFlashUsed
+                        duration
                     );
                 }
             } catch (Exception ignore) {
 
             }
-        });
+        }), () -> {
+            isRecordingVideo = true;
+            if (onStart != null) {
+                onStart.run();
+            }
+        }, cameraView);
+    }
 
-        if (!wasFrontFlashUsed) {
-            cameraView.startTakePictureAnimation(true);
+    public void stopVideoRecord() {
+        if (cameraView == null || !isRecordingVideo) {
+            return;
         }
+
+        CameraController.getInstance().stopVideoRecording(cameraView.getCameraSessionObject(), false);
+    }
+
+    @NonNull
+    private BitmapFactory.Options decodeBitmap(@NonNull String path) {
+        BitmapFactory.Options options = new BitmapFactory.Options();
+        options.inJustDecodeBounds = true;
+        BitmapFactory.decodeFile(new File(path).getAbsolutePath(), options);
+        return options;
     }
 
     private boolean isLastFrameDark() {
@@ -409,19 +542,20 @@ public class MediaRecorderController implements CameraView.Callback {
 
 
     @Override
-    public void onCameraSwitch() {
+    public void onCameraSwitchRequest() {
+        isCameraSwitchInProgress = true;
+    }
+
+    @Override
+    public void onCameraSwitchDone() {
         if (cameraView != null) {
             setZoom(0f, false, true);
-            boolean changed;
-            if (cameraView.isFrontface()) {
-                changed = setFrontFlashMode(frontFlashMode);
-            } else {
-                changed = setBackFlashMode(backFlashMode);
-            }
-            if (!changed) {
-                notifyCurrentFlashMode();
+            checkActiveFlashMode();
+            if (callback != null) {
+                callback.onCameraSwitchDone();
             }
         }
+        isCameraSwitchInProgress = false;
     }
 
 
@@ -431,14 +565,21 @@ public class MediaRecorderController implements CameraView.Callback {
         void onFrontFlashWarmthChanged(float warmth);
         void onFrontFlashIntensityChanged(float intensity);
         void onDualToggle(boolean isDual);
-        void onCameraSwitch();
+        void onCameraSwitchRequest();
+        void onCameraSwitchDone();
         void onTakePictureSuccess(
             @NonNull File outputFile,
             int width,
             int height,
             int orientation,
-            boolean isSameTakePictureOrientation,
-            boolean wasFrontFlashUsed
+            boolean isSameTakePictureOrientation
+        );
+        void onRecordVideoSuccess(
+            @NonNull File outputFile,
+            @NonNull String thumbPath,
+            int width,
+            int height,
+            long duration
         );
     }
 
