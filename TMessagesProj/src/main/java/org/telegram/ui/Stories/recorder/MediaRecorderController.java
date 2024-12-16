@@ -120,12 +120,15 @@ public class MediaRecorderController implements CameraView.Callback {
     private void checkActiveFlashMode() {
         if (cameraView != null) {
             if (isRecordingVideo) {
-                frontFlashMode = shouldUseDisplayFlash()
-                    ? Camera.Parameters.FLASH_MODE_TORCH
-                    : Camera.Parameters.FLASH_MODE_OFF;
-                backFlashMode = shouldUseBackFlash()
-                    ? Camera.Parameters.FLASH_MODE_TORCH
-                    : Camera.Parameters.FLASH_MODE_OFF;
+                if (cameraView.isFrontface()) {
+                    frontFlashMode = shouldUseFlash(frontFlashMode)
+                        ? Camera.Parameters.FLASH_MODE_TORCH
+                        : Camera.Parameters.FLASH_MODE_OFF;
+                } else {
+                    backFlashMode = shouldUseFlash(backFlashMode)
+                        ? Camera.Parameters.FLASH_MODE_TORCH
+                        : Camera.Parameters.FLASH_MODE_OFF;
+                }
             } else {
                 frontFlashMode = frontFlashMode.equals(Camera.Parameters.FLASH_MODE_TORCH)
                     ? Camera.Parameters.FLASH_MODE_ON
@@ -352,17 +355,13 @@ public class MediaRecorderController implements CameraView.Callback {
     public boolean shouldUseDisplayFlash() {
         return cameraView != null &&
             cameraView.isFrontface() &&
-            (frontFlashMode.equals(Camera.Parameters.FLASH_MODE_ON) ||
-                frontFlashMode.equals(Camera.Parameters.FLASH_MODE_TORCH) ||
-                frontFlashMode.equals(Camera.Parameters.FLASH_MODE_AUTO) && isLastFrameDark());
+            shouldUseFlash(frontFlashMode);
     }
 
-    private boolean shouldUseBackFlash() {
-        return cameraView != null &&
-            !cameraView.isFrontface() &&
-            (backFlashMode.equals(Camera.Parameters.FLASH_MODE_ON) ||
-                backFlashMode.equals(Camera.Parameters.FLASH_MODE_TORCH) ||
-                backFlashMode.equals(Camera.Parameters.FLASH_MODE_AUTO) && isLastFrameDark());
+    private boolean shouldUseFlash(@NonNull String mode) {
+        return mode.equals(Camera.Parameters.FLASH_MODE_ON) ||
+            mode.equals(Camera.Parameters.FLASH_MODE_TORCH) ||
+            mode.equals(Camera.Parameters.FLASH_MODE_AUTO) && isLastFrameDark();
     }
 
     public void startPreview() {
@@ -462,8 +461,7 @@ public class MediaRecorderController implements CameraView.Callback {
             return;
         }
 
-        checkActiveFlashMode();
-
+        isRecordingVideo = true;
         CameraController.getInstance().recordVideo(cameraView.getCameraSessionObject(), outputFile, mirror, ((thumbPath, duration) -> {
             isRecordingVideo = false;
             checkActiveFlashMode();
@@ -482,7 +480,7 @@ public class MediaRecorderController implements CameraView.Callback {
 
             }
         }), () -> {
-            isRecordingVideo = true;
+            checkActiveFlashMode();
             if (onStart != null) {
                 onStart.run();
             }
