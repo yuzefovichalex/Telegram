@@ -164,6 +164,10 @@ public class CameraSession {
         }
     }
 
+    public boolean isTorchModeSupported() {
+        return isTorchModeSupported;
+    }
+
     public void setTorchEnabled(boolean enabled) {
         try {
             currentFlashMode = enabled ? Camera.Parameters.FLASH_MODE_TORCH : Camera.Parameters.FLASH_MODE_OFF;

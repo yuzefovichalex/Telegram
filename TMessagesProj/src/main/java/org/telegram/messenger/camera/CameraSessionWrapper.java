@@ -98,6 +98,16 @@ public class CameraSessionWrapper {
         return null;
     }
 
+    public boolean isTorchModeSupported() {
+        if (camera2Session != null) {
+            // TODO
+            return false;
+        } else if (camera1Session != null) {
+            return camera1Session.isTorchModeSupported();
+        }
+        return false;
+    }
+
     public String getNextFlashMode() {
         return getNextFlashMode(false);
     }

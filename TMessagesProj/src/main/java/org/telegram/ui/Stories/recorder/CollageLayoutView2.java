@@ -646,6 +646,13 @@ public class CollageLayoutView2 extends FrameLayout implements ItemOptions.Scrim
         return false;
     }
 
+    public boolean isFilled() {
+        for (Part part : parts) {
+            if (!part.hasContent()) return false;
+        }
+        return true;
+    }
+
     public void setCameraView(CameraView cameraView) {
         if (this.cameraView != cameraView && this.cameraView != null) {
             this.cameraView.unlistenDraw(this::invalidate);

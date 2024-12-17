@@ -396,7 +396,11 @@ public class MediaRecorderController implements CameraView.Callback {
         }
     }
 
-    public void takePicture(boolean isSecretChat, boolean showCameraAnimation) {
+    public void takePicture(
+        boolean isSecretChat,
+        boolean showCameraAnimation,
+        boolean forceTakeFromTexture
+    ) {
         isPreparing = false;
 
         if (cameraView == null || isTakingPicture) {
@@ -420,22 +424,27 @@ public class MediaRecorderController implements CameraView.Callback {
             cameraView.startTakePictureAnimation(true);
         }
 
-        if (cameraView.isDual()) {
+        if (cameraView.isDual() || forceTakeFromTexture) {
             isTakingPicture = true;
+
             // TODO stucks after returning from photoviewer
             //cameraView.pauseAsTakingPicture();
-            Bitmap lastFrame = getLastFrame();
-            if (lastFrame != null) {
-                try (FileOutputStream out = new FileOutputStream(outputFile.getAbsoluteFile())) {
-                    lastFrame.compress(Bitmap.CompressFormat.JPEG, 100, out);
+
+            String currentFlashMode = cameraView.isFrontface() ? frontFlashMode : backFlashMode;
+            boolean enableTorch = cameraSession.isTorchModeSupported() && shouldUseFlash(currentFlashMode);
+            if (enableTorch) {
+                cameraSession.setCurrentFlashMode(Camera.Parameters.FLASH_MODE_TORCH);
+                AndroidUtilities.runOnUIThread(() -> {
                     // TODO wrong orientation
-                    onPictureReady(outputFile, cameraSession.getCurrentOrientation(), isSameTakePictureOrientation);
-                } catch (Exception e) {
-                    FileLog.e(e);
-                }
-                lastFrame.recycle();
+                    takePictureFromTexture(outputFile, cameraSession.getCurrentOrientation(), isSameTakePictureOrientation);
+                    cameraSession.setCurrentFlashMode(currentFlashMode);
+                    isTakingPicture = false;
+                }, 2000);
+            } else {
+                // TODO wrong orientation
+                takePictureFromTexture(outputFile, cameraSession.getCurrentOrientation(), isSameTakePictureOrientation);
+                isTakingPicture = false;
             }
-            isTakingPicture = false;
         } else {
             isTakingPicture = CameraController.getInstance().takePicture(outputFile, false, cameraView.getCameraSessionObject(), orientation -> {
                 isTakingPicture = false;
@@ -445,6 +454,23 @@ public class MediaRecorderController implements CameraView.Callback {
 
                 }
             });
+        }
+    }
+
+    private void takePictureFromTexture(
+        @NonNull File outputFile,
+        int orientation,
+        boolean isSameTakePictureOrientation
+    ) {
+        Bitmap lastFrame = getLastFrame();
+        if (lastFrame != null) {
+            try (FileOutputStream out = new FileOutputStream(outputFile.getAbsoluteFile())) {
+                lastFrame.compress(Bitmap.CompressFormat.JPEG, 100, out);
+                onPictureReady(outputFile, orientation, isSameTakePictureOrientation);
+            } catch (Exception e) {
+                FileLog.e(e);
+            }
+            lastFrame.recycle();
         }
     }
 
