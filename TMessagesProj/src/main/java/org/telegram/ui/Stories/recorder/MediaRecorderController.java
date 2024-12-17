@@ -202,7 +202,11 @@ public class MediaRecorderController implements CameraView.Callback {
     }
 
     public void setZoom(float zoom) {
-        setZoom(zoom, false, false);
+        setZoom(zoom, false);
+    }
+
+    public void setZoom(float zoom, boolean silent) {
+        setZoom(zoom, false, silent);
     }
 
     private void setZoom(float zoom, boolean force, boolean silent) {

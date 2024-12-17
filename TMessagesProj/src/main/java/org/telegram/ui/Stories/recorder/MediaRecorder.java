@@ -206,6 +206,10 @@ public class MediaRecorder extends FrameLayout {
         return contentView.getCameraBitmap();
     }
 
+    public boolean handleBackPress() {
+        return contentView.handleBackPress();
+    }
+
     @Override
     public boolean dispatchTouchEvent(MotionEvent ev) {
         if (contentView.isOpen()) {
@@ -281,6 +285,9 @@ public class MediaRecorder extends FrameLayout {
         private final ToggleButton dualButton;
 
         @NonNull
+        private final VideoTimerView videoTimerView;
+
+        @NonNull
         private final ZoomControlView zoomControlView;
 
         @NonNull
@@ -288,6 +295,9 @@ public class MediaRecorder extends FrameLayout {
 
         @NonNull
         private final PhotoVideoSwitcherView photoVideoSwitcherView;
+
+        @NonNull
+        private final HintTextView videoHintTextView;
 
 
         @NonNull
@@ -397,11 +407,7 @@ public class MediaRecorder extends FrameLayout {
             backButton.setImageResource(R.drawable.msg_photo_back);
             backButton.setColorFilter(new PorterDuffColorFilter(Color.WHITE, PorterDuff.Mode.MULTIPLY));
             backButton.setBackground(Theme.createSelectorDrawable(SELECTOR_BACKGROUND_COLOR));
-            backButton.setOnClickListener(v -> {
-                if (isOpen() && !mediaRecorderController.isBusy()) {
-                    closeCamera();
-                }
-            });
+            backButton.setOnClickListener(v -> handleBackPress());
             flashViews.add(backButton);
             addView(backButton, LayoutHelper.createFrame(56, 56));
 
@@ -421,6 +427,11 @@ public class MediaRecorder extends FrameLayout {
             addView(dualButton, LayoutHelper.createFrame(56, 56, Gravity.RIGHT));
 
             checkActionButtonsPosition();
+
+            videoTimerView = new VideoTimerView(context);
+            flashViews.add(videoTimerView);
+            setVideoTimerVisibility(false, false);
+            addView(videoTimerView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 45, Gravity.TOP, 168, 0, 168, 0));
 
             zoomControlView = new ZoomControlView(context);
             zoomControlView.setDelegate(new ZoomControlView.ZoomControlViewDelegate() {
@@ -449,6 +460,11 @@ public class MediaRecorder extends FrameLayout {
             photoVideoSwitcherView.setOnSwitchingModeListener(recordControl::startAsVideoT);
             flashViews.add(photoVideoSwitcherView);
             addView(photoVideoSwitcherView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 48, Gravity.BOTTOM));
+
+            videoHintTextView = new HintTextView(context);
+            flashViews.add(videoHintTextView);
+            setVideoHintTextViewVisibility(false, false);
+            addView(videoHintTextView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 32, Gravity.BOTTOM, 8, 0, 8, 8));
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 // TODO deal with insets
@@ -713,6 +729,10 @@ public class MediaRecorder extends FrameLayout {
             openCloseAnimator.setFloatValues(openCloseProgress, 0f);
             openCloseAnimator.setDuration(CLOSE_ANIMATION_DURATION);
             openCloseAnimator.start();
+
+            if (callback != null) {
+                callback.onClose();
+            }
         }
 
         private void destroyCamera(boolean async) {
@@ -722,13 +742,16 @@ public class MediaRecorder extends FrameLayout {
                     Matrix m = cameraView.getDualPosition();
                     m.set(dualCameraMatrix);
                 }
+                mediaRecorderController.detachCameraView();
                 cameraView.destroy(async, null);
                 removeView(cameraView);
                 cameraView = null;
                 dualCameraMatrix = null;
                 placeholder.setVisibility(View.VISIBLE);
-                mediaRecorderController.detachCameraView();
             }
+            setZoomControlVisibility(false, null);
+            setPhotoVideoSwitcherVisibility(true, false);
+            setVideoHintTextViewVisibility(false, false);
         }
 
         @Nullable
@@ -879,9 +902,11 @@ public class MediaRecorder extends FrameLayout {
             updateMargin(backButton, 0, statusBarInset, 0, 0);
             updateMargin(flashButton, 0, statusBarInset, 0, 0);
             updateMargin(dualButton, 0, statusBarInset, 0, 0);
+            updateMargin(videoTimerView, 0, statusBarInset, 0, 0);
             updateMargin(zoomControlView, 0, 0, 0, navigationBarInset + dp(172));
             updateMargin(recordControl, 0, 0, 0, navigationBarInset + dp(64));
             updateMargin(photoVideoSwitcherView, 0, 0, 0, navigationBarInset + dp(16));
+            updateMargin(videoHintTextView, 0, 0, 0, navigationBarInset + dp(16));
         }
 
         private void updateMargin(
@@ -917,44 +942,9 @@ public class MediaRecorder extends FrameLayout {
             }
         }
 
-        private void setZoomControlVisibility(
-            boolean isVisible,
-            @Nullable Runnable onAnimationEnd
-        ) {
-            if (isZoomControlVisible == isVisible || isZoomControlAnimationRunning) {
-                if (onAnimationEnd != null) {
-                    onAnimationEnd.run();
-                }
-                return;
-            }
-
-            zoomControlView.animate().cancel();
-
-            float alpha = isVisible ? 1f : 0f;
-            zoomControlView.animate()
-                .alpha(alpha)
-                .setDuration(180)
-                .withStartAction(() -> {
-                    isZoomControlAnimationRunning = true;
-                    if (isVisible) {
-                        zoomControlView.setVisibility(View.VISIBLE);
-                    }
-                })
-                .withEndAction(() -> {
-                    isZoomControlVisible = isVisible;
-                    isZoomControlAnimationRunning = false;
-                    if (!isVisible) {
-                        zoomControlView.setVisibility(View.GONE);
-                    }
-                    if (onAnimationEnd != null) {
-                        onAnimationEnd.run();
-                    }
-                });
-        }
-
         @Override
         public void onFlashModeChanged(@NonNull String flashMode, boolean isFront) {
-            setCurrentFlashModeIcon(flashMode, true);
+            setCurrentFlashModeIcon(flashMode);
             if (isFront && mediaRecorderController.isRecordingVideo()) {
                 if (mediaRecorderController.shouldUseDisplayFlash()) {
                     flashViews.flashIn();
@@ -964,7 +954,7 @@ public class MediaRecorder extends FrameLayout {
             }
         }
 
-        private void setCurrentFlashModeIcon(@NonNull String mode, boolean animated) {
+        private void setCurrentFlashModeIcon(@NonNull String mode) {
             int iconResId = ResourcesCompat.ID_NULL;
             switch (mode) {
                 case Camera.Parameters.FLASH_MODE_ON:
@@ -981,7 +971,7 @@ public class MediaRecorder extends FrameLayout {
                     flashButton.setContentDescription(getString(R.string.AccDescrCameraFlashOff));
                     break;
             }
-            flashButton.setIcon(iconResId, animated);
+            flashButton.setIcon(iconResId, true);
         }
 
         @Override
@@ -1003,10 +993,10 @@ public class MediaRecorder extends FrameLayout {
             if (mediaRecorderController.shouldUseDisplayFlash()) {
                 mediaRecorderController.setPreparing(true);
                 flashViews.flashIn(() ->
-                    mediaRecorderController.takePicture(false, false)
+                    mediaRecorderController.takePicture(isSecretChat, false)
                 );
             } else {
-                mediaRecorderController.takePicture(false, true);
+                mediaRecorderController.takePicture(isSecretChat, true);
             }
         }
 
@@ -1038,11 +1028,32 @@ public class MediaRecorder extends FrameLayout {
             if (mediaRecorderController.shouldUseDisplayFlash()) {
                 mediaRecorderController.setPreparing(true);
                 flashViews.flashIn(() ->
-                    mediaRecorderController.startVideoRecord(false, false, whenStarted)
+                    mediaRecorderController.startVideoRecord(isSecretChat, false, whenStarted)
                 );
             } else {
-                mediaRecorderController.startVideoRecord(false, false, whenStarted);
+                mediaRecorderController.startVideoRecord(isSecretChat, false, whenStarted);
             }
+
+            setVideoTimerVisibility(true, true);
+
+            videoTimerView.setRecording(true, true);
+            setPhotoVideoSwitcherVisibility(false, true);
+
+            int hintResId = byLongPress ? R.string.StoryHintSwipeToZoom : R.string.StoryHintPinchToZoom;
+            videoHintTextView.setText(LocaleController.getString(hintResId), false);
+            setVideoHintTextViewVisibility(true, true);
+        }
+
+        @Override
+        public void onVideoRecordLocked() {
+            videoTimerView.setRecording(true, false);
+            setVideoTimerVisibility(true, true);
+            videoHintTextView.setText(LocaleController.getString(R.string.StoryHintPinchToZoom), true);
+        }
+
+        @Override
+        public boolean canRecordAudio() {
+            return callback != null && callback.canRecordVideo();
         }
 
         @Override
@@ -1057,12 +1068,13 @@ public class MediaRecorder extends FrameLayout {
 
         @Override
         public void onVideoRecordEnd(boolean byDuration) {
+            videoTimerView.setRecording(false, true);
             mediaRecorderController.stopVideoRecord();
         }
 
         @Override
         public void onVideoDuration(long duration) {
-
+            videoTimerView.setDuration(duration, true);
         }
 
         @Override
@@ -1088,6 +1100,9 @@ public class MediaRecorder extends FrameLayout {
                 if (callback != null) {
                     callback.onRecordVideoSuccess(outputFile, thumbPath, width, height, duration);
                 }
+                videoTimerView.setDuration(0, false);
+                setPhotoVideoSwitcherVisibility(true, true);
+                setVideoHintTextViewVisibility(false, true);
             });
         }
 
@@ -1132,17 +1147,7 @@ public class MediaRecorder extends FrameLayout {
 
         @Override
         public void onZoom(float zoom) {
-            mediaRecorderController.setZoom(zoom);
-        }
-
-        @Override
-        public void onVideoRecordLocked() {
-
-        }
-
-        @Override
-        public boolean canRecordAudio() {
-            return true;
+            mediaRecorderController.setZoom(zoom, true);
         }
 
         @Override
@@ -1193,19 +1198,122 @@ public class MediaRecorder extends FrameLayout {
         }
 
         private void switchMode(boolean isVideo) {
-//            if (takingPhoto || takingVideo) {
-//                return;
-//            }
+            if (mediaRecorderController.isBusy()) {
+                return;
+            }
 
-           // isVideo = newIsVideo;
-           // showVideoTimer(isVideo && !collageListView.isVisible(), true);
+            setVideoTimerVisibility(isVideo, true);
             recordControl.startAsVideo(isVideo);
+        }
+
+        public boolean handleBackPress() {
+            if (isOpen()) {
+                if (!mediaRecorderController.isBusy()) {
+                    closeCamera();
+                } else if (mediaRecorderController.isRecordingVideo()) {
+                    recordControl.stopRecording();
+                }
+                return true;
+            }
+            return false;
+        }
+
+        private void setVideoTimerVisibility(boolean isVisible, boolean animated) {
+            setVisibility(videoTimerView, isVisible, animated ? 350 : 0);
+        }
+
+        private void setPhotoVideoSwitcherVisibility(boolean isVisible, boolean animated) {
+            setVisibility(photoVideoSwitcherView, isVisible, animated ? 260 : 0, dp(32f));
+        }
+
+        private void setVideoHintTextViewVisibility(boolean isVisible, boolean animated) {
+            setVisibility(videoHintTextView, isVisible, animated ? 260 : 0, -dp(32f));
+        }
+
+        private void setZoomControlVisibility(
+            boolean isVisible,
+            @Nullable Runnable onAnimationEnd
+        ) {
+            if (isZoomControlVisible == isVisible || isZoomControlAnimationRunning) {
+                if (onAnimationEnd != null) {
+                    onAnimationEnd.run();
+                }
+                return;
+            }
+
+            setVisibility(
+                zoomControlView,
+                isVisible,
+                180,
+                0f,
+                () -> isZoomControlAnimationRunning = true,
+                () -> {
+                    isZoomControlVisible = isVisible;
+                    isZoomControlAnimationRunning = false;
+                }
+            );
+        }
+
+        private void setVisibility(
+            @NonNull View view,
+            boolean isVisible,
+            long duration
+        ) {
+            setVisibility(view, isVisible, duration, 0f);
+        }
+
+        private void setVisibility(
+            @NonNull View view,
+            boolean isVisible,
+            long duration,
+            float additionalTranslationY
+        ) {
+            setVisibility(view, isVisible, duration, additionalTranslationY, null, null);
+        }
+
+        private void setVisibility(
+            @NonNull View view,
+            boolean isVisible,
+            long duration,
+            float additionalTranslationY,
+            @Nullable Runnable onStart,
+            @Nullable Runnable onEnd
+        ) {
+            view.animate().cancel();
+            if (duration > 0) {
+                view.animate()
+                    .alpha(isVisible ? 1f : 0f)
+                    .translationY(isVisible ? 0f : additionalTranslationY)
+                    .setInterpolator(CubicBezierInterpolator.DEFAULT)
+                    .setDuration(duration)
+                    .withStartAction(() -> {
+                        if (isVisible) {
+                            view.setVisibility(View.VISIBLE);
+                        }
+                        if (onStart != null) {
+                            onStart.run();
+                        }
+                    })
+                    .withEndAction(() -> {
+                        if (!isVisible) {
+                            view.setVisibility(View.GONE);
+                        }
+                        if (onEnd != null) {
+                            onEnd.run();
+                        }
+                    });
+            } else {
+                view.setAlpha(isVisible ? 1f : 0f);
+                view.setTranslationY(isVisible ? 0f : additionalTranslationY);
+                view.setVisibility(isVisible ? View.VISIBLE : View.GONE);
+            }
         }
 
     }
 
 
     public interface Callback {
+        boolean canRecordVideo();
         void onTakePictureSuccess(
             @NonNull File outputFile,
             int width,
@@ -1220,6 +1328,7 @@ public class MediaRecorder extends FrameLayout {
             int height,
             long duration
         );
+        void onClose();
     }
 
 }

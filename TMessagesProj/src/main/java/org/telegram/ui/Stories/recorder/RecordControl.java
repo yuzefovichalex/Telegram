@@ -741,12 +741,13 @@ public class RecordControl extends View implements FlashViews.Invertable {
 
             r = true;
         } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+            discardParentTouch = false;
+
             if (!touch) {
                 return false;
             }
 
             touch = false;
-            discardParentTouch = false;
 
             AndroidUtilities.cancelRunOnUIThread(onRecordLongPressRunnable);
             AndroidUtilities.cancelRunOnUIThread(onFlipLongPressRunnable);

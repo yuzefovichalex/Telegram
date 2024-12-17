@@ -255,7 +255,6 @@ import org.telegram.ui.Stories.recorder.StoryEntry;
 import org.telegram.ui.Stories.recorder.StoryRecorder;
 import org.telegram.ui.bots.BotAdView;
 import org.telegram.ui.bots.BotCommandsMenuView;
-import org.telegram.ui.bots.BotWebViewAttachedSheet;
 import org.telegram.ui.bots.BotWebViewSheet;
 import org.telegram.ui.bots.WebViewRequestProps;
 
@@ -17557,6 +17556,27 @@ public class ChatActivity extends BaseFragment implements NotificationCenter.Not
                 }
             } else {
                 VoIPHelper.permissionDenied(getParentActivity(), null, requestCode);
+            }
+        } else if (requestCode == ChatAttachAlertPhotoLayout.REQUEST_CODE_MIC_FOR_VIDEO) {
+            if (getParentActivity() == null) {
+                return;
+            }
+            if (grantResults != null && grantResults.length != 0 && grantResults[0] != PackageManager.PERMISSION_GRANTED) {
+                new AlertDialog.Builder(getParentActivity(), themeDelegate)
+                    .setTopAnimation(R.raw.permission_request_camera, AlertsCreator.PERMISSIONS_REQUEST_TOP_ICON_SIZE, false, Theme.getColor(Theme.key_dialogTopBackground))
+                    .setMessage(AndroidUtilities.replaceTags(getString(R.string.PermissionNoMicForVideoWithHint)))
+                    .setPositiveButton(getString(R.string.PermissionOpenSettings), (dialogInterface, i) -> {
+                        try {
+                            Intent intent = new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                            intent.setData(Uri.parse("package:" + ApplicationLoader.applicationContext.getPackageName()));
+                            getParentActivity().startActivity(intent);
+                        } catch (Exception e) {
+                            FileLog.e(e);
+                        }
+                    })
+                    .setNegativeButton(getString(R.string.ContactsPermissionAlertNotNow), null)
+                    .create()
+                    .show();
             }
         }
     }

@@ -3885,7 +3885,6 @@ public class ChatAttachAlert extends BottomSheet implements NotificationCenter.N
                     ChatAttachAlertPhotoLayout photoLayout = (ChatAttachAlertPhotoLayout) currentAttachLayout;
                     if (photoLayout.cameraView != null) {
                         photoLayout.cameraView.setVisibility(View.INVISIBLE);
-                        photoLayout.cameraIcon.setVisibility(View.INVISIBLE);
                         photoLayout.cameraCell.setVisibility(View.VISIBLE);
                     }
                 }
@@ -3895,7 +3894,6 @@ public class ChatAttachAlert extends BottomSheet implements NotificationCenter.N
                     ChatAttachAlertPhotoLayout photoLayout = (ChatAttachAlertPhotoLayout) nextAttachLayout;
                     if (photoLayout.cameraView != null) {
                         photoLayout.cameraView.setVisibility(View.VISIBLE);
-                        photoLayout.cameraIcon.setVisibility(View.VISIBLE);
                     }
                 }
             }
