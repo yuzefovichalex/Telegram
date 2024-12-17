@@ -50,6 +50,13 @@ public class CollageLayoutButton extends ToggleButton2 {
 
         private CollageLayout selectedLayout;
 
+        private boolean isTouch;
+
+
+        public boolean isTouch() {
+            return isTouch;
+        }
+
         public void setSelected(CollageLayout layout) {
             selectedLayout = layout;
             AndroidUtilities.updateVisibleRows(listView);
@@ -70,8 +77,19 @@ public class CollageLayoutButton extends ToggleButton2 {
                 @Override
                 public boolean dispatchTouchEvent(MotionEvent e) {
                     if (e.getX() <= getPaddingLeft() || e.getX() >= getWidth() - getPaddingRight()) {
+                        isTouch = false;
                         return false;
                     }
+
+                    switch (e.getActionMasked()) {
+                        case MotionEvent.ACTION_DOWN:
+                            isTouch = true;
+                            break;
+                        case MotionEvent.ACTION_CANCEL:
+                        case MotionEvent.ACTION_UP:
+                            isTouch = false;
+                    }
+
                     return super.dispatchTouchEvent(e);
                 }
 

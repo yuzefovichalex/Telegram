@@ -2,6 +2,7 @@ package org.telegram.ui.Stories.recorder;
 
 import static org.telegram.messenger.Utilities.clamp;
 
+import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.hardware.Camera;
@@ -32,6 +33,8 @@ public class MediaRecorderController implements CameraView.Callback {
     @Nullable
     private Callback callback;
 
+    private final boolean isDualAvailable;
+
     @NonNull
     private final ArrayList<String> displayFlashModes = new ArrayList<>();
 
@@ -51,6 +54,11 @@ public class MediaRecorderController implements CameraView.Callback {
     private boolean isRecordingVideo;
 
 
+    public MediaRecorderController(@NonNull Context context) {
+        isDualAvailable = DualCameraView.dualAvailableStatic(context);
+    }
+
+
     public boolean isTakingPicture() {
         return isPreparing || isTakingPicture;
     }
@@ -65,6 +73,14 @@ public class MediaRecorderController implements CameraView.Callback {
 
     public boolean isFrontface() {
         return cameraView != null && cameraView.isFrontface();
+    }
+
+    public boolean isDualAvailable() {
+        return isDualAvailable;
+    }
+
+    public boolean isDual() {
+        return cameraView != null && cameraView.isDual();
     }
 
     public float getDisplayFlashWarmth() {
@@ -338,7 +354,7 @@ public class MediaRecorderController implements CameraView.Callback {
     }
 
     public void toggleDual() {
-        if (!isTakingPicture() && cameraView != null) {
+        if (isDualAvailable && !isTakingPicture() && cameraView != null) {
             cameraView.toggleDual();
             checkActiveFlashMode();
             if (callback != null) {
