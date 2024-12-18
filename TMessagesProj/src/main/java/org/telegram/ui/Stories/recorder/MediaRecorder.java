@@ -476,7 +476,7 @@ public class MediaRecorder extends FrameLayout {
             addView(collageButton, LayoutHelper.createFrame(56, 56, Gravity.RIGHT));
 
             collageListView = new CollageLayoutButton.CollageLayoutListView(context, flashViews);
-            collageListView.setOnLayoutClick(this::setCollageLayout);
+            collageListView.setOnLayoutClick(collageLayout -> setCollageLayout(collageLayout, collageListView.isVisible()));
             collageListView.setVisible(false, false);
             setCollageListVisibility(false, false);
             addView(collageListView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 56));
@@ -1369,7 +1369,7 @@ public class MediaRecorder extends FrameLayout {
             checkCollageViews(animated);
         }
 
-        private void setCollageLayout(@NonNull CollageLayout collageLayout) {
+        private void setCollageLayout(@NonNull CollageLayout collageLayout, boolean animated) {
             CollageLayout previousLayout = selectedCollageLayout;
             selectedCollageLayout = collageLayout;
 
@@ -1389,7 +1389,7 @@ public class MediaRecorder extends FrameLayout {
                 }
             }
 
-            checkCollageViews(isCollageListVisible);
+            checkCollageViews(animated);
             recordControl.setCollageProgress(collageLayoutView.getFilledProgress(), true);
 
             canParentProcessTouchEvents = collageLayoutView.getFilledProgress() != 1f;
@@ -1408,6 +1408,12 @@ public class MediaRecorder extends FrameLayout {
                 collageListView.isVisible()
             );
             collageButton.setIcon(icon, false);
+
+            boolean hasEmptyParts = collageLayoutView.getFilledProgress() != 1f;
+            setActionButtonVisibility(flashButton, !collageListView.isVisible() && hasEmptyParts, animated);
+            setVideoTimerVisibility(hasEmptyParts && isVideo, animated);
+            setPhotoVideoSwitcherVisibility(hasEmptyParts, animated);
+            recordControl.setCollageProgress(collageLayoutView.getFilledProgress(), animated);
         }
 
         private void pushCollageEntry(@NonNull StoryEntry entry) {
@@ -1433,13 +1439,8 @@ public class MediaRecorder extends FrameLayout {
                 collageLayoutView.clear(true);
             }
 
-            boolean hasEmptyParts = collageLayoutView.getFilledProgress() != 1f;
-            setActionButtonVisibility(flashButton, hasEmptyParts, animated);
-            setVideoTimerVisibility(hasEmptyParts && isVideo, animated);
-            setPhotoVideoSwitcherVisibility(hasEmptyParts, animated);
-            recordControl.setCollageProgress(collageLayoutView.getFilledProgress(), animated);
-            setCollageLayout(collageLayoutView.getLayout());
             collageLayoutView.setTouchable(true);
+            setCollageLayout(collageLayoutView.getLayout(), animated);
 
             if (collageEntry != null) {
                 collageEntry.destroy(false);
@@ -1584,9 +1585,18 @@ public class MediaRecorder extends FrameLayout {
                         }
                     });
             } else {
+                if (onStart != null) {
+                    onStart.run();
+                }
                 view.setAlpha(isVisible ? 1f : 0f);
                 view.setTranslationY(isVisible ? 0f : additionalTranslationY);
                 view.setVisibility(isVisible ? View.VISIBLE : View.GONE);
+                if (onUpdate != null) {
+                    onUpdate.run();
+                }
+                if (onEnd != null) {
+                    onEnd.run();
+                }
             }
         }
 
