@@ -272,13 +272,13 @@ public class MediaRecorder extends FrameLayout {
 
 
         @NonNull
-        private final ImageView placeholder;
-
-        @NonNull
         private final CollageLayoutView2 collageLayoutView;
 
         @Nullable
         private DualCameraView cameraView;
+
+        @NonNull
+        private final ImageView placeholder;
 
         @NonNull
         private final ImageView cameraIcon;
@@ -379,6 +379,10 @@ public class MediaRecorder extends FrameLayout {
         private boolean isSecretChat;
 
 
+        @Nullable
+        private StoryEntry collageEntry;
+
+
         private ContentView(@NonNull Context context) {
             super(context);
 
@@ -416,10 +420,6 @@ public class MediaRecorder extends FrameLayout {
 
             resetDragAnimator.addUpdateListener(animation -> setVerticalDragProgress((float) animation.getAnimatedValue()));
 
-            placeholder = new ImageView(context);
-            placeholder.setScaleType(ImageView.ScaleType.CENTER_CROP);
-            addView(placeholder, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
-
             collageLayoutView = new CollageLayoutView2(
                 context,
                 new BlurringShader.BlurManager(this),
@@ -428,6 +428,10 @@ public class MediaRecorder extends FrameLayout {
             );
             collageLayoutView.setResetState(() -> resetCollageResult(false, true));
             addView(collageLayoutView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+
+            placeholder = new ImageView(context);
+            placeholder.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            addView(placeholder, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
 
             cameraIcon = new ImageView(context);
             cameraIcon.setImageResource(R.drawable.instant_camera);
@@ -1256,7 +1260,41 @@ public class MediaRecorder extends FrameLayout {
 
         @Override
         public void onCheckClick() {
-            resetCollageResult(true, true);
+            if (collageEntry != null && callback != null) {
+                collageLayoutView.setTouchable(false);
+                mediaRecorderController.convertCollageToMedia(
+                    collageEntry,
+                    isSecretChat,
+                    () -> resetCollageResult(true, true)
+                );
+            } else {
+                resetCollageResult(true, true);
+            }
+        }
+
+        @Override
+        public void onCollagePictureSuccess(
+            @NonNull File outputFile,
+            int width,
+            int height,
+            int orientation
+        ) {
+            if (callback != null) {
+                callback.onTakePictureSuccess(outputFile, width, height, orientation, true);
+            }
+        }
+
+        @Override
+        public void onCollageVideoSuccess(
+            @NonNull File outputFile,
+            @NonNull String thumbPath,
+            int width,
+            int height,
+            long duration
+        ) {
+            if (callback != null) {
+                callback.onRecordVideoSuccess(outputFile, thumbPath, width, height, duration);
+            }
         }
 
         private void startCameraPreview() {
@@ -1308,6 +1346,9 @@ public class MediaRecorder extends FrameLayout {
                 mediaRecorderController.toggleDual();
             }
             setCollageListVisibility(!collageListView.isVisible(), true);
+            if (!isCollageInUse) {
+                canParentProcessTouchEvents = true;
+            }
         }
 
         private void setCollageListVisibility(boolean isVisible, boolean animated) {
@@ -1340,8 +1381,18 @@ public class MediaRecorder extends FrameLayout {
                 }
             }
 
+            if (!selectedCollageLayout.isValid()) {
+                selectedCollageLayout = CollageLayout.getLayouts().get(6);
+                if (isCollageInUse) {
+                    toggleCollageList();
+                    return;
+                }
+            }
+
             checkCollageViews(isCollageListVisible);
             recordControl.setCollageProgress(collageLayoutView.getFilledProgress(), true);
+
+            canParentProcessTouchEvents = collageLayoutView.getFilledProgress() != 1f;
         }
 
         private void checkCollageViews(boolean animated) {
@@ -1361,6 +1412,10 @@ public class MediaRecorder extends FrameLayout {
 
         private void pushCollageEntry(@NonNull StoryEntry entry) {
             if (collageLayoutView.push(entry)) {
+                collageEntry = StoryEntry.asCollage(
+                    collageLayoutView.getLayout(),
+                    collageLayoutView.getContent()
+                );
                 onCollageDone();
             }
             recordControl.setCollageProgress(collageLayoutView.getFilledProgress(), true);
@@ -1369,7 +1424,6 @@ public class MediaRecorder extends FrameLayout {
         private void onCollageDone() {
             canParentProcessTouchEvents = false;
             setActionButtonVisibility(flashButton, false, true);
-            setActionButtonVisibility(collageButton, false, true);
             setVideoTimerVisibility(false, true);
             setPhotoVideoSwitcherVisibility(false, true);
         }
@@ -1381,12 +1435,15 @@ public class MediaRecorder extends FrameLayout {
 
             boolean hasEmptyParts = collageLayoutView.getFilledProgress() != 1f;
             setActionButtonVisibility(flashButton, hasEmptyParts, animated);
-            setActionButtonVisibility(collageButton, hasEmptyParts, animated);
             setVideoTimerVisibility(hasEmptyParts && isVideo, animated);
             setPhotoVideoSwitcherVisibility(hasEmptyParts, animated);
             recordControl.setCollageProgress(collageLayoutView.getFilledProgress(), animated);
-            canParentProcessTouchEvents = hasEmptyParts;
             setCollageLayout(collageLayoutView.getLayout());
+            collageLayoutView.setTouchable(true);
+
+            if (collageEntry != null) {
+                collageEntry.destroy(false);
+            }
         }
 
         private void switchMode(boolean isVideo) {
@@ -1395,6 +1452,7 @@ public class MediaRecorder extends FrameLayout {
             }
 
             this.isVideo = isVideo;
+            setCollageListVisibility(false, true);
             setVideoTimerVisibility(isVideo, true);
             recordControl.startAsVideo(isVideo);
         }

@@ -76,6 +76,10 @@ public class CollageLayout {
         return new CollageLayout(newSource.toString());
     }
 
+    public boolean isValid() {
+        return src.length() > 1 && src.startsWith(".") && src.endsWith(".");
+    }
+
     public static class Part {
         public final CollageLayout layout;
         public final int x, y;

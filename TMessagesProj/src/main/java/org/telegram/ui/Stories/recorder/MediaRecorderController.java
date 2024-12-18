@@ -52,6 +52,7 @@ public class MediaRecorderController implements CameraView.Callback {
     private boolean isPreparing;
     private boolean isTakingPicture;
     private boolean isRecordingVideo;
+    private boolean isProcessing;
 
 
     public MediaRecorderController(@NonNull Context context) {
@@ -68,7 +69,7 @@ public class MediaRecorderController implements CameraView.Callback {
     }
 
     public boolean isBusy() {
-        return isPreparing || isTakingPicture || isRecordingVideo;
+        return isPreparing || isTakingPicture || isRecordingVideo || isProcessing;
     }
 
     public boolean isFrontface() {
@@ -474,6 +475,87 @@ public class MediaRecorderController implements CameraView.Callback {
         }
     }
 
+    public void convertCollageToMedia(
+        @NonNull StoryEntry entry,
+        boolean isSecretChat,
+        @Nullable Runnable onDone
+    ) {
+        if (entry.wouldBeVideo()) {
+            convertCollageToVideo(entry, isSecretChat, onDone);
+        } else {
+            convertCollageToPicture(entry, isSecretChat, onDone);
+        }
+    }
+
+    private void convertCollageToPicture(
+        @NonNull StoryEntry entry,
+        boolean isSecretChat,
+        @Nullable Runnable onDone
+    ) {
+        if (callback == null || isBusy()) {
+            return;
+        }
+
+        isProcessing = true;
+
+        File outputFile = AndroidUtilities.generatePicturePath(isSecretChat, null);
+        if (outputFile != null) {
+            entry.buildPhoto(outputFile);
+            isProcessing = false;
+            if (onDone != null) {
+                onDone.run();
+            }
+            callback.onCollagePictureSuccess(
+                outputFile,
+                entry.width,
+                entry.height,
+                entry.orientation
+            );
+        }
+
+        isProcessing = false;
+    }
+
+    private void convertCollageToVideo(
+        @NonNull StoryEntry entry,
+        boolean isSecretChat,
+        @Nullable Runnable onDone
+    ) {
+        if (callback == null || isBusy()) {
+            return;
+        }
+
+        isProcessing = true;
+
+        File outputFile = AndroidUtilities.generateVideoPath(isSecretChat);
+        if (outputFile != null) {
+            DownloadButton.BuildingVideo videoBuilder = new DownloadButton.BuildingVideo(
+                0,
+                entry,
+                outputFile,
+                () -> {
+                    isProcessing = false;
+                    if (onDone != null) {
+                        onDone.run();
+                    }
+                    callback.onCollageVideoSuccess(
+                        outputFile,
+                        // TODO create thumb
+                        null,
+                        entry.width,
+                        entry.height,
+                        entry.duration
+                    );
+                },
+                progress -> {},
+                () -> {}
+            );
+            videoBuilder.start();
+        }
+
+        isProcessing = false;
+    }
+
     private void onPictureReady(
         @NonNull File outputFile,
         int orientation,
@@ -619,6 +701,19 @@ public class MediaRecorderController implements CameraView.Callback {
             boolean isSameTakePictureOrientation
         );
         void onRecordVideoSuccess(
+            @NonNull File outputFile,
+            @NonNull String thumbPath,
+            int width,
+            int height,
+            long duration
+        );
+        void onCollagePictureSuccess(
+            @NonNull File outputFile,
+            int width,
+            int height,
+            int orientation
+        );
+        void onCollageVideoSuccess(
             @NonNull File outputFile,
             @NonNull String thumbPath,
             int width,

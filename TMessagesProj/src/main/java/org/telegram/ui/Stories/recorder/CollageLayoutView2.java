@@ -837,9 +837,15 @@ public class CollageLayoutView2 extends FrameLayout implements ItemOptions.Scrim
 
     public Part longPressedPart;
 
+    private boolean isTouchable = true;
+
+    public void setTouchable(boolean touchable) {
+        isTouchable = touchable;
+    }
+
     @Override
     public boolean dispatchTouchEvent(MotionEvent event) {
-        if (!hasLayout() || preview) {
+        if (!hasLayout() || preview || !isTouchable) {
             return super.dispatchTouchEvent(event);
         }
         final Part hitPart = getPartAt(event.getX(), event.getY());

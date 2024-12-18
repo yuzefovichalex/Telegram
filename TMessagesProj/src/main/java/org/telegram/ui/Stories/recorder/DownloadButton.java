@@ -266,7 +266,7 @@ public class DownloadButton extends ImageView {
         showToast(R.raw.error, LocaleController.getString("VideoConvertFail"));
     }
 
-    private static class BuildingVideo implements NotificationCenter.NotificationCenterDelegate {
+    public static class BuildingVideo implements NotificationCenter.NotificationCenterDelegate {
 
         final int currentAccount;
         final StoryEntry entry;
