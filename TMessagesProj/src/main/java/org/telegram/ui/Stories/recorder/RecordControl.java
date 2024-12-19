@@ -30,6 +30,7 @@ import android.view.ViewConfiguration;
 import android.widget.FrameLayout;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.core.graphics.ColorUtils;
 
 import com.google.zxing.common.detector.MathUtils;
@@ -126,6 +127,9 @@ public class RecordControl extends View implements FlashViews.Invertable {
     private final Point check2 = new Point(-dpf2(8.5f/3.0f), dpf2(26/3.0f));
     private final Point check3 = new Point(dpf2(29/3.0f), dpf2(-11/3.0f));
 
+    @Nullable
+    private Runnable syntheticPhotoShootRelease;
+
     public RecordControl(Context context) {
         super(context);
 
@@ -188,10 +192,14 @@ public class RecordControl extends View implements FlashViews.Invertable {
     }
 
     public void updateGalleryImage() {
+        updateGalleryImage(true);
+    }
+
+    public void updateGalleryImage(boolean useStoryDrafts) {
         final String filter = "80_80";
         ArrayList<StoryEntry> drafts = MessagesController.getInstance(galleryImage.getCurrentAccount()).getStoriesController().getDraftsController().drafts;
         galleryImage.setOrientation(0, 0, true);
-        if (drafts != null && !drafts.isEmpty() && drafts.get(0).draftThumbFile != null) {
+        if (useStoryDrafts && drafts != null && !drafts.isEmpty() && drafts.get(0).draftThumbFile != null) {
             galleryImage.setImage(ImageLocation.getForPath(drafts.get(0).draftThumbFile.getAbsolutePath()), filter, null, null, noGalleryDrawable, 0, null, null, 0);
             return;
         }
@@ -807,6 +815,41 @@ public class RecordControl extends View implements FlashViews.Invertable {
         }
         flipButtonWasPressed = innerFlipButton;
         return r;
+    }
+
+    public void callPhotoShoot() {
+        if (recording || syntheticPhotoShootRelease != null) {
+            return;
+        }
+
+        recordButton.setPressed(true);
+        syntheticPhotoShootRelease = () -> {
+            recordButton.setPressed(false);
+            delegate.onPhotoShoot();
+            syntheticPhotoShootRelease = null;
+        };
+        AndroidUtilities.runOnUIThread(syntheticPhotoShootRelease, 120);
+    }
+
+    public void startRecording() {
+        if (recording) {
+            return;
+        }
+
+        if (delegate.canRecordAudio()) {
+            lastDuration = 0;
+            recordingStart = System.currentTimeMillis();
+            showLock = false;
+            recordButton.setPressed(true);
+            delegate.onVideoRecordStart(false, () -> {
+                recordingStart = System.currentTimeMillis();
+                lastDuration = 0;
+                recording = true;
+                delegate.onVideoDuration(lastDuration);
+            });
+        }
+
+        invalidate();
     }
 
     public void stopRecording() {
