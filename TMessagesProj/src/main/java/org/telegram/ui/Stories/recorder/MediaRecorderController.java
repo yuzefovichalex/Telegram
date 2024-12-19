@@ -82,6 +82,10 @@ public class MediaRecorderController implements CameraView.Callback {
         return isPreparing || isRecordingVideo;
     }
 
+    public boolean isProcessing() {
+        return isProcessing;
+    }
+
     public boolean isBusy() {
         return isPreparing || isTakingPicture || isRecordingVideo || isProcessing;
     }

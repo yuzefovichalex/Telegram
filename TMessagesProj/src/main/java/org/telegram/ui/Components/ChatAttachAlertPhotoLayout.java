@@ -2292,7 +2292,7 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
 
     private void applyCameraViewPosition() {
         mediaRecorder.setPreviewPosition(cameraViewLocation[0], cameraViewLocation[1]);
-        mediaRecorder.setPreviewClip(0f, cameraViewOffsetY, 0f, 0f);
+        mediaRecorder.setPreviewClip(0f, cameraViewOffsetY, 0f, cameraViewOffsetBottomY);
     }
 
     public HashMap<Object, Object> getSelectedPhotos() {
@@ -3567,12 +3567,7 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
 
 
     private void invalidateCameraPreviewRadius() {
-        mediaRecorder.setPreviewRadius(
-            dp(8f * parentAlert.cornerRadius),
-            0f,
-            0f,
-            0f
-        );
+        mediaRecorder.setPreviewRadius(dp(8f * parentAlert.cornerRadius), 0f);
     }
 
     @Nullable

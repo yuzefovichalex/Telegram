@@ -161,13 +161,8 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
         contentView.setPreviewPosition(x, y);
     }
 
-    public void setPreviewRadius(
-        float topLeft,
-        float topRight,
-        float bottomRight,
-        float bottomLeft
-    ) {
-        contentView.setPreviewRadius(topLeft, topRight, bottomRight, bottomLeft);
+    public void setPreviewRadius(float topLeft, float topRight) {
+        contentView.setPreviewRadius(topLeft, topRight);
     }
 
     public void setPreviewClip(
@@ -347,7 +342,7 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
         private final RectF previewClipRect = new RectF();
 
         @NonNull
-        private final float[] previewRadius = new float[4];
+        private final float[] previewTopRadius = new float[2];
 
         @NonNull
         private final RectF fullSizeRect = new RectF();
@@ -531,6 +526,8 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
             setBottomHintTextViewVisibility(false, false);
             addView(bottomHintTextView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 32, Gravity.BOTTOM, 8, 0, 8, 8));
 
+            invalidateControlsState(false);
+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 // TODO deal with insets
                 applyWindowInsets(WindowInsetsCompat.CONSUMED);
@@ -546,10 +543,52 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
                     }
                 });
 
+                ViewOutlineProvider innerOutlineProvider = new ViewOutlineProvider() {
+                    @Override
+                    public void getOutline(View view, Outline outline) {
+                        outline.setRect(
+                            (int) currentRect.left,
+                            (int) currentRect.top,
+                            (int) currentRect.right,
+                            (int) currentRect.bottom
+                        );
+                    }
+                };
+                placeholder.setOutlineProvider(innerOutlineProvider);
+                placeholder.setClipToOutline(true);
+                collageLayoutView.setOutlineProvider(innerOutlineProvider);
+                collageLayoutView.setClipToOutline(true);
+
                 setOutlineProvider(new ViewOutlineProvider() {
                     @Override
                     public void getOutline(View view, Outline outline) {
-                        outline.setConvexPath(clipPath);
+                        if (isOpen()) {
+                            outline.setRoundRect(
+                                (int) currentRect.left,
+                                (int) currentRect.top,
+                                (int) currentRect.right,
+                                (int) currentRect.bottom,
+                                getDragRadius()
+                            );
+                        } else {
+                            float topLeftRadius = 0f;
+                            float topRightRadius = 0f;
+                            float radius = 0f;
+                            if (currentRadii[0] > 0 || currentRadii[2] > 0) {
+                                if (currentRadii[0] > currentRadii[2]) {
+                                    topLeftRadius = radius = currentRadii[0];
+                                } else {
+                                    topRightRadius = radius = currentRadii[2];
+                                }
+                            }
+                            outline.setRoundRect(
+                                (int) (currentRect.left - topRightRadius),
+                                (int) currentRect.top,
+                                (int) (currentRect.right + topLeftRadius),
+                                (int) (currentRect.bottom + radius),
+                                radius
+                            );
+                        }
                     }
                 });
                 setClipToOutline(true);
@@ -587,10 +626,7 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
             }
 
             this.previewSize = previewSize;
-            if (isLaidOut() && !isLayoutRequested()) {
-                calculatePreviewRect();
-                invalidateInternal();
-            }
+            invalidateInternal();
         }
 
         private void setPreviewPosition(float x, float y) {
@@ -605,16 +641,9 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
             this.previewAbsoluteY = (-getMeasuredHeight() + previewSize) / 2f + previewClientY;
         }
 
-        private void setPreviewRadius(
-            float topLeft,
-            float topRight,
-            float bottomRight,
-            float bottomLeft
-        ) {
-            previewRadius[0] = topLeft;
-            previewRadius[1] = topRight;
-            previewRadius[2] = bottomRight;
-            previewRadius[3] = bottomLeft;
+        private void setPreviewRadius(float topLeft, float topRight) {
+            previewTopRadius[0] = topLeft;
+            previewTopRadius[1] = topRight;
             invalidateInternal();
         }
 
@@ -625,10 +654,7 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
             float clipBottom
         ) {
             previewClipRect.set(clipLeft, clipTop, clipRight, clipBottom);
-            if (isLaidOut() && !isLayoutRequested()) {
-                calculatePreviewRect();
-                invalidateInternal();
-            }
+            invalidateInternal();
         }
 
         private void setPlaceholder(@Nullable Bitmap bitmap) {
@@ -640,32 +666,55 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
         }
 
         private void invalidateInternal() {
-            float outerScale = lerp(1f, getDragScale(), openCloseProgress);
+            if (getMeasuredWidth() == 0 || getMeasuredHeight() == 0) {
+                return;
+            }
+
+            int minSide = Math.min(getMeasuredWidth(), getMeasuredHeight());
+            float outerScale = lerp(previewSize / minSide, getDragScale(), openCloseProgress);
             setScaleX(outerScale);
             setScaleY(outerScale);
             setTranslationX(lerp(previewAbsoluteX, 0f, openCloseProgress));
             setTranslationY(lerp(previewAbsoluteY, getDragTranslationY(), openCloseProgress));
 
-            if (getMeasuredWidth() != 0) {
-                int minSide = Math.min(getMeasuredWidth(), getMeasuredHeight());
-                float innerScale = lerp(previewSize / minSide, 1f, openCloseProgress);
-                setPlaceholderScale(innerScale);
-                setTextureViewScale(innerScale);
-            }
-
             float invertedProgress = 1f - openCloseProgress;
             cameraIcon.setAlpha(invertedProgress * invertedProgress);
+            cameraIcon.setScaleX(1f / outerScale);
+            cameraIcon.setScaleY(1f / outerScale);
+
+            float previewLeft = (getMeasuredWidth() - minSide) / 2f;
+            float previewTop = (getMeasuredHeight() - minSide) / 2f;
+            float previewRight = previewLeft + minSide;
+            float previewBottom = previewTop + minSide;
+
+            float previewClippedTop = clamp(
+                previewTop + previewClipRect.top / outerScale,
+                previewBottom,
+                previewTop
+            );
+            float previewClippedBottom = clamp(
+                previewBottom - previewClipRect.bottom / outerScale,
+                previewBottom,
+                previewClippedTop
+            );
+
+            previewRect.set(
+                previewLeft,
+                previewClippedTop,
+                previewRight,
+                previewClippedBottom
+            );
 
             lerp(previewRect, fullSizeRect, openCloseProgress, currentRect);
 
             float dragRadius = getDragRadius();
             setClipRadius(
-                lerp(previewRadius[0], dragRadius, openCloseProgress),
-                lerp(previewRadius[1], dragRadius, openCloseProgress),
-                lerp(previewRadius[2], dragRadius, openCloseProgress),
-                lerp(previewRadius[3], dragRadius, openCloseProgress)
+                lerp(previewTopRadius[0] * (1f / outerScale), dragRadius, openCloseProgress),
+                lerp(previewTopRadius[1] * (1f / outerScale), dragRadius, openCloseProgress),
+                lerp(0, dragRadius, openCloseProgress),
+                lerp(0, dragRadius, openCloseProgress)
             );
-            invalidateClipPath();
+            invalidateClip();
 
             invalidateDualCameraScale();
         }
@@ -676,18 +725,6 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
                 m.set(dualCameraMatrix);
                 m.postScale(openCloseProgress, openCloseProgress);
                 cameraView.updateDualPosition();
-            }
-        }
-
-        private void setPlaceholderScale(float scale) {
-            placeholder.setScaleX(scale);
-            placeholder.setScaleY(scale);
-        }
-
-        private void setTextureViewScale(float scale) {
-            if (cameraView != null) {
-                cameraView.getTextureView().setScaleX(scale);
-                cameraView.getTextureView().setScaleY(scale);
             }
         }
 
@@ -705,7 +742,7 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
 
             float dragRadius = getDragRadius();
             setClipRadius(dragRadius, dragRadius, dragRadius, dragRadius);
-            invalidateClipPath();
+            invalidateClip();
         }
 
         private void resetVerticalDragProgress() {
@@ -737,12 +774,14 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
             currentRadii[6] = currentRadii[7] = bottomLeft;
         }
 
-        private void invalidateClipPath() {
-            clipPath.reset();
-            clipPath.addRoundRect(currentRect, currentRadii, Path.Direction.CW);
+        private void invalidateClip() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                placeholder.invalidateOutline();
+                collageLayoutView.invalidateOutline();
                 invalidateOutline();
             } else {
+                clipPath.reset();
+                clipPath.addRoundRect(currentRect, currentRadii, Path.Direction.CW);
                 invalidate();
             }
         }
@@ -773,6 +812,8 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
             invalidateDualCameraScale();
 
             collageLayoutView.setCameraView(cameraView);
+
+            invalidateInternal();
         }
 
         private boolean openCamera() {
@@ -833,8 +874,7 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
                 placeholder.setVisibility(View.VISIBLE);
             }
             setZoomControlVisibility(false, null);
-            setPhotoVideoSwitcherVisibility(true, false);
-            setBottomHintTextViewVisibility(false, false);
+            invalidateControlsState(false);
         }
 
         @Nullable
@@ -843,28 +883,10 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
         }
 
         @Override
-        protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
-            super.onLayout(changed, left, top, right, bottom);
+        protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+            super.onMeasure(widthMeasureSpec, heightMeasureSpec);
             fullSizeRect.set(0, 0, getMeasuredWidth(), getMeasuredHeight());
-            calculatePreviewRect();
             invalidateInternal();
-        }
-
-        private void calculatePreviewRect() {
-            float left = (getMeasuredWidth() - previewSize) / 2f;
-            float top = (getMeasuredHeight() - previewSize) / 2f;
-            float right = left + previewSize;
-            float bottom = top + previewSize;
-
-            float clippedTop = clamp(top + previewClipRect.top, bottom, top);
-            float clippedBottom = clamp(bottom - previewClipRect.bottom, bottom, clippedTop);
-
-            previewRect.set(
-                left + previewClipRect.left,
-                clippedTop,
-                right - previewClipRect.right,
-                clippedBottom
-            );
         }
 
         @Override
@@ -1249,7 +1271,7 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
                 }
                 videoTimerView.setDuration(0, false);
                 setPhotoVideoSwitcherVisibility(!collageLayoutView.isFilled(), true);
-                setBottomHintTextViewVisibility(false, true);
+                setBottomHintTextViewVisibility(collageLayoutView.isFilled(), true);
             });
         }
 
@@ -1461,14 +1483,15 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
 
             boolean isCollageListVisible = collageListView.isVisible();
             boolean hasEmptyParts = collageLayoutView.getFilledProgress() != 1f;
-            setActionButtonVisibility(backButton, !isCollageListVisible, animated);
-            setActionButtonVisibility(flashButton, !isCollageListVisible && hasEmptyParts, animated);
-            setActionButtonVisibility(dualButton, !isCollageInUse && !isCollageListVisible && mediaRecorderController.isDualAvailable(), animated);
-            setActionButtonVisibility(collageButton, !mediaRecorderController.isBusy(), animated);
-            setVideoTimerVisibility(!isCollageListVisible && hasEmptyParts && isVideo, animated);
-            setPhotoVideoSwitcherVisibility(hasEmptyParts, animated);
-            setBottomHintTextViewVisibility(mediaRecorderController.isRecordingVideo() || !hasEmptyParts, animated);
+            setActionButtonVisibility(backButton, isOpenOrOpening && !isCollageListVisible, animated);
+            setActionButtonVisibility(flashButton, isOpenOrOpening && !isCollageListVisible && hasEmptyParts, animated);
+            setActionButtonVisibility(dualButton, isOpenOrOpening && !isCollageInUse && !isCollageListVisible && mediaRecorderController.isDualAvailable(), animated);
+            setActionButtonVisibility(collageButton, isOpenOrOpening && !mediaRecorderController.isBusy(), animated);
+            setVideoTimerVisibility(isOpenOrOpening && !isCollageListVisible && hasEmptyParts && isVideo, animated);
+            setPhotoVideoSwitcherVisibility(isOpenOrOpening && hasEmptyParts, animated);
+            setBottomHintTextViewVisibility(isOpenOrOpening && mediaRecorderController.isRecordingVideo() || !hasEmptyParts && !mediaRecorderController.isProcessing(), animated);
             recordControl.setCollageProgress(collageLayoutView.getFilledProgress(), animated);
+            setRecordControlVisibility(isOpenOrOpening, animated);
         }
 
         private void pushCollageEntry(@NonNull StoryEntry entry) {
@@ -1570,6 +1593,10 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
 
         private void setVideoTimerVisibility(boolean isVisible, boolean animated) {
             setVisibility(videoTimerView, isVisible, animated ? 350 : 0);
+        }
+
+        private void setRecordControlVisibility(boolean isVisible, boolean animated) {
+            setVisibility(recordControl, isVisible, animated ? 350 : 0);
         }
 
         private void setPhotoVideoSwitcherVisibility(boolean isVisible, boolean animated) {
