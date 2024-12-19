@@ -329,7 +329,7 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
         private final PhotoVideoSwitcherView photoVideoSwitcherView;
 
         @NonNull
-        private final HintTextView videoHintTextView;
+        private final HintTextView bottomHintTextView;
 
 
         @NonNull
@@ -526,10 +526,10 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
             flashViews.add(photoVideoSwitcherView);
             addView(photoVideoSwitcherView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 48, Gravity.BOTTOM));
 
-            videoHintTextView = new HintTextView(context);
-            flashViews.add(videoHintTextView);
-            setVideoHintTextViewVisibility(false, false);
-            addView(videoHintTextView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 32, Gravity.BOTTOM, 8, 0, 8, 8));
+            bottomHintTextView = new HintTextView(context);
+            flashViews.add(bottomHintTextView);
+            setBottomHintTextViewVisibility(false, false);
+            addView(bottomHintTextView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 32, Gravity.BOTTOM, 8, 0, 8, 8));
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 // TODO deal with insets
@@ -834,7 +834,7 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
             }
             setZoomControlVisibility(false, null);
             setPhotoVideoSwitcherVisibility(true, false);
-            setVideoHintTextViewVisibility(false, false);
+            setBottomHintTextViewVisibility(false, false);
         }
 
         @Nullable
@@ -1008,7 +1008,7 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
             updateMargin(zoomControlView, 0, 0, 0, navigationBarInset + dp(172));
             updateMargin(recordControl, 0, 0, 0, navigationBarInset + dp(64));
             updateMargin(photoVideoSwitcherView, 0, 0, 0, navigationBarInset + dp(16));
-            updateMargin(videoHintTextView, 0, 0, 0, navigationBarInset + dp(16));
+            updateMargin(bottomHintTextView, 0, 0, 0, navigationBarInset + dp(16));
         }
 
         private void updateMargin(
@@ -1181,8 +1181,8 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
             setPhotoVideoSwitcherVisibility(false, true);
 
             int hintResId = byLongPress ? R.string.StoryHintSwipeToZoom : R.string.StoryHintPinchToZoom;
-            videoHintTextView.setText(LocaleController.getString(hintResId), false);
-            setVideoHintTextViewVisibility(true, true);
+            bottomHintTextView.setText(LocaleController.getString(hintResId), false);
+            setBottomHintTextViewVisibility(true, true);
         }
 
         @Override
@@ -1194,7 +1194,7 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
         public void onVideoRecordLocked() {
             videoTimerView.setRecording(true, false);
             setVideoTimerVisibility(true, true);
-            videoHintTextView.setText(LocaleController.getString(R.string.StoryHintPinchToZoom), true);
+            bottomHintTextView.setText(LocaleController.getString(R.string.StoryHintPinchToZoom), true);
         }
 
         @Override
@@ -1249,7 +1249,7 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
                 }
                 videoTimerView.setDuration(0, false);
                 setPhotoVideoSwitcherVisibility(!collageLayoutView.isFilled(), true);
-                setVideoHintTextViewVisibility(false, true);
+                setBottomHintTextViewVisibility(false, true);
             });
         }
 
@@ -1467,6 +1467,7 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
             setActionButtonVisibility(collageButton, !mediaRecorderController.isBusy(), animated);
             setVideoTimerVisibility(!isCollageListVisible && hasEmptyParts && isVideo, animated);
             setPhotoVideoSwitcherVisibility(hasEmptyParts, animated);
+            setBottomHintTextViewVisibility(mediaRecorderController.isRecordingVideo() || !hasEmptyParts, animated);
             recordControl.setCollageProgress(collageLayoutView.getFilledProgress(), animated);
         }
 
@@ -1482,6 +1483,9 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
             setActionButtonVisibility(flashButton, false, true);
             setVideoTimerVisibility(false, true);
             setPhotoVideoSwitcherVisibility(false, true);
+
+            bottomHintTextView.setText(LocaleController.getString(R.string.StoryCollageReorderHint), false);
+            setBottomHintTextViewVisibility(true, true);
         }
 
         private void resetCollageResult(boolean clear, boolean animated) {
@@ -1572,8 +1576,8 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
             setVisibility(photoVideoSwitcherView, isVisible, animated ? 260 : 0, dp(32f));
         }
 
-        private void setVideoHintTextViewVisibility(boolean isVisible, boolean animated) {
-            setVisibility(videoHintTextView, isVisible, animated ? 260 : 0, -dp(32f));
+        private void setBottomHintTextViewVisibility(boolean isVisible, boolean animated) {
+            setVisibility(bottomHintTextView, isVisible, animated ? 260 : 0, -dp(32f));
         }
 
         private void setZoomControlVisibility(
