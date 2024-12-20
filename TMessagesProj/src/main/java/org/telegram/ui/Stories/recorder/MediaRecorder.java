@@ -82,7 +82,7 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
         gestureDetector = new GestureDetector(context, new GestureDetector.SimpleOnGestureListener() {
             @Override
             public boolean onDown(@NonNull MotionEvent e) {
-                contentView.onTapDown();
+                contentView.onTapDown(e);
                 return false;
             }
 
@@ -341,6 +341,7 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
         private boolean isGalleryOpen;
         private boolean willGalleryBeOpen;
         private float galleryDragProgress;
+        private boolean isCameraPausedByGallery;
 
         @NonNull
         private final ValueAnimator galleryOpenCloseAnimator = new ValueAnimator();
@@ -435,10 +436,7 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
                 public void onAnimationEnd(Animator animation) {
                     isOpenCloseAnimationRunning = false;
                     dragProgress = 0f;
-                    int visibility = isOpenOrOpening
-                        ? View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_FULLSCREEN
-                        : View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN;
-                    setSystemUiVisibility(visibility);
+                    setSystemBarsVisibility(!isOpenOrOpening);
                 }
             });
 
@@ -447,6 +445,21 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
 
             galleryOpenCloseAnimator.setInterpolator(CubicBezierInterpolator.DEFAULT);
             galleryOpenCloseAnimator.addUpdateListener(animation -> setGalleryDragProgress((float) animation.getAnimatedValue()));
+            galleryOpenCloseAnimator.addListener(new AnimatorListenerAdapter() {
+                @Override
+                public void onAnimationStart(Animator animation) {
+                    if (isGalleryOpen && isCameraPausedByGallery) {
+                        startCameraPreview();
+                    }
+                }
+
+                @Override
+                public void onAnimationEnd(Animator animation) {
+                    if (galleryDragProgress == 0f) {
+                        destroyGalleryListView();
+                    }
+                }
+            });
 
             collageLayoutView = new CollageLayoutView2(
                 context,
@@ -901,6 +914,7 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
                 cameraView.destroy(async, null);
                 cameraView = null;
                 dualCameraMatrix = null;
+                isCameraPausedByGallery = false;
                 placeholder.setVisibility(View.VISIBLE);
             }
             setZoomControlVisibility(false, null);
@@ -931,8 +945,10 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
             }
         }
 
-        private void onTapDown() {
-            if (collageListView.isVisible()) {
+        private void onTapDown(@NonNull MotionEvent e) {
+            if (isGalleryOpen && galleryListView != null && e.getY() < galleryListView.top()) {
+                animateGalleryVisibility(false);
+            } else if (collageListView.isVisible()) {
                 setCollageListVisibility(false, true);
             }
         }
@@ -977,10 +993,11 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
                     GalleryListView galleryListView = getOrCreateGalleryListView();
                     if (galleryDragProgress == 1f && dOffset > 0f) {
                         galleryListView.ignoreScroll = false;
-                    } else if (galleryDragProgress == 1f &&
-                        dOffset < 0f &&
-                        isGalleryNotScrolled() ||
-                        galleryDragProgress != 1f
+                    } else if (!galleryOpenCloseAnimator.isRunning() &&
+                        (galleryDragProgress == 1f &&
+                            dOffset < 0f &&
+                            isGalleryNotScrolled() ||
+                            galleryDragProgress != 1f)
                     ) {
                         galleryListView.ignoreScroll = true;
                         setGalleryDragProgress(galleryDragProgress + dOffset);
@@ -1349,7 +1366,7 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
 
         @Override
         public void onGalleryClick() {
-
+            animateGalleryVisibility(true);
         }
 
         @Override
@@ -1503,11 +1520,40 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
                     protected void firstLayout() {
                         setGalleryDragProgress(galleryDragProgress);
                     }
+
+                    @Override
+                    protected void onFullScreen(boolean isFullscreen) {
+                        setSystemBarsVisibility(isFullscreen);
+                        if (isFullscreen) {
+                            stopCameraPreview();
+                        } else {
+                            startCameraPreview();
+                        }
+                        isCameraPausedByGallery = isFullscreen;
+                    }
                 };
+                galleryListView.setOnBackClickListener(() -> animateGalleryVisibility(false));
+                galleryListView.setOnSelectListener((entry, blurredBitmap) -> {
+
+                });
+                galleryListView.allowSearch(false);
                 galleryListView.ignoreScroll = true;
                 addView(galleryListView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
             }
             return galleryListView;
+        }
+
+        private void destroyGalleryListView() {
+            if (galleryListView == null) {
+                return;
+            }
+
+            galleryOpenCloseAnimator.cancel();
+            galleryDragProgress = 0f;
+            isGalleryVisible = false;
+            isGalleryOpen = false;
+            removeView(galleryListView);
+            galleryListView = null;
         }
 
         private boolean isGalleryNotScrolled() {
@@ -1515,6 +1561,12 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
         }
 
         private void setGalleryDragProgress(float dragProgress) {
+            if (galleryDragProgress == 0f &&
+                (mediaRecorderController.isBusy() || collageLayoutView.isFilled())
+            ) {
+                return;
+            }
+
             galleryDragProgress = clamp(dragProgress, 1f, 0f);
             isGalleryVisible = galleryDragProgress != 0f;
             isGalleryOpen = galleryDragProgress == 1f;
@@ -1527,7 +1579,10 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
         }
 
         private void animateGalleryVisibility(boolean isOpen) {
-            if (galleryOpenCloseAnimator.isRunning() && willGalleryBeOpen == isOpen) {
+            if (isOpen && isGalleryOpen ||
+                !isOpen && !isGalleryVisible ||
+                galleryOpenCloseAnimator.isRunning() && willGalleryBeOpen == isOpen
+            ) {
                 return;
             }
 
@@ -1695,6 +1750,13 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
                 return true;
             }
             return false;
+        }
+
+        private void setSystemBarsVisibility(boolean isVisible) {
+            int visibility = !isVisible
+                ? View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_FULLSCREEN
+                : View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN;
+            setSystemUiVisibility(visibility);
         }
 
         private void setActionButtonVisibility(
