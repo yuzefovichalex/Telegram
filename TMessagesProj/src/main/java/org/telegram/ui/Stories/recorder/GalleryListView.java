@@ -462,6 +462,10 @@ public class GalleryListView extends FrameLayout implements NotificationCenter.N
         }
     }
 
+    public boolean isScrolled() {
+        return top() < getPadding() + AndroidUtilities.statusBarHeight + ActionBar.getCurrentActionBarHeight() - AndroidUtilities.dp(32);
+    }
+
     public void allowSearch(boolean allow) {
         searchItem.setVisibility(allow ? View.VISIBLE : View.GONE);
     }
