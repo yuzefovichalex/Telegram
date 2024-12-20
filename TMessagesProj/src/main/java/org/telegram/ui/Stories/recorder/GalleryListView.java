@@ -179,7 +179,7 @@ public class GalleryListView extends FrameLayout implements NotificationCenter.N
             } else if (containsDrafts) {
                 if (index >= 0 && index < drafts.size()) {
                     StoryEntry entry = drafts.get(index);
-                    onSelectListener.run(entry, entry.isVideo ? prepareBlurredThumb(cell) : null);
+                    onSelectListener.run(entry, index, entry.isVideo ? prepareBlurredThumb(cell) : null);
                     return;
                 }
                 index -= drafts.size();
@@ -187,7 +187,7 @@ public class GalleryListView extends FrameLayout implements NotificationCenter.N
 
             if (index >= 0 && index < selectedPhotos.size()) {
                 MediaController.PhotoEntry entry = selectedPhotos.get(index);
-                onSelectListener.run(entry, entry.isVideo ? prepareBlurredThumb(cell) : null);
+                onSelectListener.run(entry, index, entry.isVideo ? prepareBlurredThumb(cell) : null);
             }
         });
         listView.setOnScrollListener(new RecyclerView.OnScrollListener() {
@@ -427,7 +427,7 @@ public class GalleryListView extends FrameLayout implements NotificationCenter.N
                 return;
             }
             if (onSelectListener != null) {
-                onSelectListener.run(searchAdapterImages.results.get(position), null);
+                onSelectListener.run(searchAdapterImages.results.get(position), position, null);
             }
         });
 
@@ -570,8 +570,8 @@ public class GalleryListView extends FrameLayout implements NotificationCenter.N
         this.onBackClickListener = onBackClickListener;
     }
 
-    private Utilities.Callback2<Object, Bitmap> onSelectListener;
-    public void setOnSelectListener(Utilities.Callback2<Object, Bitmap> onSelectListener) {
+    private Utilities.Callback3<Object, Integer, Bitmap> onSelectListener;
+    public void setOnSelectListener(Utilities.Callback3<Object, Integer, Bitmap> onSelectListener) {
         this.onSelectListener = onSelectListener;
     }
 

@@ -4208,7 +4208,7 @@ public class StoryRecorder implements NotificationCenter.NotificationCenterDeleg
             animateGalleryListView(false);
             lastGallerySelectedAlbum = null;
         });
-        galleryListView.setOnSelectListener((entry, blurredBitmap) -> {
+        galleryListView.setOnSelectListener((entry, position, blurredBitmap) -> {
             if (entry == null || galleryListViewOpening != null || scrollingY || !isGalleryOpen()) {
                 return;
             }

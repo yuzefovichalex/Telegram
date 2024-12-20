@@ -51,6 +51,8 @@ import org.telegram.ui.Components.RLottieDrawable;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 public class StoryEntry {
@@ -900,14 +902,27 @@ public class StoryEntry {
     }
 
     public static StoryEntry asCollage(CollageLayout layout, ArrayList<StoryEntry> entries) {
+        return asCollage(layout, entries, true);
+    }
+
+    public static StoryEntry asCollage(CollageLayout layout, ArrayList<StoryEntry> entries, boolean limitDuration) {
         StoryEntry entry = new StoryEntry();
         entry.collage = layout;
         entry.collageContent = entries;
+
+        float totalDuration;
+        if (!limitDuration) {
+            StoryEntry longestEntry = Collections.max(entries, Comparator.comparingLong(o -> o.duration));
+            totalDuration = Math.max(59_000.0f, longestEntry.duration);
+        } else {
+            totalDuration = 59_000.0f;
+        }
+
         for (StoryEntry e : entries) {
             if (e.isVideo) {
                 entry.isVideo = true;
                 e.videoLeft = 0;
-                e.videoRight = Math.min(1.0f, 59_000.0f / e.duration);
+                e.videoRight = Math.min(1.0f, totalDuration / e.duration);
             }
         }
         if (entry.isVideo) {

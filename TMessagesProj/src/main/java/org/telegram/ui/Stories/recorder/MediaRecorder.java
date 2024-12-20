@@ -40,6 +40,7 @@ import androidx.core.view.WindowInsetsCompat;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.LocaleController;
+import org.telegram.messenger.MediaController;
 import org.telegram.messenger.R;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.BlurringShader;
@@ -1416,7 +1417,8 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
                 collageLayoutView.setTouchable(false);
                 StoryEntry collageEntry = StoryEntry.asCollage(
                     collageLayoutView.getLayout(),
-                    collageLayoutView.getContent()
+                    collageLayoutView.getContent(),
+                    false
                 );
                 mediaRecorderController.convertCollageToMedia(
                     collageEntry,
@@ -1533,14 +1535,30 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
                     }
                 };
                 galleryListView.setOnBackClickListener(() -> animateGalleryVisibility(false));
-                galleryListView.setOnSelectListener((entry, blurredBitmap) -> {
-
-                });
+                galleryListView.setOnSelectListener(this::useGalleryEntry);
                 galleryListView.allowSearch(false);
                 galleryListView.ignoreScroll = true;
                 addView(galleryListView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
             }
             return galleryListView;
+        }
+
+        private void useGalleryEntry(
+            @Nullable Object entry,
+            @NonNull Integer position,
+            @Nullable Bitmap blurredThumb
+        ) {
+            animateGalleryVisibility(false);
+            if (entry instanceof MediaController.PhotoEntry) {
+                MediaController.PhotoEntry photoEntry = (MediaController.PhotoEntry) entry;
+                if (collageLayoutView.hasLayout()) {
+                    StoryEntry collageEntry = StoryEntry.fromPhotoEntry(photoEntry);
+                    collageEntry.blurredVideoThumb = blurredThumb;
+                    pushCollageEntry(collageEntry);
+                } else if (galleryListView != null && callback != null) {
+                    callback.onGalleryPhotoSelect(galleryListView.selectedAlbum, photoEntry, position);
+                }
+            }
         }
 
         private void destroyGalleryListView() {
@@ -1899,6 +1917,11 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
             int height,
             int orientation,
             boolean isSameTakePictureOrientation
+        );
+        void onGalleryPhotoSelect(
+            @NonNull MediaController.AlbumEntry album,
+            @NonNull MediaController.PhotoEntry entry,
+            int position
         );
         void onRecordVideoSuccess(
             @NonNull File outputFile,
