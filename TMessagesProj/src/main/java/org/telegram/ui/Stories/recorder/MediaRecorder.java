@@ -153,6 +153,10 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
         return isDraggingHorizontally || isDraggingVertically;
     }
 
+    public void setCurrentAccount(int currentAccount) {
+        contentView.setCurrentAccount(currentAccount);
+    }
+
     public void setSecretChat(boolean isSecretChat) {
         contentView.setSecretChat(isSecretChat);
     }
@@ -406,6 +410,7 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
 
 
         private boolean isVideo;
+        private int currentAccount;
         private boolean isSecretChat;
 
 
@@ -651,6 +656,11 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
 
         private void setCallback(@Nullable Callback callback) {
             this.callback = callback;
+        }
+
+        public void setCurrentAccount(int currentAccount) {
+            this.currentAccount = currentAccount;
+            mediaRecorderController.setCurrentAccount(currentAccount);
         }
 
         public void setSecretChat(boolean isSecretChat) {
@@ -1424,7 +1434,10 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
                     collageEntry,
                     isSecretChat,
                     () -> invalidateControlsState(true),
-                    () -> resetCollageResult(true, true)
+                    () -> {
+                        recordControl.setProcessingProgress(0f, true);
+                        resetCollageResult(true, true);
+                    }
                 );
             } else {
                 resetCollageResult(true, true);
@@ -1432,13 +1445,18 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
         }
 
         @Override
-        public void onCollageConversionProgress(float progress) {
+        public void onCancelClick() {
+            mediaRecorderController.cancelLatestCollageConversion();
+        }
 
+        @Override
+        public void onCollageConversionProgress(float progress) {
+            recordControl.setProcessingProgress(progress, true);
         }
 
         @Override
         public void onCollageConversionCancel() {
-
+            recordControl.setProcessingProgress(0f, true);
         }
 
         @Override
@@ -1512,7 +1530,7 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
         private GalleryListView getOrCreateGalleryListView() {
             if (galleryListView == null) {
                 galleryListView = new GalleryListView(
-                    0,
+                    currentAccount,
                     getContext(),
                     resourcesProvider,
                     null,
@@ -1679,9 +1697,9 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
             setActionButtonVisibility(backButton, isOpenOrOpening && !isCollageListVisible, animated);
             setActionButtonVisibility(flashButton, isOpenOrOpening && !isCollageListVisible && hasEmptyParts, animated);
             setActionButtonVisibility(dualButton, isOpenOrOpening && !isCollageInUse && !isCollageListVisible && mediaRecorderController.isDualAvailable(), animated);
-            setActionButtonVisibility(collageButton, isOpenOrOpening && !mediaRecorderController.isBusy(), animated);
+            setActionButtonVisibility(collageButton, isOpenOrOpening && !mediaRecorderController.isProcessing(), animated);
             setVideoTimerVisibility(isOpenOrOpening && !isCollageListVisible && hasEmptyParts && isVideo, animated);
-            setPhotoVideoSwitcherVisibility(isOpenOrOpening && hasEmptyParts, animated);
+            setPhotoVideoSwitcherVisibility(isOpenOrOpening && hasEmptyParts && !mediaRecorderController.isBusy(), animated);
             setBottomHintTextViewVisibility(isOpenOrOpening && mediaRecorderController.isRecordingVideo() || !hasEmptyParts && !mediaRecorderController.isProcessing(), animated);
             recordControl.setCollageProgress(collageLayoutView.getFilledProgress(), animated);
             setRecordControlVisibility(isOpenOrOpening, animated);
@@ -1730,15 +1748,16 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
                     animateGalleryVisibility(false);
                 } else if (collageListView.isVisible()) {
                     setCollageListVisibility(false, true);
-                } else if (collageLayoutView.hasLayout() &&
-                    collageLayoutView.hasContent() &&
-                    !mediaRecorderController.isBusy()
-                ) {
-                    resetCollageResult(true, true);
-                } else if (!mediaRecorderController.isBusy()) {
-                    closeCamera();
                 } else if (mediaRecorderController.isRecordingVideo()) {
                     recordControl.stopRecording();
+                } else if (collageLayoutView.hasLayout() && collageLayoutView.hasContent()) {
+                    if (!mediaRecorderController.isBusy()) {
+                        resetCollageResult(true, true);
+                    } else if (mediaRecorderController.isProcessing()) {
+                        mediaRecorderController.cancelLatestCollageConversion();
+                    }
+                } else if (!mediaRecorderController.isBusy()) {
+                    closeCamera();
                 }
                 return true;
             }

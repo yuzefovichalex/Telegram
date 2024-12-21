@@ -37,6 +37,8 @@ public class MediaRecorderController implements CameraView.Callback {
     @NonNull
     private final Context context;
 
+    private int currentAccount;
+
     @Nullable
     private CameraView cameraView;
 
@@ -112,6 +114,10 @@ public class MediaRecorderController implements CameraView.Callback {
 
     public void setPreparing(boolean preparing) {
         isPreparing = preparing;
+    }
+
+    public void setCurrentAccount(int currentAccount) {
+        this.currentAccount = currentAccount;
     }
 
     public void setCallback(@Nullable Callback callback) {
@@ -562,12 +568,13 @@ public class MediaRecorderController implements CameraView.Callback {
         File outputFile = AndroidUtilities.generateVideoPath(isSecretChat);
         if (outputFile != null) {
             videoBuilder = new DownloadButton.BuildingVideo(
-                0,
+                currentAccount,
                 entry,
                 outputFile,
                 () -> {
                     isProcessing = false;
                     videoBuilder = null;
+                    callback.onCollageConversionProgress(1f);
                     if (onDone != null) {
                         onDone.run();
                     }
@@ -579,10 +586,13 @@ public class MediaRecorderController implements CameraView.Callback {
                         entry.duration
                     );
                 },
-                callback::onCollageConversionProgress,
+                progress -> callback.onCollageConversionProgress(progress * .95f),
+                // Cancel by error only
                 () -> callback.onCollageConversionCancel()
             );
             videoBuilder.start();
+            callback.onCollageConversionProgress(.005f);
+            return;
         }
 
         isProcessing = false;
@@ -628,6 +638,10 @@ public class MediaRecorderController implements CameraView.Callback {
         videoBuilder.stop(true);
         isProcessing = false;
         videoBuilder = null;
+
+        if (callback != null) {
+            callback.onCollageConversionCancel();
+        }
     }
 
     private void onPictureReady(

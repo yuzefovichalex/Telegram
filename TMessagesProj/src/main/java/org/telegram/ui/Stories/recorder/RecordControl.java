@@ -6,7 +6,6 @@ import static org.telegram.messenger.AndroidUtilities.dpf2;
 import static org.telegram.messenger.AndroidUtilities.lerp;
 import static org.telegram.messenger.Utilities.clamp;
 
-import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Matrix;
@@ -17,19 +16,13 @@ import android.graphics.PorterDuffColorFilter;
 import android.graphics.PorterDuffXfermode;
 import android.graphics.RadialGradient;
 import android.graphics.Shader;
-import android.graphics.SurfaceTexture;
-import android.graphics.Xfermode;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.os.SystemClock;
-import android.util.Log;
 import android.view.MotionEvent;
-import android.view.TextureView;
 import android.view.View;
 import android.view.ViewConfiguration;
-import android.widget.FrameLayout;
 
-import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.graphics.ColorUtils;
 
@@ -41,7 +34,6 @@ import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.MediaController;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.R;
-import org.telegram.messenger.Utilities;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.AnimatedFloat;
 import org.telegram.ui.Components.ButtonBounce;
@@ -68,6 +60,7 @@ public class RecordControl extends View implements FlashViews.Invertable {
         void onVideoRecordLocked();
         boolean canRecordAudio();
         void onCheckClick();
+        void onCancelClick();
     }
 
     public void startAsVideo(boolean isVideo) {
@@ -125,7 +118,13 @@ public class RecordControl extends View implements FlashViews.Invertable {
     private final Path checkPath = new Path();
     private final Point check1 = new Point(-dpf2(29/3.0f), dpf2(7/3.0f));
     private final Point check2 = new Point(-dpf2(8.5f/3.0f), dpf2(26/3.0f));
-    private final Point check3 = new Point(dpf2(29/3.0f), dpf2(-11/3.0f));
+    private final Point check3 = new Point(-dpf2(8.5f/3.0f), dpf2(26/3.0f));
+    private final Point check4 = new Point(dpf2(29/3.0f), dpf2(-11/3.0f));
+
+    private final Point check1Cross = new Point(-dpf2(23/3.0f), -dpf2(23/3.0f));
+    private final Point check2Cross = new Point(dpf2(23/3.0f), dpf2(23/3.0f));
+    private final Point check3Cross = new Point(-dpf2(23/3.0f), dpf2(23/3.0f));
+    private final Point check4Cross = new Point(dpf2(23/3.0f), -dpf2(23/3.0f));
 
     @Nullable
     private Runnable syntheticPhotoShootRelease;
@@ -320,12 +319,25 @@ public class RecordControl extends View implements FlashViews.Invertable {
     private final AnimatedFloat collageProgressAnimated = new AnimatedFloat(this, 0, 320, CubicBezierInterpolator.EASE_OUT_QUINT);
     private final AnimatedFloat checkAnimated = new AnimatedFloat(this, 0, 320, CubicBezierInterpolator.EASE_OUT_QUINT);
 
+    private float processingProgress;
+    private final AnimatedFloat processing = new AnimatedFloat(this, 0, 320, CubicBezierInterpolator.EASE_OUT_QUINT);
+    private final AnimatedFloat processingProgressAnimated = new AnimatedFloat(this, 0, 320, CubicBezierInterpolator.EASE_OUT_QUINT);
+
     public void setCollageProgress(float collageProgress, boolean animated) {
         if (Math.abs(collageProgress - this.collageProgress) < 0.01f) return;
         this.collageProgress = collageProgress;
         if (!animated) {
             this.collage.set(collageProgress > 0 && !recording, true);
             this.collageProgressAnimated.set(collageProgress, true);
+        }
+        invalidate();
+    }
+
+    public void setProcessingProgress(float processingProgress, boolean animated) {
+        this.processingProgress = processingProgress;
+        if (!animated) {
+            this.processing.set(processingProgress > 0f && collageProgress == 1f && !recording, true);
+            this.processingProgressAnimated.set(processingProgress, true);
         }
         invalidate();
     }
@@ -386,6 +398,9 @@ public class RecordControl extends View implements FlashViews.Invertable {
         final float collageProgress = this.collageProgressAnimated.set(this.collageProgress);
         final float check = checkAnimated.set(hasCheck());
 
+        final float processing = this.processing.set(processingProgress > 0 && collageProgress == 1f);
+        final float processingProgress = this.processingProgressAnimated.set(this.processingProgress);
+
         float hintLineT = longpressRecording ? recordingT * isVideo * touchT : 0;
         if (hintLineT > 0) {
             float lcx = cx - dp(42 + 8), rcx = cx + dp(42 + 8);
@@ -421,9 +436,26 @@ public class RecordControl extends View implements FlashViews.Invertable {
         if (check > 0) {
             checkPaint.setStrokeWidth(dp(4));
             checkPath.rewind();
-            checkPath.moveTo(check1.x, check1.y);
-            checkPath.lineTo(lerp(check1.x, check2.x, clamp(check / .3f, 1.0f, 0.0f)), lerp(check1.y, check2.y, clamp(check / .3f, 1.0f, 0.0f)));
-            if (check > .3f) checkPath.lineTo(lerp(check2.x, check3.x, clamp((check-.3f) / .7f, 1.0f, 0.0f)), lerp(check2.y, check3.y, clamp((check-.3f) / .7f, 1.0f, 0.0f)));
+            float x1 = lerp(check1.x, check1Cross.x, processing);
+            float y1 = lerp(check1.y, check1Cross.y, processing);
+            float x2 = lerp(check2.x, check2Cross.x, processing);
+            float y2 = lerp(check2.y, check2Cross.y, processing);
+            checkPath.moveTo(x1, y1);
+            checkPath.lineTo(
+                lerp(x1, x2, clamp(check / .3f, 1.0f, 0.0f)),
+                lerp(y1, y2, clamp(check / .3f, 1.0f, 0.0f))
+            );
+            if (check > .3f) {
+                float x3 = lerp(check3.x, check3Cross.x, processing);
+                float y3 = lerp(check3.y, check3Cross.y, processing);
+                float x4 = lerp(check4.x, check4Cross.x, processing);
+                float y4 = lerp(check4.y, check4Cross.y, processing);
+                checkPath.moveTo(x3, y3);
+                checkPath.lineTo(
+                    lerp(x3, x4, clamp((check-.3f) / .7f, 1.0f, 0.0f)),
+                    lerp(y3, y4, clamp((check-.3f) / .7f, 1.0f, 0.0f))
+                );
+            }
             canvas.translate(cx, cy);
             canvas.drawPath(checkPath, checkPaint);
         }
@@ -432,16 +464,29 @@ public class RecordControl extends View implements FlashViews.Invertable {
         canvas.save();
         scale = Math.max(scale, 1);
         canvas.scale(scale, scale, cx, cy);
-        float or = Math.max(dpf2(33.5f), r + lerp(dpf2(4.5f), dp(9), touchIsCenterT) + dp(5) * collage * (1.0f - touchIsCenterT));
-        final float strokeWidth = lerp(dp(3), dp(4), collage);
-        or = lerp(or, r - strokeWidth - dp(4), check);
+        float orFull = Math.max(dpf2(33.5f), r + lerp(dpf2(4.5f), dp(9), touchIsCenterT) + dp(5) * collage * (1.0f - touchIsCenterT));
+        float strokeWidth = lerp(dp(3), dp(4), collage);
+        float or = lerp(orFull, r - strokeWidth - dp(4), check);
         AndroidUtilities.rectTmp.set(cx - or, cy - or, cx + or, cy + or);
         outlinePaint.setStrokeWidth(strokeWidth);
         outlinePaint.setAlpha((int) (0xFF * lerp(1.0f, 0.3f, collage) * (1.0f - check)));
         canvas.drawCircle(cx, cy, or, outlinePaint);
-        if (collage > 0 & collageProgress > 0) {
+        if (processingProgress == 0 & collage > 0 & collageProgress > 0) {
             outlinePaint.setAlpha(0xFF);
             canvas.drawArc(AndroidUtilities.rectTmp, -90, 360 * collageProgress, false, outlinePaint);
+        }
+
+        strokeWidth = lerp(dp(3), dp(4), processing);
+        if (processingProgress != 0f) {
+            or = lerp(orFull, r - strokeWidth - dp(4), 1f - processing);
+        }
+        AndroidUtilities.rectTmp.set(cx - or, cy - or, cx + or, cy + or);
+        if (processingProgress > 0 && collageProgress == 1f) {
+            outlinePaint.setStrokeWidth(strokeWidth);
+            outlinePaint.setAlpha((int) (0xFF * lerp(1f, 0.3f, processing)));
+            canvas.drawCircle(cx, cy, or, outlinePaint);
+            outlinePaint.setAlpha(0xFF);
+            canvas.drawArc(AndroidUtilities.rectTmp, -90, 360 * processingProgress, false, outlinePaint);
         }
 
         long duration = System.currentTimeMillis() - recordingStart;
@@ -654,6 +699,10 @@ public class RecordControl extends View implements FlashViews.Invertable {
         return collageProgress >= 1.0f;
     }
 
+    private boolean isProcessing() {
+        return processingProgress != 0f;
+    }
+
     private final Point p1 = new Point(), p2 = new Point(), p3 = new Point(), p4 = new Point(), h1 = new Point(), h2 = new Point(), h3 = new Point(), h4 = new Point();
     private void getVector(float cx, float cy, double a, float r, Point point) {
         point.x = (float) (cx + Math.cos(a) * r);
@@ -775,7 +824,11 @@ public class RecordControl extends View implements FlashViews.Invertable {
                 }
             } else if (recordButton.isPressed()) {
                 if (hasCheck()) {
-                    delegate.onCheckClick();
+                    if (isProcessing()) {
+                        delegate.onCancelClick();
+                    } else {
+                        delegate.onCheckClick();
+                    }
                 } else if (!startModeIsVideo && !recording && !longpressRecording) {
                     delegate.onPhotoShoot();
                 } else if (!recording) {

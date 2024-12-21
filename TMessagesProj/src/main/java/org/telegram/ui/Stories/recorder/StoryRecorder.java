@@ -3367,6 +3367,9 @@ public class StoryRecorder implements NotificationCenter.NotificationCenterDeleg
             navigateTo(PAGE_PREVIEW, true);
         }
 
+        @Override
+        public void onCancelClick() { }
+
         private void takePicture(Utilities.Callback<Runnable> done) {
             boolean savedFromTextureView = false;
             if (!useDisplayFlashlight()) {

@@ -1023,7 +1023,6 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
         } else {
             mediaRecorder.setPlaceholder(R.drawable.icplaceholder);
         }
-        mediaRecorder.setSecretChat(parentAlert.baseFragment instanceof ChatActivity && ((ChatActivity) parentAlert.baseFragment).isSecretChat());
         mediaRecorder.setPreviewSize(itemSize);
         mediaRecorder.setCallback(new MediaRecorder.Callback() {
             @Override
@@ -1176,6 +1175,13 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
                 //}
             }
         });
+
+        BaseFragment fragment = parentAlert.baseFragment;
+        if (fragment != null) {
+            mediaRecorder.setCurrentAccount(fragment.getCurrentAccount());
+            mediaRecorder.setSecretChat(fragment instanceof ChatActivity && ((ChatActivity) fragment).isSecretChat());
+        }
+
         container.addView(mediaRecorder, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
     }
 
