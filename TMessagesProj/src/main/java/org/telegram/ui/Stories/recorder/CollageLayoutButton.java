@@ -193,10 +193,10 @@ public class CollageLayoutButton extends ToggleButton2 {
         private boolean visible;
         private ValueAnimator visibleAnimator;
         public void setVisible(final boolean visible, boolean animated) {
+            if (this.visible == visible) return;
             if (visibleAnimator != null) {
                 visibleAnimator.cancel();
             }
-            if (this.visible == visible) return;
             this.visible = visible;
             if (animated) {
                 listView.setVisibility(View.VISIBLE);
