@@ -707,6 +707,8 @@ public class ChatAttachAlert extends BottomSheet implements NotificationCenter.N
 
         }
 
+        public void onOpenAnimationUpdate() { }
+
         public void onOpenAnimationEnd() {
 
         }
@@ -4371,6 +4373,11 @@ public class ChatAttachAlert extends BottomSheet implements NotificationCenter.N
             appearSpringAnimation.getSpring().setDampingRatio(0.75f);
             appearSpringAnimation.getSpring().setStiffness(350.0f);
         }
+        appearSpringAnimation.addUpdateListener((animation, value, velocity) -> {
+            if (currentAttachLayout != null) {
+                currentAttachLayout.onOpenAnimationUpdate();
+            }
+        });
         appearSpringAnimation.start();
 
         if (Build.VERSION.SDK_INT >= 20 && useHardwareLayer) {

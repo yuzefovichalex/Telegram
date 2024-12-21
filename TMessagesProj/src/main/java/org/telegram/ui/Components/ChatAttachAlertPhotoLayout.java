@@ -1979,6 +1979,7 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
         }
 
         mediaRecorder.setVisibility(View.VISIBLE);
+        checkCameraViewPosition();
         mediaRecorder.startCamera();
     }
 
@@ -2722,12 +2723,6 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
     }
 
     @Override
-    public void onButtonsTranslationYUpdated() {
-        checkCameraViewPosition();
-        invalidate();
-    }
-
-    @Override
     public void setTranslationY(float translationY) {
         if (parentAlert.getSheetAnimationType() == 1) {
             float scale = -0.1f * (translationY / 40.0f);
@@ -2788,6 +2783,7 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
     @Override
     public void onShown() {
         mediaRecorder.setVisibility(View.VISIBLE);
+        checkCameraViewPosition();
         if (checkCameraWhenShown) {
             checkCameraWhenShown = false;
             checkCamera(true);
@@ -2949,6 +2945,11 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
         checkCameraViewPosition();
         invalidateCameraPreviewRadius();
         invalidate();
+    }
+
+    @Override
+    public void onOpenAnimationUpdate() {
+        checkCameraViewPosition();
     }
 
     @Override
