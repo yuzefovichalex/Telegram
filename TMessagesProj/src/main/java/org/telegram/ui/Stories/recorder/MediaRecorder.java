@@ -35,10 +35,9 @@ import androidx.annotation.DrawableRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.res.ResourcesCompat;
-import androidx.core.view.ViewCompat;
-import androidx.core.view.WindowInsetsCompat;
 
 import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.AnimationNotificationsLocker;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaController;
 import org.telegram.messenger.R;
@@ -206,14 +205,14 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
         contentView.startCamera();
     }
 
-    public void openCamera() {
-        if (contentView.openCamera()) {
+    public void openCamera(boolean animated) {
+        if (contentView.openCamera(animated)) {
             Bulletin.addDelegate(this, this);
         }
     }
 
-    public void closeCamera() {
-        if (contentView.closeCamera()) {
+    public void closeCamera(boolean animated) {
+        if (contentView.closeCamera(animated)) {
             Bulletin.addDelegate(this, this);
         }
     }
@@ -233,6 +232,10 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
 
     public boolean handleKeyEvent(int keyCode, @NonNull KeyEvent keyEvent) {
         return contentView.handleKeyEvent(keyCode, keyEvent);
+    }
+
+    public void onPause() {
+        // TODO handle pause, e.g. pause video
     }
 
     @Override
@@ -293,6 +296,9 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
 
         @NonNull
         private final MediaRecorderController mediaRecorderController;
+
+        @NonNull
+        private final AnimationNotificationsLocker notificationsLocker = new AnimationNotificationsLocker();
 
 
         @NonNull
@@ -428,21 +434,14 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
             openCloseAnimator.addListener(new AnimatorListenerAdapter() {
                 @Override
                 public void onAnimationStart(Animator animation) {
-                    if (isOpenOrOpening && cameraView != null && cameraView.isDual()) {
-                        if (dualCameraMatrix == null) {
-                            dualCameraMatrix = new Matrix();
-                        }
-                        dualCameraMatrix.set(cameraView.getDualPosition());
-                    }
-                    isOpenOrOpening = !isOpenOrOpening;
-                    isOpenCloseAnimationRunning = true;
+                    notificationsLocker.lock();
+                    onOpenCloseAnimatorStart();
                 }
 
                 @Override
                 public void onAnimationEnd(Animator animation) {
-                    isOpenCloseAnimationRunning = false;
-                    dragProgress = 0f;
-                    setSystemBarsVisibility(!isOpenOrOpening);
+                    notificationsLocker.unlock();
+                    onOpenCloseAnimatorEnd();
                 }
             });
 
@@ -569,22 +568,9 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
             addView(bottomHintTextView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 32, Gravity.BOTTOM, 8, 0, 8, 8));
 
             invalidateControlsState(false);
+            applyWindowInsets();
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                // TODO deal with insets
-                applyWindowInsets(WindowInsetsCompat.CONSUMED);
-                ViewCompat.setOnApplyWindowInsetsListener(this, new androidx.core.view.OnApplyWindowInsetsListener() {
-                    @NonNull
-                    @Override
-                    public WindowInsetsCompat onApplyWindowInsets(
-                        @NonNull View v,
-                        @NonNull WindowInsetsCompat insets
-                    ) {
-                        applyWindowInsets(insets);
-                        return insets;
-                    }
-                });
-
                 ViewOutlineProvider innerOutlineProvider = new ViewOutlineProvider() {
                     @Override
                     public void getOutline(View view, Outline outline) {
@@ -870,14 +856,21 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
             invalidateInternal();
         }
 
-        private boolean openCamera() {
+        private boolean openCamera(boolean animated) {
             if (fullSizeRect.isEmpty() || isOpenOrOpening || isOpenCloseAnimationRunning) {
                 return false;
             }
 
-            openCloseAnimator.setFloatValues(openCloseProgress, 1f);
-            openCloseAnimator.setDuration(OPEN_ANIMATION_DURATION);
-            openCloseAnimator.start();
+            if (animated) {
+                openCloseAnimator.setFloatValues(openCloseProgress, 1f);
+                openCloseAnimator.setDuration(OPEN_ANIMATION_DURATION);
+                openCloseAnimator.start();
+            } else {
+                openCloseProgress = 1f;
+                onOpenCloseAnimatorStart();
+                invalidateInternal();
+                onOpenCloseAnimatorEnd();
+            }
 
             invalidateControlsState(true);
             recordControl.updateGalleryImage(false);
@@ -885,16 +878,23 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
             return true;
         }
 
-        private boolean closeCamera() {
+        private boolean closeCamera(boolean animated) {
             if (!isOpenOrOpening || isOpenCloseAnimationRunning) {
                 return false;
             }
 
             resetDragAnimator.cancel();
 
-            openCloseAnimator.setFloatValues(openCloseProgress, 0f);
-            openCloseAnimator.setDuration(CLOSE_ANIMATION_DURATION);
-            openCloseAnimator.start();
+            if (animated) {
+                openCloseAnimator.setFloatValues(openCloseProgress, 0f);
+                openCloseAnimator.setDuration(CLOSE_ANIMATION_DURATION);
+                openCloseAnimator.start();
+            } else {
+                openCloseProgress = 0f;
+                onOpenCloseAnimatorStart();
+                invalidateInternal();
+                onOpenCloseAnimatorEnd();
+            }
 
             resetCollageResult(true, false);
 
@@ -913,6 +913,26 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
             return true;
         }
 
+        private void onOpenCloseAnimatorStart() {
+            if (isOpenOrOpening && cameraView != null && cameraView.isDual()) {
+                if (dualCameraMatrix == null) {
+                    dualCameraMatrix = new Matrix();
+                }
+                dualCameraMatrix.set(cameraView.getDualPosition());
+            }
+            isOpenOrOpening = !isOpenOrOpening;
+            isOpenCloseAnimationRunning = true;
+        }
+
+        private void onOpenCloseAnimatorEnd() {
+            isOpenCloseAnimationRunning = false;
+            dragProgress = 0f;
+            setSystemBarsVisibility(!isOpenOrOpening);
+            if (isOpenOrOpening && callback != null) {
+                callback.onOpen();
+            }
+        }
+
         private void destroyCamera(boolean async) {
             if (cameraView != null) {
                 collageLayoutView.setCameraView(null);
@@ -924,10 +944,17 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
                 mediaRecorderController.detachCameraView();
                 cameraView.destroy(async, null);
                 cameraView = null;
-                dualCameraMatrix = null;
-                isCameraPausedByGallery = false;
-                placeholder.setVisibility(View.VISIBLE);
             }
+
+            dualCameraMatrix = null;
+            isCameraPausedByGallery = false;
+            placeholder.setVisibility(View.VISIBLE);
+
+            isCollageInUse = false;
+            selectedCollageLayout = CollageLayout.getLayouts().get(6);
+            collageButton.setSelected(false);
+            collageLayoutView.setLayout(null, false);
+
             setZoomControlVisibility(false, null);
             invalidateControlsState(false);
         }
@@ -1030,7 +1057,7 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
             if (isGalleryVisible) {
                 animateGalleryVisibility(galleryDragProgress > .3f);
             } else if (dragProgress > CLOSE_ON_DRAG_ANCHOR_PERCENTAGE) {
-                closeCamera();
+                closeCamera(true);
             } else {
                 resetVerticalDragProgress();
             }
@@ -1063,7 +1090,7 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
                     if (isGalleryVisible && isGalleryNotScrolled()) {
                         animateGalleryVisibility(false);
                     } else if (!isGalleryVisible) {
-                        closeCamera();
+                        closeCamera(true);
                     }
                     return true;
                 }
@@ -1112,25 +1139,19 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
         }
 
 
-        private void applyWindowInsets(@NonNull WindowInsetsCompat insets) {
-            int statusBarInset = AndroidUtilities.statusBarHeight;//insets
-                //.getInsetsIgnoringVisibility(WindowInsetsCompat.Type.statusBars())
-                //.top;
-
-            int navigationBarInset = AndroidUtilities.navigationBarHeight;//insets
-                //.getInsetsIgnoringVisibility(WindowInsetsCompat.Type.navigationBars())
-                //.bottom;
-
+        private void applyWindowInsets() {
+            int statusBarInset = AndroidUtilities.statusBarHeight;
+            int navigationBarInset = AndroidUtilities.navigationBarHeight;
             updateMargin(backButton, 0, statusBarInset, 0, 0);
             updateMargin(flashButton, 0, statusBarInset, 0, 0);
             updateMargin(dualButton, 0, statusBarInset, 0, 0);
             updateMargin(collageButton, 0, statusBarInset, 0, 0);
             updateMargin(collageListView, dp(16), statusBarInset, dp(56), 0);
             updateMargin(videoTimerView, 0, statusBarInset, 0, 0);
-            updateMargin(zoomControlView, 0, 0, 0, navigationBarInset + dp(172));
-            updateMargin(recordControl, 0, 0, 0, navigationBarInset + dp(64));
+            updateMargin(zoomControlView, 0, 0, 0, navigationBarInset + dp(188));
+            updateMargin(recordControl, 0, 0, 0, navigationBarInset + dp(80));
             updateMargin(photoVideoSwitcherView, 0, 0, 0, navigationBarInset + dp(16));
-            updateMargin(bottomHintTextView, 0, 0, 0, navigationBarInset + dp(16));
+            updateMargin(bottomHintTextView, 0, 0, 0, navigationBarInset + dp(32));
         }
 
         private void updateMargin(
@@ -1425,6 +1446,7 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
         public void onCheckClick() {
             if (callback != null && collageLayoutView.isFilled()) {
                 collageLayoutView.setTouchable(false);
+                bottomHintTextView.setText(LocaleController.getString(R.string.CollageProcessing), true);
                 StoryEntry collageEntry = StoryEntry.asCollage(
                     collageLayoutView.getLayout(),
                     collageLayoutView.getContent(),
@@ -1457,6 +1479,7 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
         @Override
         public void onCollageConversionCancel() {
             recordControl.setProcessingProgress(0f, true);
+            bottomHintTextView.setText(LocaleController.getString(R.string.StoryCollageReorderHint), true);
         }
 
         @Override
@@ -1700,7 +1723,7 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
             setActionButtonVisibility(collageButton, isOpenOrOpening && !mediaRecorderController.isProcessing(), animated);
             setVideoTimerVisibility(isOpenOrOpening && !isCollageListVisible && hasEmptyParts && isVideo, animated);
             setPhotoVideoSwitcherVisibility(isOpenOrOpening && hasEmptyParts && !mediaRecorderController.isBusy(), animated);
-            setBottomHintTextViewVisibility(isOpenOrOpening && mediaRecorderController.isRecordingVideo() || !hasEmptyParts && !mediaRecorderController.isProcessing(), animated);
+            setBottomHintTextViewVisibility(isOpenOrOpening && mediaRecorderController.isRecordingVideo() || !hasEmptyParts, animated);
             recordControl.setCollageProgress(collageLayoutView.getFilledProgress(), animated);
             setRecordControlVisibility(isOpenOrOpening, animated);
         }
@@ -1757,7 +1780,7 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
                         mediaRecorderController.cancelLatestCollageConversion();
                     }
                 } else if (!mediaRecorderController.isBusy()) {
-                    closeCamera();
+                    closeCamera(true);
                 }
                 return true;
             }
@@ -1821,7 +1844,7 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
         }
 
         private void setPhotoVideoSwitcherVisibility(boolean isVisible, boolean animated) {
-            setVisibility(photoVideoSwitcherView, isVisible, animated ? 260 : 0, dp(32f));
+            setVisibility(photoVideoSwitcherView, isVisible, animated ? 260 : 0, dp(24f));
         }
 
         private void setBottomHintTextViewVisibility(boolean isVisible, boolean animated) {
@@ -1927,6 +1950,7 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
 
 
     public interface Callback {
+        void onOpen();
         boolean canTakePicture();
         boolean canRecordVideo();
         void onLockOrientationRequest(boolean isLocked);

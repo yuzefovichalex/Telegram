@@ -3634,7 +3634,7 @@ public class ChatAttachAlert extends BottomSheet implements NotificationCenter.N
 
     @Override
     protected boolean shouldOverlayCameraViewOverNavBar() {
-        return currentAttachLayout == photoLayout && photoLayout.cameraExpanded;
+        return currentAttachLayout == photoLayout && photoLayout.mediaRecorder.isOpenOrOpening();
     }
 
     @Override
@@ -3883,18 +3883,13 @@ public class ChatAttachAlert extends BottomSheet implements NotificationCenter.N
                 nextAttachLayout.setTranslationX(width);
                 if (currentAttachLayout instanceof ChatAttachAlertPhotoLayout) {
                     ChatAttachAlertPhotoLayout photoLayout = (ChatAttachAlertPhotoLayout) currentAttachLayout;
-                    if (photoLayout.cameraView != null) {
-                        photoLayout.cameraView.setVisibility(View.INVISIBLE);
-                        photoLayout.cameraCell.setVisibility(View.VISIBLE);
-                    }
+                    photoLayout.mediaRecorder.setVisibility(View.INVISIBLE);
                 }
             } else {
                 currentAttachLayout.setTranslationX(-width);
                 if (nextAttachLayout == photoLayout) {
                     ChatAttachAlertPhotoLayout photoLayout = (ChatAttachAlertPhotoLayout) nextAttachLayout;
-                    if (photoLayout.cameraView != null) {
-                        photoLayout.cameraView.setVisibility(View.VISIBLE);
-                    }
+                    photoLayout.mediaRecorder.setVisibility(View.VISIBLE);
                 }
             }
             nextAttachLayout.setAlpha(1);
@@ -5123,7 +5118,7 @@ public class ChatAttachAlert extends BottomSheet implements NotificationCenter.N
         currentAttachLayout.onContainerTranslationUpdated(currentPanTranslationY);
         if (allowDrawContent != value) {
             allowDrawContent = value;
-            if (currentAttachLayout == photoLayout && photoLayout != null && !photoLayout.cameraExpanded) {
+            if (currentAttachLayout == photoLayout && photoLayout != null && !photoLayout.mediaRecorder.isOpenOrOpening()) {
                 photoLayout.pauseCamera(!allowDrawContent || sent);
             }
         }

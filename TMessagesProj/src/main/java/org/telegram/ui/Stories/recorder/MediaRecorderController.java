@@ -66,6 +66,8 @@ public class MediaRecorderController implements CameraView.Callback {
     private boolean isRecordingVideo;
     private boolean isProcessing;
 
+    private boolean isPreviewRunning;
+
     @Nullable
     private DownloadButton.BuildingVideo videoBuilder;
 
@@ -132,6 +134,7 @@ public class MediaRecorderController implements CameraView.Callback {
             checkFrontFlashParams();
             checkDual();
             setZoom(this.zoom, true, true);
+            isPreviewRunning = true;
         }
     }
 
@@ -235,6 +238,7 @@ public class MediaRecorderController implements CameraView.Callback {
         isPreparing = false;
         isTakingPicture = false;
         isRecordingVideo = false;
+        isPreviewRunning = false;
         cancelLatestCollageConversion();
     }
 
@@ -411,13 +415,15 @@ public class MediaRecorderController implements CameraView.Callback {
     }
 
     public void startPreview() {
-        if (cameraView != null) {
+        if (cameraView != null && !isPreviewRunning) {
+            isPreviewRunning = true;
             CameraController.getInstance().startPreview(cameraView.getCameraSessionObject());
         }
     }
 
     public void stopPreview() {
-        if (cameraView != null) {
+        if (cameraView != null && isPreviewRunning) {
+            isPreviewRunning = false;
             CameraController.getInstance().stopPreview(cameraView.getCameraSessionObject());
         }
     }
@@ -586,7 +592,7 @@ public class MediaRecorderController implements CameraView.Callback {
                         entry.duration
                     );
                 },
-                progress -> callback.onCollageConversionProgress(progress * .95f),
+                progress -> callback.onCollageConversionProgress(progress * .98f),
                 // Cancel by error only
                 () -> callback.onCollageConversionCancel()
             );
