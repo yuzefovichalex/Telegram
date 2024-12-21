@@ -31,7 +31,6 @@ import android.view.ViewOutlineProvider;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 
-import androidx.annotation.DrawableRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.res.ResourcesCompat;
@@ -185,14 +184,6 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
         contentView.setPreviewClip(clipLeft, clipTop, clipRight, clipBottom);
     }
 
-    public void setPlaceholder(@Nullable Bitmap bitmap) {
-        contentView.setPlaceholder(bitmap);
-    }
-
-    public void setPlaceholder(@DrawableRes int resId) {
-        contentView.setPlaceholder(resId);
-    }
-
     public void startCameraPreview() {
         contentView.startCameraPreview();
     }
@@ -219,11 +210,6 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
 
     public void destroyCamera(boolean async) {
         contentView.destroyCamera(async);
-    }
-
-    @Nullable
-    public Bitmap getCameraBitmap() {
-        return contentView.getCameraBitmap();
     }
 
     public boolean handleBackPress() {
@@ -688,14 +674,6 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
             invalidateInternal();
         }
 
-        private void setPlaceholder(@Nullable Bitmap bitmap) {
-            placeholder.setImageBitmap(bitmap);
-        }
-
-        private void setPlaceholder(@DrawableRes int resId) {
-            placeholder.setImageResource(resId);
-        }
-
         private void invalidateInternal() {
             if (getMeasuredWidth() == 0 || getMeasuredHeight() == 0) {
                 return;
@@ -933,6 +911,7 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
 
         private void destroyCamera(boolean async) {
             if (cameraView != null) {
+                mediaRecorderController.saveCameraThumb();
                 collageLayoutView.setCameraView(null);
                 cameraView.setDelegate(null);
                 if (dualCameraMatrix != null) {
@@ -957,9 +936,10 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
             invalidateControlsState(false);
         }
 
-        @Nullable
-        private Bitmap getCameraBitmap() {
-            return mediaRecorderController.getLastFrame();
+        @Override
+        protected void onAttachedToWindow() {
+            super.onAttachedToWindow();
+            mediaRecorderController.loadLastSavedCameraThumb();
         }
 
         @Override
@@ -1173,6 +1153,15 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
 
             right -= dp(46) * dualButton.getAlpha();
             collageButton.setTranslationX(right);
+        }
+
+        @Override
+        public void onCameraThumbLoad(@Nullable Bitmap thumb) {
+            if (thumb != null) {
+                placeholder.setImageBitmap(thumb);
+            } else {
+                placeholder.setImageResource(R.drawable.icplaceholder);
+            }
         }
 
         @Override

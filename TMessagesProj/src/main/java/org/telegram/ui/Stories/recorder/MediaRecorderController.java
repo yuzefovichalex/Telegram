@@ -14,6 +14,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.FileLoader;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.ImageLoader;
@@ -32,6 +33,7 @@ import java.util.ArrayList;
 public class MediaRecorderController implements CameraView.Callback {
 
     private static final String NO_FLASH_MODE = "no_flash_mode";
+    private static final String THUMB_FILE_NAME = "cthumb.jpg";
 
 
     @NonNull
@@ -746,8 +748,56 @@ public class MediaRecorderController implements CameraView.Callback {
         return l < .22f;
     }
 
+    public void loadLastSavedCameraThumb() {
+        if (callback != null) {
+            File file = new File(ApplicationLoader.getFilesDirFixed(), THUMB_FILE_NAME);
+            try {
+                callback.onCameraThumbLoad(BitmapFactory.decodeFile(file.getAbsolutePath()));
+            } catch (Exception e) {
+                callback.onCameraThumbLoad(null);
+            }
+        }
+    }
+
+    public void saveCameraThumb() {
+        Bitmap lastFrame = getLastFrame();
+        if (cameraView != null && lastFrame != null) {
+            try {
+                Bitmap copy = Bitmap.createBitmap(
+                    lastFrame,
+                    0, 0,
+                    lastFrame.getWidth(), lastFrame.getHeight(),
+                    cameraView.getMatrix(),
+                    true
+                );
+                lastFrame.recycle();
+
+                Bitmap thumb = Bitmap.createScaledBitmap(
+                    copy,
+                    80,
+                    (int) (copy.getHeight() / (copy.getWidth() / 80.0f)),
+                    true
+                );
+                copy.recycle();
+
+                Utilities.blurBitmap(
+                    thumb,
+                    7, 1,
+                    thumb.getWidth(), thumb.getHeight(),
+                    thumb.getRowBytes()
+                );
+
+                File file = new File(ApplicationLoader.getFilesDirFixed(), THUMB_FILE_NAME);
+                FileOutputStream stream = new FileOutputStream(file);
+                thumb.compress(Bitmap.CompressFormat.JPEG, 87, stream);
+                thumb.recycle();
+                stream.close();
+            } catch (Exception ignore) { }
+        }
+    }
+
     @Nullable
-    public Bitmap getLastFrame() {
+    private Bitmap getLastFrame() {
         if (cameraView == null) {
             return null;
         }
@@ -780,6 +830,7 @@ public class MediaRecorderController implements CameraView.Callback {
 
 
     public interface Callback {
+        void onCameraThumbLoad(@Nullable Bitmap thumb);
         void onZoomChanged(float zoom, boolean silent);
         void onFlashModeChanged(@NonNull String flashMode, boolean isFront);
         void onFrontFlashWarmthChanged(float warmth);

@@ -54,7 +54,6 @@ import androidx.recyclerview.widget.LinearSmoothScroller;
 import androidx.recyclerview.widget.RecyclerView;
 
 import org.telegram.messenger.AndroidUtilities;
-import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.ChatObject;
 import org.telegram.messenger.FileLoader;
@@ -970,12 +969,6 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
         });
 
         mediaRecorder = new MediaRecorder(getContext());
-        Bitmap lastCameraThumb = loadLastCameraBitmap();
-        if (lastCameraThumb != null) {
-            mediaRecorder.setPlaceholder(lastCameraThumb);
-        } else {
-            mediaRecorder.setPlaceholder(R.drawable.icplaceholder);
-        }
         mediaRecorder.setPreviewSize(itemSize);
         mediaRecorder.setCallback(new MediaRecorder.Callback() {
             @Override
@@ -1988,37 +1981,8 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
             return;
         }
 
-        saveLastCameraBitmap();
         mediaRecorder.destroyCamera(async);
         mediaRecorder.setVisibility(View.INVISIBLE);
-    }
-
-    private void saveLastCameraBitmap() {
-        //if (!canSaveCameraPreview) {
-        //    return;
-        //}
-        try {
-            Bitmap bitmap = mediaRecorder.getCameraBitmap();
-            if (bitmap != null) {
-                Bitmap newBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), cameraView.getMatrix(), true);
-                bitmap.recycle();
-                bitmap = newBitmap;
-                Bitmap lastBitmap = Bitmap.createScaledBitmap(bitmap, 80, (int) (bitmap.getHeight() / (bitmap.getWidth() / 80.0f)), true);
-                if (lastBitmap != null) {
-                    if (lastBitmap != bitmap) {
-                        bitmap.recycle();
-                    }
-                    Utilities.blurBitmap(lastBitmap, 7, 1, lastBitmap.getWidth(), lastBitmap.getHeight(), lastBitmap.getRowBytes());
-                    File file = new File(ApplicationLoader.getFilesDirFixed(), "cthumb.jpg");
-                    FileOutputStream stream = new FileOutputStream(file);
-                    lastBitmap.compress(Bitmap.CompressFormat.JPEG, 87, stream);
-                    lastBitmap.recycle();
-                    stream.close();
-                }
-            }
-        } catch (Throwable ignore) {
-
-        }
     }
 
     public void onActivityResultFragment(int requestCode, Intent data, String currentPicturePath) {
@@ -2202,6 +2166,10 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
         cameraViewOffsetY = itemSize;
 
         applyCameraViewPosition();
+    }
+
+    private void invalidateCameraPreviewRadius() {
+        mediaRecorder.setPreviewRadius(dp(8f * parentAlert.cornerRadius), 0f);
     }
 
     private void applyCameraViewPosition() {
@@ -2806,8 +2774,6 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
 
     @Override
     public void onHide() {
-        saveLastCameraBitmap();
-
         if (headerAnimator != null) {
             headerAnimator.cancel();
         }
@@ -3426,24 +3392,6 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
             if (position[0] == 0 && position[1] < getListTopPadding()) {
                 position[1] = getListTopPadding();
             }
-        }
-    }
-
-
-
-
-
-    private void invalidateCameraPreviewRadius() {
-        mediaRecorder.setPreviewRadius(dp(8f * parentAlert.cornerRadius), 0f);
-    }
-
-    @Nullable
-    private Bitmap loadLastCameraBitmap() {
-        File file = new File(ApplicationLoader.getFilesDirFixed(), "cthumb.jpg");
-        try {
-            return BitmapFactory.decodeFile(file.getAbsolutePath());
-        } catch (Exception e) {
-            return null;
         }
     }
 
