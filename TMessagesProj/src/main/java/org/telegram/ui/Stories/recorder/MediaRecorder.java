@@ -1490,9 +1490,16 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
         }
 
         @Override
-        public void onCollageConversionCancel() {
+        public void onCollageConversionCancel(boolean cancelledByUser) {
             recordControl.setProcessingProgress(0f, true);
             bottomHintTextView.setText(LocaleController.getString(R.string.StoryCollageReorderHint), true);
+            if (!cancelledByUser) {
+                Toast.makeText(
+                    getContext(),
+                    LocaleController.getString(R.string.CollageProcessingFailure),
+                    Toast.LENGTH_SHORT
+                ).show();
+            }
         }
 
         @Override

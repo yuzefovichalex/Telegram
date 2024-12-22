@@ -628,7 +628,7 @@ public class MediaRecorderController implements CameraView.Callback {
                 },
                 progress -> callback.onCollageConversionProgress(progress * .98f),
                 // Cancel by error only
-                () -> callback.onCollageConversionCancel()
+                () -> callback.onCollageConversionCancel(false)
             );
             videoBuilder.start();
             callback.onCollageConversionProgress(.005f);
@@ -648,7 +648,7 @@ public class MediaRecorderController implements CameraView.Callback {
         videoBuilder = null;
 
         if (callback != null) {
-            callback.onCollageConversionCancel();
+            callback.onCollageConversionCancel(true);
         }
     }
 
@@ -1073,7 +1073,7 @@ public class MediaRecorderController implements CameraView.Callback {
         );
         void onRecordVideoFailure();
         void onCollageConversionProgress(float progress);
-        void onCollageConversionCancel();
+        void onCollageConversionCancel(boolean cancelledByUser);
         void onCollagePictureSuccess(
             @NonNull File outputFile,
             int width,
