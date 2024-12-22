@@ -903,6 +903,7 @@ public class MediaRecorderController implements CameraView.Callback {
                     }
                 });
             } catch (Exception e) {
+                FileLog.e(e);
                 if (onFailure != null) {
                     AndroidUtilities.runOnUIThread(onFailure);
                 }
@@ -1025,6 +1026,7 @@ public class MediaRecorderController implements CameraView.Callback {
 
                 return result;
             } catch (Exception e) {
+                FileLog.e(e);
                 return null;
             }
         }
