@@ -1681,7 +1681,8 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
                     getContext(),
                     resourcesProvider,
                     null,
-                    true
+                    false,
+                    false
                 ) {
                     @Override
                     protected void firstLayout() {

@@ -2509,7 +2509,11 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
 
     @Override
     public void onResume() {
-        if (parentAlert.isShowing() && !parentAlert.isDismissed() && !PhotoViewer.getInstance().isVisible()) {
+        if (parentAlert.isShowing() &&
+            !parentAlert.isDismissed() &&
+            !PhotoViewer.getInstance().isVisible() &&
+            parentAlert.getCurrentAttachLayout() == this
+        ) {
             checkCamera(false);
         }
     }

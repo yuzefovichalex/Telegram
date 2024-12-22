@@ -107,12 +107,14 @@ public class GalleryListView extends FrameLayout implements NotificationCenter.N
 
     public boolean ignoreScroll;
     public final boolean onlyPhotos;
+    private final boolean withStories;
 
-    public GalleryListView(int currentAccount, Context context, Theme.ResourcesProvider resourcesProvider, MediaController.AlbumEntry startAlbum, boolean onlyPhotos) {
+    public GalleryListView(int currentAccount, Context context, Theme.ResourcesProvider resourcesProvider, MediaController.AlbumEntry startAlbum, boolean onlyPhotos, boolean withStories) {
         super(context);
         this.currentAccount = currentAccount;
         this.resourcesProvider = resourcesProvider;
         this.onlyPhotos = onlyPhotos;
+        this.withStories = withStories;
 
         backgroundPaint.setColor(0xff1f1f1f);
         backgroundPaint.setShadowLayer(dp(2.33f), 0, dp(-.4f), 0x08000000);
@@ -432,7 +434,7 @@ public class GalleryListView extends FrameLayout implements NotificationCenter.N
         });
 
         drafts.clear();
-        if (!onlyPhotos) {
+        if (withStories) {
             ArrayList<StoryEntry> draftArray = MessagesController.getInstance(currentAccount).getStoriesController().getDraftsController().drafts;
             for (StoryEntry draft : draftArray) {
                 if (!draft.isEdit && !draft.isError) {
@@ -1388,7 +1390,7 @@ public class GalleryListView extends FrameLayout implements NotificationCenter.N
 
     public void updateDrafts() {
         drafts.clear();
-        if (!onlyPhotos) {
+        if (withStories) {
             ArrayList<StoryEntry> draftArray = MessagesController.getInstance(currentAccount).getStoriesController().getDraftsController().drafts;
             for (StoryEntry draft : draftArray) {
                 if (!draft.isEdit && !draft.isError) {
