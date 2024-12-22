@@ -8,6 +8,7 @@ import android.view.Gravity;
 import android.view.View;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.core.graphics.ColorUtils;
 
 import org.telegram.messenger.AndroidUtilities;
@@ -69,7 +70,11 @@ public class VideoTimerView extends View implements FlashViews.Invertable {
         if (s < 10)
             str.append('0');
         str.append(s);
-        textDrawable.setText(str, animated);
+        setText(str, animated);
+    }
+
+    public void setText(@Nullable CharSequence text, boolean animated) {
+        textDrawable.setText(text, animated);
     }
 
     @Override

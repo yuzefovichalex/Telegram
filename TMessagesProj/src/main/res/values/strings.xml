@@ -6292,6 +6292,7 @@
     <string name="StoryCollageMenuHint">Hold and drag tiles to reorder them.</string>
     <string name="StoryCollageReorderHint">You can drag a tile to reorder</string>
     <string name="CollageProcessing">Processing…</string>
+    <string name="RecordingPaused">Paused</string>
     <string name="StoryMentionedTitle">**%s** mentioned you in a story.</string>
     <string name="StoryMentionedAction">View Story</string>
     <string name="ExpiredStoryMention">The story you were mentioned in is no longer available</string>

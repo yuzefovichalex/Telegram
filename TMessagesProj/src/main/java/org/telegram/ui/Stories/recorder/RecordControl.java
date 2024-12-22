@@ -195,6 +195,10 @@ public class RecordControl extends View implements FlashViews.Invertable {
         this.maxDuration = maxDuration;
     }
 
+    public long getLastDuration() {
+        return lastDuration;
+    }
+
     public void updateGalleryImage() {
         updateGalleryImage(true);
     }

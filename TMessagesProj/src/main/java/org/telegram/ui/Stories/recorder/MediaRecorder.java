@@ -1327,11 +1327,27 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
         @Override
         public void onVideoRecordPause() {
             mediaRecorderController.stopVideoRecord(true);
+            videoTimerView.setRecording(false, true);
+            videoTimerView.setText(LocaleController.getString(R.string.RecordingPaused), true);
+            flashViews.flashOut(() -> invalidateControlsState(true));
         }
 
         @Override
         public void onVideoRecordResume() {
-            mediaRecorderController.startVideoRecord(false, null);
+            setCollageListVisibility(false, true);
+            if (mediaRecorderController.shouldUseDisplayFlash()) {
+                flashViews.flashIn(() -> {
+                    videoTimerView.setRecording(true, true);
+                    videoTimerView.setDuration(recordControl.getLastDuration(), true);
+                    mediaRecorderController.startVideoRecord(false, null);
+                    invalidateControlsState(true);
+                });
+            } else {
+                videoTimerView.setRecording(true, true);
+                videoTimerView.setDuration(recordControl.getLastDuration(), true);
+                mediaRecorderController.startVideoRecord(false, null);
+                invalidateControlsState(true);
+            }
         }
 
         @Override
@@ -1371,13 +1387,15 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
                 } else if (callback != null) {
                     callback.onRecordVideoSuccess(outputFile, thumbPath, width, height, duration);
                 }
-                videoTimerView.setDuration(0, false);
+                videoTimerView.setDuration(0, true);
                 invalidateControlsState(true);
             });
         }
 
         @Override
         public void onRecordVideoFailure() {
+            recordControl.stopRecording();
+            invalidateControlsState(true);
             Toast.makeText(getContext(), "Unable to process recorded video", Toast.LENGTH_SHORT).show();
         }
 
@@ -1754,7 +1772,9 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
                     animateGalleryVisibility(false);
                 } else if (collageListView.isVisible()) {
                     setCollageListVisibility(false, true);
-                } else if (mediaRecorderController.isRecordingVideo()) {
+                } else if (mediaRecorderController.isRecordingVideo() ||
+                    mediaRecorderController.isMultipartRecording()
+                ) {
                     recordControl.stopRecording();
                 } else if (collageLayoutView.hasLayout() && collageLayoutView.hasContent()) {
                     if (!mediaRecorderController.isBusy()) {
