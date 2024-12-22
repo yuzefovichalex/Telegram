@@ -2117,11 +2117,6 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
             return;
         }
 
-//        if (mediaRecorder.getVisibility() != View.VISIBLE) {
-//            mediaRecorder.setAlpha(1f);
-//            mediaRecorder.setVisibility(View.VISIBLE);
-//        }
-
         int count = gridView.getChildCount();
         for (int a = 0; a < count; a++) {
             View child = gridView.getChildAt(a);
@@ -2761,8 +2756,6 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
 
     @Override
     public void onShown() {
-        mediaRecorder.setVisibility(View.VISIBLE);
-        checkCameraViewPosition();
         if (checkCameraWhenShown) {
             checkCameraWhenShown = false;
             checkCamera(true);
@@ -2775,6 +2768,10 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
 
     @Override
     public void onHideShowProgress(float progress) {
+        if (noCameraPermissions || !needCamera || !deviceHasGoodCamera) {
+            return;
+        }
+        
         mediaRecorder.setAlpha(progress);
         if (progress != 0 && mediaRecorder.getVisibility() != VISIBLE) {
             mediaRecorder.setVisibility(VISIBLE);
@@ -2926,7 +2923,16 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
     }
 
     @Override
+    public void onOpenAnimationStart() {
+        checkCamera(false);
+    }
+
+    @Override
     public void onOpenAnimationUpdate() {
+        if (noCameraPermissions || !needCamera || !deviceHasGoodCamera) {
+            return;
+        }
+
         mediaRecorder.setAlpha(1f);
         mediaRecorder.setVisibility(View.VISIBLE);
         checkCameraViewPosition();

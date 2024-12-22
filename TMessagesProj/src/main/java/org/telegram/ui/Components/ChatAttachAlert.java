@@ -707,6 +707,8 @@ public class ChatAttachAlert extends BottomSheet implements NotificationCenter.N
 
         }
 
+        public void onOpenAnimationStart() { }
+
         public void onOpenAnimationUpdate() { }
 
         public void onOpenAnimationEnd() {
@@ -5112,6 +5114,9 @@ public class ChatAttachAlert extends BottomSheet implements NotificationCenter.N
     @Override
     public void onOpenAnimationStart() {
         sent = false;
+        if (currentAttachLayout != null) {
+            currentAttachLayout.onOpenAnimationStart();
+        }
     }
 
     @Override
