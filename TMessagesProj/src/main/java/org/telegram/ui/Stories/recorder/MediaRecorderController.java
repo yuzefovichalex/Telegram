@@ -82,8 +82,6 @@ public class MediaRecorderController implements CameraView.Callback {
     private boolean isRecordingVideo;
     private boolean isProcessing;
 
-    private boolean isPreviewRunning;
-
     @NonNull
     private final ArrayList<VideoData> recordedParts = new ArrayList<>();
     private boolean isMultipartRecording;
@@ -166,7 +164,6 @@ public class MediaRecorderController implements CameraView.Callback {
             checkFrontFlashParams();
             checkDual();
             setZoom(this.zoom, true, true);
-            isPreviewRunning = true;
         }
     }
 
@@ -260,7 +257,6 @@ public class MediaRecorderController implements CameraView.Callback {
         if (cameraView != null) {
             cameraView.setCallback(null);
         }
-        isPreviewRunning = false;
         isCameraSwitchInProgress = false;
         if (resetParams || cameraView == null) {
             zoom = 0f;
@@ -453,15 +449,13 @@ public class MediaRecorderController implements CameraView.Callback {
     }
 
     public void startPreview() {
-        if (cameraView != null && !isPreviewRunning) {
-            isPreviewRunning = true;
+        if (cameraView != null) {
             CameraController.getInstance().startPreview(cameraView.getCameraSessionObject());
         }
     }
 
     public void stopPreview() {
-        if (cameraView != null && isPreviewRunning) {
-            isPreviewRunning = false;
+        if (cameraView != null) {
             CameraController.getInstance().stopPreview(cameraView.getCameraSessionObject());
         }
     }

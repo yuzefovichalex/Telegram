@@ -30,11 +30,14 @@ import android.view.View;
 import android.view.ViewOutlineProvider;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.res.ResourcesCompat;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.AnimationNotificationsLocker;
@@ -42,11 +45,13 @@ import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaController;
 import org.telegram.messenger.R;
 import org.telegram.ui.ActionBar.Theme;
+import org.telegram.ui.Cells.PhotoAttachPhotoCell;
 import org.telegram.ui.Components.BlurringShader;
 import org.telegram.ui.Components.Bulletin;
 import org.telegram.ui.Components.CubicBezierInterpolator;
 import org.telegram.ui.Components.ItemOptions;
 import org.telegram.ui.Components.LayoutHelper;
+import org.telegram.ui.Components.RecyclerListView;
 import org.telegram.ui.Components.ZoomControlView;
 import org.telegram.ui.Stories.DarkThemeResourceProvider;
 
@@ -152,6 +157,16 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
         return isDraggingHorizontally || isDraggingVertically;
     }
 
+    @NonNull
+    public RecyclerListView getCameraPhotoRecyclerView() {
+        return contentView.getCameraPhotoRecyclerView();
+    }
+
+    @NonNull
+    public LinearLayoutManager getCameraPhotoLayoutManager() {
+        return contentView.getCameraPhotoLayoutManager();
+    }
+
     public void setCurrentAccount(int currentAccount) {
         contentView.setCurrentAccount(currentAccount);
     }
@@ -183,6 +198,14 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
         float clipBottom
     ) {
         contentView.setPreviewClip(clipLeft, clipTop, clipRight, clipBottom);
+    }
+
+    public void setMultipleCameraPhotoControlsVisibility(boolean areVisible) {
+        contentView.setMultipleCameraPhotoControlsVisibility(areVisible);
+    }
+
+    public void setCounterText(@Nullable String text) {
+        contentView.setCounterText(text);
     }
 
     public void startCameraPreview() {
@@ -333,6 +356,15 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
         @NonNull
         private final HintTextView bottomHintTextView;
 
+        @NonNull
+        private final TextView counterTextView;
+
+        @NonNull
+        private final RecyclerListView cameraPhotoRecyclerView;
+
+        @NonNull
+        private final LinearLayoutManager cameraPhotoLayoutManager;
+
         @Nullable
         private GalleryListView galleryListView;
         private boolean isGalleryVisible;
@@ -391,6 +423,8 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
         @NonNull
         private final Runnable hideZoomControlRunnable =
             () -> setZoomControlVisibility(false, null);
+
+        private boolean shouldShowMultipleCameraPhotoControls;
 
 
         @Nullable
@@ -554,8 +588,51 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
             flashViews.add(bottomHintTextView);
             addView(bottomHintTextView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 32, Gravity.BOTTOM, 8, 0, 8, 8));
 
+            counterTextView = new TextView(context);
+            counterTextView.setBackgroundResource(R.drawable.photos_rounded);
+            counterTextView.setVisibility(View.GONE);
+            counterTextView.setTextColor(0xffffffff);
+            counterTextView.setGravity(Gravity.CENTER);
+            counterTextView.setPivotX(0);
+            counterTextView.setPivotY(0);
+            counterTextView.setTypeface(AndroidUtilities.bold());
+            counterTextView.setCompoundDrawablesWithIntrinsicBounds(0, 0, R.drawable.photos_arrow, 0);
+            counterTextView.setCompoundDrawablePadding(dp(4));
+            counterTextView.setPadding(dp(16), 0, dp(16), 0);
+            counterTextView.setVisibility(View.GONE);
+            counterTextView.setAlpha(0.0f);
+            counterTextView.setOnClickListener(v -> {
+                if (cameraView == null || callback == null) {
+                    return;
+                }
+                callback.onPhotoViewerRequest();
+            });
+            addView(counterTextView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, 38, Gravity.CENTER_HORIZONTAL | Gravity.BOTTOM));
+
+            cameraPhotoRecyclerView = new RecyclerListView(context, resourcesProvider);
+            cameraPhotoRecyclerView.setVerticalScrollBarEnabled(true);
+            cameraPhotoRecyclerView.setClipToPadding(false);
+            cameraPhotoRecyclerView.setPadding(dp(8), 0, dp(8), 0);
+            cameraPhotoRecyclerView.setItemAnimator(null);
+            cameraPhotoRecyclerView.setLayoutAnimation(null);
+            cameraPhotoRecyclerView.setOverScrollMode(RecyclerListView.OVER_SCROLL_NEVER);
+            cameraPhotoRecyclerView.setVisibility(View.GONE);
+            cameraPhotoRecyclerView.setAlpha(0.0f);
+            cameraPhotoLayoutManager = new LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false) {
+                @Override
+                public boolean supportsPredictiveItemAnimations() {
+                    return false;
+                }
+            };
+            cameraPhotoRecyclerView.setLayoutManager(cameraPhotoLayoutManager);
+            cameraPhotoRecyclerView.setOnItemClickListener((view, position) -> {
+                if (view instanceof PhotoAttachPhotoCell) {
+                    ((PhotoAttachPhotoCell) view).callDelegate();
+                }
+            });
+            addView(cameraPhotoRecyclerView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 80, Gravity.BOTTOM));
+
             invalidateControlsState(false);
-            applyWindowInsets();
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 ViewOutlineProvider innerOutlineProvider = new ViewOutlineProvider() {
@@ -627,8 +704,21 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
             return dragProgress * getMeasuredHeight();
         }
 
+        @NonNull
+        private RecyclerListView getCameraPhotoRecyclerView() {
+            return cameraPhotoRecyclerView;
+        }
+
+        @NonNull
+        private LinearLayoutManager getCameraPhotoLayoutManager() {
+            return cameraPhotoLayoutManager;
+        }
+
         private void setCallback(@Nullable Callback callback) {
             this.callback = callback;
+            if (callback != null) {
+                cameraPhotoRecyclerView.setAdapter(callback.getCameraPhotoAdapter());
+            }
         }
 
         public void setCurrentAccount(int currentAccount) {
@@ -1103,7 +1193,9 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
                 collageListView.isVisible() && isOnHitRect(collageListView, event) ||
                 zoomControlView.getVisibility() == View.VISIBLE && isOnHitRect(zoomControlView, event) ||
                 isOnHitRect(recordControl, event) ||
-                isOnHitRect(photoVideoSwitcherView, event);
+                isOnHitRect(photoVideoSwitcherView, event) ||
+                counterTextView.getVisibility() == View.VISIBLE && isOnHitRect(counterTextView, event) ||
+                cameraPhotoRecyclerView.getVisibility() == View.VISIBLE && isOnHitRect(cameraPhotoRecyclerView, event);
             return !isOnControls &&
                 isNotAtDual(event) &&
                 !collageListView.isTouch() &&
@@ -1126,7 +1218,7 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
         }
 
 
-        private void applyWindowInsets() {
+        private void invalidateChildrenPosition() {
             int statusBarInset = AndroidUtilities.statusBarHeight;
             int navigationBarInset = AndroidUtilities.navigationBarHeight;
             updateMargin(backButton, 0, statusBarInset, 0, 0);
@@ -1135,10 +1227,22 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
             updateMargin(collageButton, 0, statusBarInset, 0, 0);
             updateMargin(collageListView, dp(16), statusBarInset, dp(56), 0);
             updateMargin(videoTimerView, 0, statusBarInset, 0, 0);
-            updateMargin(zoomControlView, 0, 0, 0, navigationBarInset + dp(188));
-            updateMargin(recordControl, 0, 0, 0, navigationBarInset + dp(80));
-            updateMargin(photoVideoSwitcherView, 0, 0, 0, navigationBarInset + dp(16));
-            updateMargin(bottomHintTextView, 0, 0, 0, navigationBarInset + dp(32));
+
+            int bottomOffset = navigationBarInset + dp(16);
+            updateMargin(cameraPhotoRecyclerView, 0, 0, 0, bottomOffset);
+
+            bottomOffset += (int) (cameraPhotoRecyclerView.getAlpha() * dp(96));
+            updateMargin(bottomHintTextView, 0, 0, 0, bottomOffset + dp(16));
+            updateMargin(photoVideoSwitcherView, 0, 0, 0, bottomOffset);
+
+            bottomOffset += dp(64);
+            updateMargin(recordControl, 0, 0, 0, bottomOffset);
+
+            bottomOffset += dp(108);
+            updateMargin(counterTextView, 0, 0, 0, bottomOffset);
+
+            bottomOffset += (int) (counterTextView.getAlpha() * dp(56));
+            updateMargin(zoomControlView, 0, 0, 0, bottomOffset);
         }
 
         private void updateMargin(
@@ -1747,6 +1851,7 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
             recordControl.setCollageProgress(collageLayoutView.getFilledProgress(), animated);
             setRecordControlVisibility(isOpenOrOpening, animated);
             collageListView.setVisible(collageListView.isVisible() && !mediaRecorderController.isProcessing(), animated);
+            checkCameraPhotosControlsVisibility();
         }
 
         private void pushCollageEntry(@NonNull StoryEntry entry) {
@@ -1895,6 +2000,40 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
             );
         }
 
+        private void setMultipleCameraPhotoControlsVisibility(boolean areVisible) {
+            shouldShowMultipleCameraPhotoControls = areVisible;
+            checkCameraPhotosControlsVisibility();
+        }
+
+        private void checkCameraPhotosControlsVisibility() {
+            boolean finalVisibility = isOpenOrOpening &&
+                shouldShowMultipleCameraPhotoControls &&
+                (!mediaRecorderController.isBusy() || mediaRecorderController.isTakingPicture());
+
+            setVisibility(
+                counterTextView,
+                finalVisibility,
+                350,
+                0f,
+                null,
+                this::invalidateChildrenPosition,
+                null
+            );
+            setVisibility(
+                cameraPhotoRecyclerView,
+                finalVisibility,
+                350,
+                0f,
+                null,
+                this::invalidateChildrenPosition,
+                null
+            );
+        }
+
+        private void setCounterText(@Nullable String text) {
+            counterTextView.setText(text);
+        }
+
         private void setVisibility(
             @NonNull View view,
             boolean isVisible,
@@ -1985,6 +2124,8 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
         boolean canTakePicture();
         boolean canRecordVideo();
         void onLockOrientationRequest(boolean isLocked);
+        @Nullable
+        RecyclerView.Adapter<?> getCameraPhotoAdapter();
         void onTakePictureSuccess(
             @NonNull File outputFile,
             int width,
@@ -2004,6 +2145,7 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
             int height,
             long duration
         );
+        void onPhotoViewerRequest();
         void onClose();
     }
 
