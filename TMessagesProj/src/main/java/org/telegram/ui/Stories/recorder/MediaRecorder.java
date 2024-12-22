@@ -513,7 +513,7 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
             backButton = new FlashViews.ImageViewInvertable(context);
             backButton.setContentDescription(getString(R.string.AccDescrGoBack));
             backButton.setScaleType(ImageView.ScaleType.CENTER);
-            backButton.setImageResource(R.drawable.msg_photo_back);
+            backButton.setImageResource(R.drawable.ic_close_white);
             backButton.setColorFilter(new PorterDuffColorFilter(Color.WHITE, PorterDuff.Mode.MULTIPLY));
             backButton.setBackground(Theme.createSelectorDrawable(SELECTOR_BACKGROUND_COLOR));
             backButton.setOnClickListener(v -> handleBackPress());
