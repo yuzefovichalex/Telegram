@@ -195,8 +195,19 @@ public class RecordControl extends View implements FlashViews.Invertable {
         this.maxDuration = maxDuration;
     }
 
-    public long getLastDuration() {
-        return lastDuration;
+    private long getRecordingDurationMillis() {
+        if (!recording) {
+            return 0;
+        }
+
+        long currentPauseDuration = lastPauseTime > 0
+            ? System.currentTimeMillis() - lastPauseTime
+            : 0;
+        return System.currentTimeMillis() - recordingStart - totalPauseDuration - currentPauseDuration;
+    }
+
+    public long getRecordingDurationSeconds() {
+        return getRecordingDurationMillis() / 1000L;
     }
 
     public void updateGalleryImage() {
@@ -506,10 +517,7 @@ public class RecordControl extends View implements FlashViews.Invertable {
             canvas.drawArc(AndroidUtilities.rectTmp, -90, 360 * processingProgress, false, outlinePaint);
         }
 
-        long currentPauseDuration = lastPauseTime > 0
-            ? System.currentTimeMillis() - lastPauseTime
-            : 0;
-        long duration = System.currentTimeMillis() - recordingStart - totalPauseDuration - currentPauseDuration;
+        long duration = getRecordingDurationMillis();
         float recordEndT = recording ? 0 : 1f - recordingLongT;
         float sweepAngle = maxDuration > -1L ? duration / (float) maxDuration * 360 : 90;
 
@@ -891,12 +899,12 @@ public class RecordControl extends View implements FlashViews.Invertable {
                 delegate.onGalleryClick();
             } else if (recording && pauseButton.isPressed()) {
                 if (isPaused) {
-                    delegate.onVideoRecordResume();
                     totalPauseDuration += System.currentTimeMillis() - lastPauseTime;
                     lastPauseTime = 0;
+                    delegate.onVideoRecordResume();
                 } else {
-                    delegate.onVideoRecordPause();
                     lastPauseTime = System.currentTimeMillis();
+                    delegate.onVideoRecordPause();
                 }
                 isPaused = !isPaused;
             } else if (recording && longpressRecording) {
@@ -1003,6 +1011,18 @@ public class RecordControl extends View implements FlashViews.Invertable {
             });
         }
 
+        invalidate();
+    }
+
+    public void pauseRecording() {
+        if (!recording || isPaused) {
+            return;
+        }
+
+        isPaused = true;
+        lastPauseTime = System.currentTimeMillis();
+        pauseButton.setPressed(false);
+        delegate.onVideoRecordPause();
         invalidate();
     }
 

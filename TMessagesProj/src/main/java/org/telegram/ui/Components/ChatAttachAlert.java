@@ -3885,12 +3885,14 @@ public class ChatAttachAlert extends BottomSheet implements NotificationCenter.N
                 nextAttachLayout.setTranslationX(width);
                 if (currentAttachLayout instanceof ChatAttachAlertPhotoLayout) {
                     ChatAttachAlertPhotoLayout photoLayout = (ChatAttachAlertPhotoLayout) currentAttachLayout;
+                    photoLayout.mediaRecorder.setAlpha(0f);
                     photoLayout.mediaRecorder.setVisibility(View.INVISIBLE);
                 }
             } else {
                 currentAttachLayout.setTranslationX(-width);
                 if (nextAttachLayout == photoLayout) {
                     ChatAttachAlertPhotoLayout photoLayout = (ChatAttachAlertPhotoLayout) nextAttachLayout;
+                    photoLayout.mediaRecorder.setAlpha(1f);
                     photoLayout.mediaRecorder.setVisibility(View.VISIBLE);
                 }
             }

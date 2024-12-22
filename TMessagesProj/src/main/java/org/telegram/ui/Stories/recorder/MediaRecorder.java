@@ -209,6 +209,10 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
         }
     }
 
+    public void pauseCamera() {
+        contentView.pauseCamera();
+    }
+
     public void destroyCamera(boolean async) {
         contentView.destroyCamera(async);
     }
@@ -219,10 +223,6 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
 
     public boolean handleKeyEvent(int keyCode, @NonNull KeyEvent keyEvent) {
         return contentView.handleKeyEvent(keyCode, keyEvent);
-    }
-
-    public void onPause() {
-        // TODO handle pause, e.g. pause video
     }
 
     @Override
@@ -404,6 +404,9 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
 
         private boolean isVideo;
         private int currentAccount;
+
+
+        private boolean isPaused;
 
 
         private ContentView(@NonNull Context context) {
@@ -807,22 +810,28 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
                 return;
             }
 
-            placeholder.setVisibility(View.VISIBLE);
+            placeholder.setVisibility(isPaused ? View.GONE : View.VISIBLE);
 
             cameraView = new DualCameraView(getContext(), false, false);
-            cameraView.setAlpha(0f);
+            cameraView.setAlpha(isPaused ? 1f : 0f);
             cameraView.setDelegate(() -> {
-                cameraView.animate()
-                    .setInterpolator(CubicBezierInterpolator.DEFAULT)
-                    .alpha(1f)
-                    .withEndAction(() -> {
-                        if (cameraView != null) {
-                            placeholder.setVisibility(View.GONE);
-                        }
-                    });
-                mediaRecorderController.attachCameraView(cameraView);
+                if (isPaused) {
+                    mediaRecorderController.attachCameraView(cameraView);
+                } else {
+                    cameraView.animate()
+                        .setInterpolator(CubicBezierInterpolator.DEFAULT)
+                        .alpha(1f)
+                        .withEndAction(() -> {
+                            if (cameraView != null) {
+                                placeholder.setVisibility(View.GONE);
+                            }
+                        });
+                    mediaRecorderController.attachCameraView(cameraView);
+                }
             });
             cameraView.setContentDescription(LocaleController.getString(R.string.AccDescrInstantCamera));
+
+            isPaused = false;
 
             dualCameraMatrix = cameraView.getSavedDualMatrix();
             invalidateDualCameraScale();
@@ -918,7 +927,7 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
                     Matrix m = cameraView.getDualPosition();
                     m.set(dualCameraMatrix);
                 }
-                mediaRecorderController.detachCameraView();
+                mediaRecorderController.detachCameraView(true);
                 cameraView.destroy(async, null);
                 cameraView = null;
             }
@@ -1338,13 +1347,13 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
             if (mediaRecorderController.shouldUseDisplayFlash()) {
                 flashViews.flashIn(() -> {
                     videoTimerView.setRecording(true, true);
-                    videoTimerView.setDuration(recordControl.getLastDuration(), true);
+                    videoTimerView.setDuration(recordControl.getRecordingDurationSeconds(), true);
                     mediaRecorderController.startVideoRecord(false, null);
                     invalidateControlsState(true);
                 });
             } else {
                 videoTimerView.setRecording(true, true);
-                videoTimerView.setDuration(recordControl.getLastDuration(), true);
+                videoTimerView.setDuration(recordControl.getRecordingDurationSeconds(), true);
                 mediaRecorderController.startVideoRecord(false, null);
                 invalidateControlsState(true);
             }
@@ -1394,7 +1403,7 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
 
         @Override
         public void onRecordVideoFailure() {
-            recordControl.stopRecording();
+            recordControl.stopRecordingLoading(true);
             invalidateControlsState(true);
             Toast.makeText(getContext(), "Unable to process recorded video", Toast.LENGTH_SHORT).show();
         }
@@ -1947,6 +1956,18 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
                     onEnd.run();
                 }
             }
+        }
+
+        private void pauseCamera() {
+            if (mediaRecorderController.isRecordingVideo()) {
+                recordControl.pauseRecording();
+            }
+            mediaRecorderController.detachCameraView(false);
+            if (cameraView != null) {
+                cameraView.destroy(true, null);
+                cameraView = null;
+            }
+            isPaused = true;
         }
 
     }

@@ -921,6 +921,7 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
             @Override
             public void onOpen() {
                 parentAlert.delegate.onCameraOpened();
+                setOrientationLocked(true);
             }
 
             @Override
@@ -963,19 +964,7 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
 
             @Override
             public void onLockOrientationRequest(boolean isLocked) {
-                BaseFragment baseFragment = parentAlert.baseFragment;
-                if (baseFragment == null) {
-                    baseFragment = LaunchActivity.getLastFragment();
-                }
-                if (baseFragment == null || baseFragment.getParentActivity() == null) {
-                    return;
-                }
-
-                if (isLocked) {
-                    AndroidUtilities.lockOrientation(baseFragment.getParentActivity());
-                } else {
-                    AndroidUtilities.unlockOrientation(baseFragment.getParentActivity());
-                }
+                // Orientation change is fully disable for camera
             }
 
             @Override
@@ -1050,6 +1039,8 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
 
             @Override
             public void onClose() {
+                setOrientationLocked(false);
+
                 AndroidUtilities.setLightNavigationBar(
                     parentAlert.getWindow(),
                     AndroidUtilities.computePerceivedBrightness(getThemedColor(Theme.key_windowBackgroundGray)) > 0.721
@@ -1080,6 +1071,7 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
             mediaRecorder.setSecretChat(fragment instanceof ChatActivity && ((ChatActivity) fragment).isSecretChat());
         }
 
+        mediaRecorder.setAlpha(0f);
         mediaRecorder.setVisibility(View.INVISIBLE);
         container.addView(mediaRecorder, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
 
@@ -1135,6 +1127,22 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
             //CameraController.getInstance().stopPreview(cameraView.getCameraSessionObject());
         });
         //container.addView(counterTextView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, 38, Gravity.LEFT | Gravity.TOP, 0, 0, 0, 100 + 16));
+    }
+
+    private void setOrientationLocked(boolean isLocked) {
+        BaseFragment baseFragment = parentAlert.baseFragment;
+        if (baseFragment == null) {
+            baseFragment = LaunchActivity.getLastFragment();
+        }
+        if (baseFragment == null || baseFragment.getParentActivity() == null) {
+            return;
+        }
+
+        if (isLocked) {
+            AndroidUtilities.lockOrientation(baseFragment.getParentActivity());
+        } else {
+            AndroidUtilities.unlockOrientation(baseFragment.getParentActivity());
+        }
     }
 
     private void openPhotoForSelect(
@@ -1971,6 +1979,7 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
             return;
         }
 
+        mediaRecorder.setAlpha(1f);
         mediaRecorder.setVisibility(View.VISIBLE);
         checkCameraViewPosition();
         mediaRecorder.startCamera();
@@ -1982,6 +1991,7 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
         }
 
         mediaRecorder.destroyCamera(async);
+        mediaRecorder.setAlpha(0f);
         mediaRecorder.setVisibility(View.INVISIBLE);
     }
 
@@ -2107,9 +2117,10 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
             return;
         }
 
-        if (mediaRecorder.getVisibility() != View.VISIBLE) {
-            mediaRecorder.setVisibility(View.VISIBLE);
-        }
+//        if (mediaRecorder.getVisibility() != View.VISIBLE) {
+//            mediaRecorder.setAlpha(1f);
+//            mediaRecorder.setVisibility(View.VISIBLE);
+//        }
 
         int count = gridView.getChildCount();
         for (int a = 0; a < count; a++) {
@@ -2553,7 +2564,7 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
     @Override
     public void onPause() {
         if (!requestingPermissions) {
-            mediaRecorder.onPause();
+            mediaRecorder.pauseCamera();
         } else {
             requestingPermissions = false;
         }
@@ -2827,6 +2838,7 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
 
     @Override
     public void onHidden() {
+        mediaRecorder.setAlpha(0f);
         mediaRecorder.setVisibility(View.INVISIBLE);
         for (Map.Entry<Object, Object> en : selectedPhotos.entrySet()) {
             if (en.getValue() instanceof MediaController.PhotoEntry) {
@@ -2915,6 +2927,8 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
 
     @Override
     public void onOpenAnimationUpdate() {
+        mediaRecorder.setAlpha(1f);
+        mediaRecorder.setVisibility(View.VISIBLE);
         checkCameraViewPosition();
     }
 

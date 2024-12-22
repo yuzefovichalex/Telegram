@@ -256,26 +256,28 @@ public class MediaRecorderController implements CameraView.Callback {
         }
     }
 
-    public void detachCameraView() {
+    public void detachCameraView(boolean resetParams) {
         if (cameraView != null) {
             cameraView.setCallback(null);
         }
-        cameraView = null;
-        zoom = 0f;
-        frontFlashMode = NO_FLASH_MODE;
-        displayFlashWarmth = -1f;
-        displayFlashIntensity = -1f;
-        backFlashMode = NO_FLASH_MODE;
-        isCameraSwitchInProgress = false;
-        isPreparing = false;
-        isTakingPicture = false;
-        isRecordingVideo = false;
         isPreviewRunning = false;
-        cancelLatestCollageConversion();
-        if (executorService != null) {
-            executorService.shutdownNow();
-            executorService = null;
+        isCameraSwitchInProgress = false;
+        if (resetParams || cameraView == null) {
+            zoom = 0f;
+            frontFlashMode = NO_FLASH_MODE;
+            displayFlashWarmth = -1f;
+            displayFlashIntensity = -1f;
+            backFlashMode = NO_FLASH_MODE;
+            isPreparing = false;
+            isTakingPicture = false;
+            isRecordingVideo = false;
+            cancelLatestCollageConversion();
+            if (executorService != null) {
+                executorService.shutdownNow();
+                executorService = null;
+            }
         }
+        cameraView = null;
     }
 
 
