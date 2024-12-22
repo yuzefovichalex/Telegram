@@ -30,6 +30,7 @@ import android.view.View;
 import android.view.ViewOutlineProvider;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -403,7 +404,6 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
 
         private boolean isVideo;
         private int currentAccount;
-        private boolean isSecretChat;
 
 
         private ContentView(@NonNull Context context) {
@@ -634,7 +634,7 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
         }
 
         public void setSecretChat(boolean isSecretChat) {
-            this.isSecretChat = isSecretChat;
+            mediaRecorderController.setSecretChat(isSecretChat);
         }
 
         private void setPreviewSize(float previewSize) {
@@ -1237,7 +1237,6 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
                 mediaRecorderController.setPreparing(true);
                 flashViews.flashIn(() ->
                     mediaRecorderController.takePicture(
-                        isSecretChat,
                         false,
                         collageLayoutView.hasLayout(),
                         onStart
@@ -1245,7 +1244,6 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
                 );
             } else {
                 mediaRecorderController.takePicture(
-                    isSecretChat,
                     true,
                     collageLayoutView.hasLayout(),
                     onStart
@@ -1280,6 +1278,11 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
         }
 
         @Override
+        public boolean canRecordAudio() {
+            return callback != null && callback.canRecordVideo();
+        }
+
+        @Override
         public void onVideoRecordStart(boolean byLongPress, Runnable whenStarted) {
             setCollageListVisibility(false, true);
 
@@ -1299,10 +1302,10 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
             if (mediaRecorderController.shouldUseDisplayFlash()) {
                 mediaRecorderController.setPreparing(true);
                 flashViews.flashIn(() ->
-                    mediaRecorderController.startVideoRecord(isSecretChat, false, onStart)
+                    mediaRecorderController.startVideoRecord(false, onStart)
                 );
             } else {
-                mediaRecorderController.startVideoRecord(isSecretChat, false, onStart);
+                mediaRecorderController.startVideoRecord(false, onStart);
             }
 
             videoTimerView.setRecording(true, true);
@@ -1322,25 +1325,20 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
         }
 
         @Override
-        public boolean canRecordAudio() {
-            return callback != null && callback.canRecordVideo();
-        }
-
-        @Override
         public void onVideoRecordPause() {
-
+            mediaRecorderController.stopVideoRecord(true);
         }
 
         @Override
         public void onVideoRecordResume() {
-
+            mediaRecorderController.startVideoRecord(false, null);
         }
 
         @Override
         public void onVideoRecordEnd(boolean byDuration) {
             setCollageListVisibility(false, true);
             videoTimerView.setRecording(false, true);
-            mediaRecorderController.stopVideoRecord();
+            mediaRecorderController.stopVideoRecord(false);
             if (callback != null) {
                 callback.onLockOrientationRequest(false);
             }
@@ -1376,6 +1374,11 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
                 videoTimerView.setDuration(0, false);
                 invalidateControlsState(true);
             });
+        }
+
+        @Override
+        public void onRecordVideoFailure() {
+            Toast.makeText(getContext(), "Unable to process recorded video", Toast.LENGTH_SHORT).show();
         }
 
         @Override
@@ -1436,7 +1439,6 @@ public class MediaRecorder extends FrameLayout implements Bulletin.Delegate {
                 );
                 mediaRecorderController.convertCollageToMedia(
                     collageEntry,
-                    isSecretChat,
                     () -> invalidateControlsState(true),
                     () -> {
                         recordControl.setProcessingProgress(0f, true);

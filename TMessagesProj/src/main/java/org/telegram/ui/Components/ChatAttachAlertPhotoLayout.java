@@ -913,60 +913,7 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
             progressView.showTextView();
         }
 
-        counterTextView = new TextView(context);
-        counterTextView.setBackgroundResource(R.drawable.photos_rounded);
-        counterTextView.setVisibility(View.GONE);
-        counterTextView.setTextColor(0xffffffff);
-        counterTextView.setGravity(Gravity.CENTER);
-        counterTextView.setPivotX(0);
-        counterTextView.setPivotY(0);
-        counterTextView.setTypeface(AndroidUtilities.bold());
-        counterTextView.setCompoundDrawablesWithIntrinsicBounds(0, 0, R.drawable.photos_arrow, 0);
-        counterTextView.setCompoundDrawablePadding(dp(4));
-        counterTextView.setPadding(dp(16), 0, dp(16), 0);
-        //container.addView(counterTextView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, 38, Gravity.LEFT | Gravity.TOP, 0, 0, 0, 100 + 16));
-        counterTextView.setOnClickListener(v -> {
-            if (cameraView == null) {
-                return;
-            }
-            openPhotoViewer(null, false, false);
-            CameraController.getInstance().stopPreview(cameraView.getCameraSessionObject());
-        });
-
         shutterButton = new ShutterButton(context);
-
-        cameraPhotoRecyclerView = new RecyclerListView(context, resourcesProvider) {
-            @Override
-            public void requestLayout() {
-                if (cameraPhotoRecyclerViewIgnoreLayout) {
-                    return;
-                }
-                super.requestLayout();
-            }
-        };
-        cameraPhotoRecyclerView.setVerticalScrollBarEnabled(true);
-        cameraPhotoRecyclerView.setAdapter(cameraAttachAdapter = new PhotoAttachAdapter(context, false));
-        cameraAttachAdapter.createCache();
-        cameraPhotoRecyclerView.setClipToPadding(false);
-        cameraPhotoRecyclerView.setPadding(dp(8), 0, dp(8), 0);
-        cameraPhotoRecyclerView.setItemAnimator(null);
-        cameraPhotoRecyclerView.setLayoutAnimation(null);
-        cameraPhotoRecyclerView.setOverScrollMode(RecyclerListView.OVER_SCROLL_NEVER);
-        cameraPhotoRecyclerView.setVisibility(View.INVISIBLE);
-        cameraPhotoRecyclerView.setAlpha(0.0f);
-        container.addView(cameraPhotoRecyclerView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 80));
-        cameraPhotoLayoutManager = new LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false) {
-            @Override
-            public boolean supportsPredictiveItemAnimations() {
-                return false;
-            }
-        };
-        cameraPhotoRecyclerView.setLayoutManager(cameraPhotoLayoutManager);
-        cameraPhotoRecyclerView.setOnItemClickListener((view, position) -> {
-            if (view instanceof PhotoAttachPhotoCell) {
-                ((PhotoAttachPhotoCell) view).callDelegate();
-            }
-        });
 
         mediaRecorder = new MediaRecorder(getContext());
         mediaRecorder.setPreviewSize(itemSize);
@@ -1135,6 +1082,59 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
 
         mediaRecorder.setVisibility(View.INVISIBLE);
         container.addView(mediaRecorder, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+
+        cameraPhotoRecyclerView = new RecyclerListView(context, resourcesProvider) {
+            @Override
+            public void requestLayout() {
+                if (cameraPhotoRecyclerViewIgnoreLayout) {
+                    return;
+                }
+                super.requestLayout();
+            }
+        };
+        cameraPhotoRecyclerView.setVerticalScrollBarEnabled(true);
+        cameraPhotoRecyclerView.setAdapter(cameraAttachAdapter = new PhotoAttachAdapter(context, false));
+        cameraAttachAdapter.createCache();
+        cameraPhotoRecyclerView.setClipToPadding(false);
+        cameraPhotoRecyclerView.setPadding(dp(8), 0, dp(8), 0);
+        cameraPhotoRecyclerView.setItemAnimator(null);
+        cameraPhotoRecyclerView.setLayoutAnimation(null);
+        cameraPhotoRecyclerView.setOverScrollMode(RecyclerListView.OVER_SCROLL_NEVER);
+        cameraPhotoRecyclerView.setVisibility(View.INVISIBLE);
+        cameraPhotoRecyclerView.setAlpha(0.0f);
+        cameraPhotoLayoutManager = new LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false) {
+            @Override
+            public boolean supportsPredictiveItemAnimations() {
+                return false;
+            }
+        };
+        cameraPhotoRecyclerView.setLayoutManager(cameraPhotoLayoutManager);
+        cameraPhotoRecyclerView.setOnItemClickListener((view, position) -> {
+            if (view instanceof PhotoAttachPhotoCell) {
+                ((PhotoAttachPhotoCell) view).callDelegate();
+            }
+        });
+        //container.addView(cameraPhotoRecyclerView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 80));
+
+        counterTextView = new TextView(context);
+        counterTextView.setBackgroundResource(R.drawable.photos_rounded);
+        counterTextView.setVisibility(View.GONE);
+        counterTextView.setTextColor(0xffffffff);
+        counterTextView.setGravity(Gravity.CENTER);
+        counterTextView.setPivotX(0);
+        counterTextView.setPivotY(0);
+        counterTextView.setTypeface(AndroidUtilities.bold());
+        counterTextView.setCompoundDrawablesWithIntrinsicBounds(0, 0, R.drawable.photos_arrow, 0);
+        counterTextView.setCompoundDrawablePadding(dp(4));
+        counterTextView.setPadding(dp(16), 0, dp(16), 0);
+        counterTextView.setOnClickListener(v -> {
+            if (cameraView == null) {
+                return;
+            }
+            openPhotoViewer(null, false, false);
+            //CameraController.getInstance().stopPreview(cameraView.getCameraSessionObject());
+        });
+        //container.addView(counterTextView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, 38, Gravity.LEFT | Gravity.TOP, 0, 0, 0, 100 + 16));
     }
 
     private void openPhotoForSelect(

@@ -13,6 +13,13 @@ import android.view.TextureView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.coremedia.iso.boxes.Container;
+import com.googlecode.mp4parser.authoring.Movie;
+import com.googlecode.mp4parser.authoring.Track;
+import com.googlecode.mp4parser.authoring.builder.DefaultMp4Builder;
+import com.googlecode.mp4parser.authoring.container.mp4.MovieCreator;
+import com.googlecode.mp4parser.authoring.tracks.AppendTrack;
+
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.FileLoader;
@@ -28,7 +35,12 @@ import org.telegram.messenger.camera.CameraView;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.nio.channels.FileChannel;
 import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class MediaRecorderController implements CameraView.Callback {
 
@@ -46,6 +58,8 @@ public class MediaRecorderController implements CameraView.Callback {
 
     @Nullable
     private Callback callback;
+
+    private boolean isSecretChat;
 
     private final boolean isDualAvailable;
 
@@ -70,8 +84,16 @@ public class MediaRecorderController implements CameraView.Callback {
 
     private boolean isPreviewRunning;
 
+    @NonNull
+    private final ArrayList<VideoData> recordedParts = new ArrayList<>();
+    private boolean isMultipartRecording;
+
+
     @Nullable
     private DownloadButton.BuildingVideo videoBuilder;
+
+    @Nullable
+    private ExecutorService executorService;
 
 
     public MediaRecorderController(@NonNull Context context) {
@@ -122,6 +144,10 @@ public class MediaRecorderController implements CameraView.Callback {
 
     public void setCurrentAccount(int currentAccount) {
         this.currentAccount = currentAccount;
+    }
+
+    public void setSecretChat(boolean secretChat) {
+        isSecretChat = secretChat;
     }
 
     public void setCallback(@Nullable Callback callback) {
@@ -242,6 +268,10 @@ public class MediaRecorderController implements CameraView.Callback {
         isRecordingVideo = false;
         isPreviewRunning = false;
         cancelLatestCollageConversion();
+        if (executorService != null) {
+            executorService.shutdownNow();
+            executorService = null;
+        }
     }
 
 
@@ -431,7 +461,6 @@ public class MediaRecorderController implements CameraView.Callback {
     }
 
     public void takePicture(
-        boolean isSecretChat,
         boolean showCameraAnimation,
         boolean forceTakeFromTexture,
         @Nullable Runnable onStart
@@ -512,20 +541,18 @@ public class MediaRecorderController implements CameraView.Callback {
 
     public void convertCollageToMedia(
         @NonNull StoryEntry entry,
-        boolean isSecretChat,
         @Nullable Runnable onStart,
         @Nullable Runnable onDone
     ) {
         if (entry.wouldBeVideo()) {
-            convertCollageToVideo(entry, isSecretChat, onStart, onDone);
+            convertCollageToVideo(entry, onStart, onDone);
         } else {
-            convertCollageToPicture(entry, isSecretChat, onStart, onDone);
+            convertCollageToPicture(entry, onStart, onDone);
         }
     }
 
     private void convertCollageToPicture(
         @NonNull StoryEntry entry,
-        boolean isSecretChat,
         @Nullable Runnable onStart,
         @Nullable Runnable onDone
     ) {
@@ -559,7 +586,6 @@ public class MediaRecorderController implements CameraView.Callback {
 
     private void convertCollageToVideo(
         @NonNull StoryEntry entry,
-        boolean isSecretChat,
         @Nullable Runnable onStart,
         @Nullable Runnable onDone
     ) {
@@ -588,7 +614,7 @@ public class MediaRecorderController implements CameraView.Callback {
                     }
                     callback.onCollageVideoSuccess(
                         outputFile,
-                        generateVideoThumb(outputFile),
+                        generateVideoThumb(context, outputFile),
                         entry.width,
                         entry.height,
                         entry.duration
@@ -604,38 +630,6 @@ public class MediaRecorderController implements CameraView.Callback {
         }
 
         isProcessing = false;
-    }
-
-    @Nullable
-    private String generateVideoThumb(@NonNull File videoFile) {
-        Bitmap thumbBitmap = SendMessagesHelper.createVideoThumbnail(
-            videoFile.getAbsolutePath(),
-            MediaStore.Video.Thumbnails.MINI_KIND
-        );
-        if (thumbBitmap == null) {
-            return null;
-        }
-
-        File thumbFile = new File(
-            FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE),
-            Integer.MIN_VALUE + "_" + SharedConfig.getLastLocalId() + ".jpg"
-        );
-        try (FileOutputStream stream = new FileOutputStream(thumbFile)) {
-            thumbBitmap.compress(Bitmap.CompressFormat.JPEG, 87, stream);
-        } catch (Throwable e) {
-            FileLog.e(e);
-            return null;
-        }
-
-        SharedConfig.saveConfig();
-
-        ImageLoader.getInstance().putImageToCache(
-            new BitmapDrawable(context.getResources(), thumbBitmap),
-            Utilities.MD5(thumbFile.getAbsolutePath()),
-            false
-        );
-
-        return thumbFile.getAbsolutePath();
     }
 
     public void cancelLatestCollageConversion() {
@@ -670,13 +664,12 @@ public class MediaRecorderController implements CameraView.Callback {
     }
 
     public void startVideoRecord(
-        boolean isSecretChat,
         boolean mirror,
         @Nullable Runnable onStart
     ) {
         isPreparing = false;
 
-        if (cameraView == null || isRecordingVideo) {
+        if (cameraView == null || isBusy()) {
             return;
         }
 
@@ -689,19 +682,21 @@ public class MediaRecorderController implements CameraView.Callback {
         CameraController.getInstance().recordVideo(cameraView.getCameraSessionObject(), outputFile, mirror, ((thumbPath, duration) -> {
             isRecordingVideo = false;
             checkActiveFlashMode();
-            try {
-                BitmapFactory.Options options = decodeBitmap(thumbPath);
-                if (callback != null) {
-                    callback.onRecordVideoSuccess(
-                        outputFile,
-                        thumbPath,
-                        options.outWidth,
-                        options.outHeight,
-                        duration
-                    );
-                }
-            } catch (Exception ignore) {
-
+            if (isMultipartRecording) {
+                VideoData part = new VideoData();
+                part.path = outputFile.getAbsolutePath();
+                part.thumbPath = thumbPath;
+                part.duration = duration;
+                recordedParts.add(part);
+            } else if (!recordedParts.isEmpty()) {
+                VideoData part = new VideoData();
+                part.path = outputFile.getAbsolutePath();
+                part.thumbPath = thumbPath;
+                part.duration = duration;
+                recordedParts.add(part);
+                runVideoMergeTask();
+            } else {
+                notifyRecorderVideoReady(outputFile, thumbPath, duration);
             }
         }), () -> {
             checkActiveFlashMode();
@@ -711,12 +706,63 @@ public class MediaRecorderController implements CameraView.Callback {
         }, cameraView);
     }
 
-    public void stopVideoRecord() {
-        if (cameraView == null || !isRecordingVideo) {
+    private void runVideoMergeTask() {
+        addTask(
+            new VideoMergerTask(recordedParts, isSecretChat),
+            result -> {
+                isProcessing = false;
+                recordedParts.clear();
+                notifyRecorderVideoReady(
+                    new File(result.path),
+                    result.thumbPath,
+                    result.duration
+                );
+            },
+            () -> isProcessing = true,
+            () -> {
+                isProcessing = false;
+                recordedParts.clear();
+                if (callback != null) {
+                    callback.onRecordVideoFailure();
+                }
+            }
+        );
+    }
+
+    private void notifyRecorderVideoReady(
+        @NonNull File outputFile,
+        @NonNull String thumbPath,
+        long duration
+    ) {
+        if (callback != null) {
+            try {
+                BitmapFactory.Options options = decodeBitmap(thumbPath);
+                callback.onRecordVideoSuccess(
+                    outputFile,
+                    thumbPath,
+                    options.outWidth,
+                    options.outHeight,
+                    duration
+                );
+            } catch (Exception e) {
+                FileLog.e(e);
+                callback.onRecordVideoFailure();
+            }
+        }
+    }
+
+    public void stopVideoRecord(boolean pause) {
+        if (cameraView == null) {
             return;
         }
 
-        CameraController.getInstance().stopVideoRecording(cameraView.getCameraSessionObject(), false);
+        if (isRecordingVideo) {
+            isMultipartRecording = pause;
+            CameraController.getInstance().stopVideoRecording(cameraView.getCameraSessionObject(), false);
+        } else if (isMultipartRecording && !pause) {
+            isMultipartRecording = false;
+            runVideoMergeTask();
+        }
     }
 
     @NonNull
@@ -829,6 +875,171 @@ public class MediaRecorderController implements CameraView.Callback {
     }
 
 
+    @NonNull
+    private ExecutorService getOrCreateExecutorService() {
+        if (executorService == null) {
+            executorService = Executors.newSingleThreadExecutor();
+        }
+        return executorService;
+    }
+
+    private <T> void addTask(
+        @NonNull Task<T> task,
+        @NonNull Completable<T> onComplete,
+        @Nullable Runnable onStart,
+        @Nullable Runnable onFailure
+    ) {
+        getOrCreateExecutorService().submit(() -> {
+            try {
+                if (onStart != null) {
+                    AndroidUtilities.runOnUIThread(onStart);
+                }
+                T result = task.run();
+                AndroidUtilities.runOnUIThread(() -> {
+                    if (result != null) {
+                        onComplete.complete(result);
+                    } else if (onFailure != null) {
+                        onFailure.run();
+                    }
+                });
+            } catch (Exception e) {
+                if (onFailure != null) {
+                    AndroidUtilities.runOnUIThread(onFailure);
+                }
+            }
+        });
+    }
+
+
+    @Nullable
+    private static String generateVideoThumb(@NonNull Context context, @NonNull File videoFile) {
+        Bitmap thumbBitmap = SendMessagesHelper.createVideoThumbnail(
+            videoFile.getAbsolutePath(),
+            MediaStore.Video.Thumbnails.MINI_KIND
+        );
+        if (thumbBitmap == null) {
+            return null;
+        }
+
+        File thumbFile = new File(
+            FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE),
+            Integer.MIN_VALUE + "_" + SharedConfig.getLastLocalId() + ".jpg"
+        );
+        try (FileOutputStream stream = new FileOutputStream(thumbFile)) {
+            thumbBitmap.compress(Bitmap.CompressFormat.JPEG, 87, stream);
+        } catch (Throwable e) {
+            FileLog.e(e);
+            return null;
+        }
+
+        SharedConfig.saveConfig();
+
+        ImageLoader.getInstance().putImageToCache(
+            new BitmapDrawable(context.getResources(), thumbBitmap),
+            Utilities.MD5(thumbFile.getAbsolutePath()),
+            false
+        );
+
+        return thumbFile.getAbsolutePath();
+    }
+
+
+    private static class VideoData {
+        public String path;
+        public String thumbPath;
+        public long duration;
+    }
+
+    private static class VideoMergerTask implements Task<VideoData> {
+
+        @NonNull
+        private final List<VideoData> parts;
+
+        private final boolean isSecretChat;
+
+
+        public VideoMergerTask(
+            @NonNull List<VideoData> parts,
+            boolean isSecretChat
+        ) {
+            this.parts = parts;
+            this.isSecretChat = isSecretChat;
+        }
+
+
+        @Nullable
+        @Override
+        public VideoData run() {
+            try {
+                if (parts.isEmpty()) {
+                    return null;
+                } else if (parts.size() == 1) {
+                    return parts.get(0);
+                }
+
+                File outputFile = AndroidUtilities.generateVideoPath(isSecretChat);
+                if (outputFile == null) {
+                    return null;
+                }
+
+                VideoData result = new VideoData();
+                result.path = outputFile.getAbsolutePath();
+                result.thumbPath = parts.get(0).thumbPath;
+
+                List<Movie> inMovies = new ArrayList<>();
+                for (VideoData part : parts) {
+                    inMovies.add(MovieCreator.build(part.path));
+                    result.duration += part.duration;
+                }
+
+                List<Track> videoTracks = new LinkedList<>();
+                List<Track> audioTracks = new LinkedList<>();
+
+                for (Movie m : inMovies) {
+                    for (Track t : m.getTracks()) {
+                        if (t.getHandler().equals("soun")) {
+                            audioTracks.add(t);
+                        }
+                        if (t.getHandler().equals("vide")) {
+                            videoTracks.add(t);
+                        }
+                    }
+                }
+
+                Movie resultMovie = new Movie();
+
+                if (!audioTracks.isEmpty()) {
+                    resultMovie.addTrack(new AppendTrack(audioTracks.toArray(new Track[0])));
+                }
+                if (!videoTracks.isEmpty()) {
+                    resultMovie.addTrack(new AppendTrack(videoTracks.toArray(new Track[0])));
+                }
+
+                Container out = new DefaultMp4Builder().build(resultMovie);
+
+                FileOutputStream fos = new FileOutputStream(outputFile);
+                FileChannel fc = fos.getChannel();
+                out.writeContainer(fc);
+                fc.close();
+                fos.close();
+
+                return result;
+            } catch (Exception e) {
+                return null;
+            }
+        }
+
+    }
+
+    private interface Task<T> {
+        @Nullable
+        T run();
+    }
+
+    private interface Completable<T> {
+        void complete(T result);
+    }
+
     public interface Callback {
         void onCameraThumbLoad(@Nullable Bitmap thumb);
         void onZoomChanged(float zoom, boolean silent);
@@ -852,6 +1063,7 @@ public class MediaRecorderController implements CameraView.Callback {
             int height,
             long duration
         );
+        void onRecordVideoFailure();
         void onCollageConversionProgress(float progress);
         void onCollageConversionCancel();
         void onCollagePictureSuccess(
