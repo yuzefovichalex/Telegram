@@ -1,0 +1,351 @@
+package org.telegram.ui;
+
+import static org.telegram.messenger.AndroidUtilities.dp;
+import static org.telegram.messenger.AndroidUtilities.lerp;
+
+import android.content.Context;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Path;
+import android.graphics.drawable.Drawable;
+import android.os.Build;
+import android.util.Log;
+import android.view.DisplayCutout;
+import android.view.ViewGroup;
+import android.widget.FrameLayout;
+import android.widget.TextView;
+
+import androidx.annotation.ColorInt;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+
+import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.ImageLocation;
+import org.telegram.messenger.ImageReceiver;
+import org.telegram.ui.ActionBar.SimpleTextView;
+import org.telegram.ui.Components.LayoutHelper;
+import org.telegram.ui.profile.AvatarImageView;
+
+public class ProfileHeader extends FrameLayout {
+
+    @NonNull
+    private final AvatarImageView avatarImageView;
+
+    private final int avatarSize = AndroidUtilities.dp(96);
+
+    @NonNull
+    private final SimpleTextView nameTextView;
+
+    @NonNull
+    private final TextView statusTextView;
+
+    private int leftActionButtonsOffset, rightActionButtonsOffset;
+
+    private float expandCollapseProgress;
+    private float openCloseProgress;
+
+    private int offsetLeft, offsetRight;
+
+    private int collapsedHeight = AndroidUtilities.dp(56f);
+    private int expandedHeight = AndroidUtilities.dp(144f);
+
+    @Nullable
+    private Path cutoutPath;
+
+
+    public ProfileHeader(@NonNull Context context) {
+        super(context);
+        setClipToPadding(false);
+
+        avatarImageView = new AvatarImageView(context);
+        avatarImageView.setRoundRadius(dp(48f));
+        addView(avatarImageView, new LayoutParams(avatarSize, avatarSize));
+
+        nameTextView = new SimpleTextView(context);
+        nameTextView.setWidthWrapContent(true);
+        nameTextView.setTypeface(AndroidUtilities.bold());
+        nameTextView.setTextSize(18);
+        nameTextView.setTextColor(Color.WHITE);
+        nameTextView.setScrollNonFitText(true);
+        nameTextView.setEllipsizeByGradient(true);
+        addView(nameTextView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT));
+
+        statusTextView = new TextView(context);
+        //statusTextView.setWidthWrapContent(true);
+        statusTextView.setTextSize(14);
+        statusTextView.setTextColor(Color.WHITE);
+        addView(statusTextView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT));
+    }
+
+
+    @Nullable
+    public ImageReceiver getAvatarImageReceiver() {
+        return avatarImageView.getImageReceiver();
+    }
+
+    public void getAvatarLocation(int[] loc) {
+        avatarImageView.getLocationInWindow(loc);
+    }
+
+    public void setCollapsedHeight(int collapsedHeight) {
+        if (this.collapsedHeight != collapsedHeight) {
+            this.collapsedHeight = collapsedHeight;
+            requestLayout();
+        }
+    }
+
+    public void setExpandedHeight(int expandedHeight) {
+        if (this.expandedHeight != expandedHeight) {
+            this.expandedHeight = expandedHeight;
+            requestLayout();
+        }
+    }
+
+    public void setDrawAvatarForeground(boolean draw) {
+        avatarImageView.drawForeground(draw);
+    }
+
+    public void setAvatarImageDrawable(@Nullable Drawable drawable) {
+        avatarImageView.setImageDrawable(drawable);
+    }
+
+    public void setAvatarImage(
+        @Nullable ImageLocation mediaLocation,
+        @Nullable String mediaFilter,
+        @Nullable Drawable thumb,
+        @Nullable Object parentObject
+    ) {
+        avatarImageView.setImage(mediaLocation, mediaFilter, thumb, parentObject);
+    }
+
+    public void setAvatarImage(
+        @Nullable ImageLocation mediaLocation,
+        @Nullable String mediaFilter,
+        @Nullable ImageLocation imageLocation,
+        @Nullable String imageFilter,
+        @Nullable Drawable thumb,
+        @Nullable Object parentObject
+    ) {
+        avatarImageView.setImage(
+            mediaLocation,
+            mediaFilter,
+            imageLocation,
+            imageFilter,
+            thumb,
+            parentObject
+        );
+    }
+
+    public void setAvatarForegroundImage(
+        @Nullable ImageLocation location,
+        @Nullable String filter,
+        @Nullable Drawable thumb
+    ) {
+        avatarImageView.setForegroundImage(location, filter, thumb);
+    }
+
+    public void setAvatarForegroundImage(
+        @Nullable ImageReceiver.BitmapHolder holder
+    ) {
+        avatarImageView.setForegroundImageDrawable(holder);
+    }
+
+    public void setLeftActionButtonsOffset(int leftActionButtonsOffset) {
+        this.leftActionButtonsOffset = leftActionButtonsOffset;
+    }
+
+    public void setRightActionButtonsOffset(int rightActionButtonsOffset) {
+        this.rightActionButtonsOffset = rightActionButtonsOffset;
+    }
+
+    public boolean setName(@NonNull CharSequence name) {
+        boolean changed = nameTextView.setText(name);
+        if (changed) {
+            requestLayout();
+        }
+        return changed;
+    }
+
+    public void setNameColor(@ColorInt int color) {
+        nameTextView.setTextColor(color);
+    }
+
+    public boolean setRightDrawable(@Nullable Drawable drawable) {
+        return nameTextView.setRightDrawable(drawable);
+    }
+
+    public void setRightDrawableOutside(boolean outside) {
+        nameTextView.setRightDrawableOutside(outside);
+    }
+
+    public boolean setRightDrawable2(@Nullable Drawable drawable) {
+        return nameTextView.setRightDrawable2(drawable);
+    }
+
+    public void setLeftDrawable(@Nullable Drawable drawable) {
+        nameTextView.setLeftDrawable(drawable);
+    }
+
+    public void setLeftDrawableOutside(boolean outside) {
+        nameTextView.setLeftDrawableOutside(outside);
+    }
+
+    public boolean setStatus(@NonNull CharSequence status) {
+        statusTextView.setText(status);
+        if (false) {
+            requestLayout();
+        }
+        return false;
+    }
+
+    public void setStatusColor(@ColorInt int color) {
+        statusTextView.setTextColor(color);
+    }
+
+    private float avatarExpandCollapseProgress;
+
+    public void setAvatarExpandCollapseProgress(float progress) {
+        if (avatarExpandCollapseProgress == progress) {
+            return;
+        }
+
+        avatarExpandCollapseProgress = progress;
+
+        float avatarScale = lerp(1.12f, (float) getMeasuredWidth() / avatarSize, progress);
+        int avatarRadius = lerp(dp(48), 0, progress);
+        avatarImageView.setScaleX(avatarScale);
+        avatarImageView.setScaleY(avatarScale);
+        avatarImageView.setRoundRadius(avatarRadius);
+
+        float namePivotX = lerp(nameTextView.getMeasuredWidth() / 2f, 0f, progress);
+        float namePivotY = lerp(nameTextView.getMeasuredHeight() / 2f, nameTextView.getMeasuredHeight(), progress);
+        nameTextView.setPivotX(namePivotX);
+        nameTextView.setPivotY(namePivotY);
+
+        requestLayout();
+    }
+
+    public void setExpandCollapseProgress(float progress) {
+        if (expandCollapseProgress == progress) {
+            return;
+        }
+
+        expandCollapseProgress = progress;
+
+        int avatarSize = lerp(dp(24f), dp(96f), Math.min(expandCollapseProgress, 1.12f));
+        ViewGroup.LayoutParams lp = avatarImageView.getLayoutParams();
+        lp.width = avatarSize;
+        lp.height = avatarSize;
+        avatarImageView.setLayoutParams(lp);
+        avatarImageView.setRoundRadius((int) (avatarSize / 2f * (1f - avatarExpandCollapseProgress)));
+        //avatarImageView.setVisibility(expandCollapseProgress < 2f ? VISIBLE : GONE);
+
+        float nameScale = expandCollapseProgress <= 1f
+            ? lerp(1f, 1.12f, expandCollapseProgress)
+            : lerp(1.12f, 1.67f, expandCollapseProgress - 1f);
+        nameTextView.setScaleX(nameScale);
+        nameTextView.setScaleY(nameScale);
+
+        requestLayout();
+    }
+
+    @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            DisplayCutout cutout = getRootWindowInsets().getDisplayCutout();
+            if (cutout != null) {
+                cutoutPath = cutout.getCutoutPath();
+            }
+        }
+    }
+
+    @Override
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        int verticalPadding = getPaddingTop() + getPaddingBottom();
+        int width = MeasureSpec.getSize(widthMeasureSpec);
+        int allowedHeight = MeasureSpec.getSize(heightMeasureSpec);
+        int contentHeight = expandCollapseProgress <= 1f
+            ? lerp(collapsedHeight, expandedHeight, expandCollapseProgress)
+            : lerp(expandedHeight, width - verticalPadding, expandCollapseProgress - 1f);
+        int desiredHeight = verticalPadding + contentHeight;
+        int finalHeight = Math.min(allowedHeight, desiredHeight);
+        int heightSpec = MeasureSpec.makeMeasureSpec(finalHeight, MeasureSpec.EXACTLY);
+
+        super.onMeasure(widthMeasureSpec, heightSpec);
+
+        offsetLeft = calculateMinOffset(leftActionButtonsOffset, getPaddingLeft());
+        offsetRight = calculateMinOffset(rightActionButtonsOffset, getPaddingRight());
+        int usedWidth = offsetLeft + offsetRight;
+        int usedHeight = getPaddingTop() + getPaddingBottom();
+        measureChildWithMargins(nameTextView, widthMeasureSpec, usedWidth, heightMeasureSpec, usedHeight);
+        measureChildWithMargins(statusTextView, widthMeasureSpec, usedWidth, heightMeasureSpec, usedHeight);
+    }
+
+    @Override
+    protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
+        int nameWidth = nameTextView.getMeasuredWidth();
+        int nameHeight = nameTextView.getMeasuredHeight();
+        int statusWidth = statusTextView.getMeasuredWidth();
+        int statusHeight = statusTextView.getMeasuredHeight();
+
+        int availableParentWidth = getMeasuredWidth() - offsetLeft - offsetRight;
+        int linesOffset = dp(1.3f);
+        int linesHeight = nameHeight + linesOffset + statusHeight;
+
+        float factor;
+        if (expandCollapseProgress <= 1f) {
+            factor = expandCollapseProgress;
+        } else if (expandCollapseProgress > 1.33f || avatarExpandCollapseProgress > 0f) {
+            factor = 1f - avatarExpandCollapseProgress;
+        } else {
+            factor = 1f;
+        }
+        int nameLeft = offsetLeft +
+            (int) (getCenteredOffset(availableParentWidth, nameWidth) * factor);
+        int nameTop =
+            getMeasuredHeight() - linesHeight - dp(8f);
+        int nameRight = nameLeft + nameWidth;
+        int nameBottom = nameTop + nameHeight;
+        nameTextView.layout(nameLeft, nameTop, nameRight, nameBottom);
+
+        int statusLeft = offsetLeft +
+            (int) (getCenteredOffset(availableParentWidth, statusWidth) * factor);
+        int statusTop = nameBottom + linesOffset;
+        int statusRight = statusLeft + statusWidth;
+        int statusBottom = statusTop + statusHeight;
+        statusTextView.layout(statusLeft, statusTop, statusRight, statusBottom);
+
+        int expandedAvatarTop = getPaddingTop() +
+            lerp(0, getCenteredOffset(expandedHeight - linesHeight, avatarImageView.getMeasuredHeight()), factor);
+        int avatarLeft = getCenteredOffset(getMeasuredWidth(), avatarImageView.getMeasuredWidth());
+        int avatarTop = lerp(-dp(24), expandedAvatarTop, expandCollapseProgress);
+        int avatarRight = avatarLeft + avatarImageView.getMeasuredWidth();
+        int avatarBottom = avatarTop + avatarImageView.getMeasuredHeight();
+        avatarImageView.layout(avatarLeft, avatarTop, avatarRight, avatarBottom);
+    }
+
+    private int getCenteredOffset(int parentSize, int childSize) {
+        return (parentSize - childSize) / 2;
+    }
+
+    private int calculateMinOffset(int actionsOffset, int minOffset) {
+        return lerp(
+            Math.max(actionsOffset, minOffset),
+            minOffset,
+            Math.min(expandCollapseProgress, 1f)
+        );
+    }
+
+    @Override
+    protected void dispatchDraw(@NonNull Canvas canvas) {
+        super.dispatchDraw(canvas);
+//        if (cutoutPath != null) {
+//            Paint p = new Paint();
+//            p.setColor(Color.RED);
+//            p.setStyle(Paint.Style.FILL);
+//            canvas.drawPath(cutoutPath, p);
+//        }
+    }
+}
