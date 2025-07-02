@@ -23,6 +23,7 @@ import androidx.annotation.Nullable;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ImageLocation;
 import org.telegram.messenger.ImageReceiver;
+import org.telegram.messenger.Utilities;
 import org.telegram.ui.ActionBar.SimpleTextView;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.profile.AvatarImageView;
@@ -32,7 +33,8 @@ public class ProfileHeader extends FrameLayout {
     @NonNull
     private final AvatarImageView avatarImageView;
 
-    private final int avatarSize = AndroidUtilities.dp(96);
+    private final int collapsedAvatarSize = AndroidUtilities.dp(24f);
+    private final int avatarSize = AndroidUtilities.dp(92f);
 
     @NonNull
     private final SimpleTextView nameTextView;
@@ -43,7 +45,7 @@ public class ProfileHeader extends FrameLayout {
     private int leftActionButtonsOffset, rightActionButtonsOffset;
 
     private float expandCollapseProgress;
-    private float openCloseProgress;
+    private float avatarExpandCollapseProgress;
 
     private int offsetLeft, offsetRight;
 
@@ -100,6 +102,10 @@ public class ProfileHeader extends FrameLayout {
             this.expandedHeight = expandedHeight;
             requestLayout();
         }
+    }
+
+    public void setAvatarVisibility(int visibility) {
+        avatarImageView.setVisibility(visibility);
     }
 
     public void setDrawAvatarForeground(boolean draw) {
@@ -203,8 +209,6 @@ public class ProfileHeader extends FrameLayout {
         statusTextView.setTextColor(color);
     }
 
-    private float avatarExpandCollapseProgress;
-
     public void setAvatarExpandCollapseProgress(float progress) {
         if (avatarExpandCollapseProgress == progress) {
             return;
@@ -212,14 +216,23 @@ public class ProfileHeader extends FrameLayout {
 
         avatarExpandCollapseProgress = progress;
 
-        float avatarScale = lerp(1.12f, (float) getMeasuredWidth() / avatarSize, progress);
-        int avatarRadius = lerp(dp(48), 0, progress);
+        float avatarScale = lerp(
+            1f,
+            (float) getMeasuredWidth() / avatarImageView.getMeasuredWidth(),
+            progress
+        );
+        int avatarRadius = lerp(avatarImageView.getMeasuredWidth() / 2, 0, progress);
         avatarImageView.setScaleX(avatarScale);
         avatarImageView.setScaleY(avatarScale);
         avatarImageView.setRoundRadius(avatarRadius);
+        avatarImageView.setForegroundAlpha(progress);
 
         float namePivotX = lerp(nameTextView.getMeasuredWidth() / 2f, 0f, progress);
-        float namePivotY = lerp(nameTextView.getMeasuredHeight() / 2f, nameTextView.getMeasuredHeight(), progress);
+        float namePivotY = lerp(
+            nameTextView.getMeasuredHeight() / 2f,
+            nameTextView.getMeasuredHeight(),
+            progress
+        );
         nameTextView.setPivotX(namePivotX);
         nameTextView.setPivotY(namePivotY);
 
@@ -233,13 +246,16 @@ public class ProfileHeader extends FrameLayout {
 
         expandCollapseProgress = progress;
 
-        int avatarSize = lerp(dp(24f), dp(96f), Math.min(expandCollapseProgress, 1.12f));
+        int avatarSize = lerp(
+            collapsedAvatarSize,
+            this.avatarSize,
+            Math.min(expandCollapseProgress, 1.12f)
+        );
         ViewGroup.LayoutParams lp = avatarImageView.getLayoutParams();
         lp.width = avatarSize;
         lp.height = avatarSize;
         avatarImageView.setLayoutParams(lp);
         avatarImageView.setRoundRadius((int) (avatarSize / 2f * (1f - avatarExpandCollapseProgress)));
-        //avatarImageView.setVisibility(expandCollapseProgress < 2f ? VISIBLE : GONE);
 
         float nameScale = expandCollapseProgress <= 1f
             ? lerp(1f, 1.12f, expandCollapseProgress)
@@ -279,7 +295,19 @@ public class ProfileHeader extends FrameLayout {
         offsetRight = calculateMinOffset(rightActionButtonsOffset, getPaddingRight());
         int usedWidth = offsetLeft + offsetRight;
         int usedHeight = getPaddingTop() + getPaddingBottom();
-        measureChildWithMargins(nameTextView, widthMeasureSpec, usedWidth, heightMeasureSpec, usedHeight);
+
+        // TODO re-check logic
+        float scaleX = nameTextView.getScaleX();
+        int availableWidth = MeasureSpec.getSize(widthMeasureSpec);
+        int maxOriginalWidth = Math.round(availableWidth / scaleX);
+        int childWidthSpec = MeasureSpec.makeMeasureSpec(maxOriginalWidth, MeasureSpec.AT_MOST);
+        measureChildWithMargins(
+            nameTextView,
+            childWidthSpec,
+            Math.round(usedWidth / scaleX),
+            heightMeasureSpec,
+            usedHeight
+        );
         measureChildWithMargins(statusTextView, widthMeasureSpec, usedWidth, heightMeasureSpec, usedHeight);
     }
 
@@ -302,6 +330,7 @@ public class ProfileHeader extends FrameLayout {
         } else {
             factor = 1f;
         }
+
         int nameLeft = offsetLeft +
             (int) (getCenteredOffset(availableParentWidth, nameWidth) * factor);
         int nameTop =
@@ -317,10 +346,18 @@ public class ProfileHeader extends FrameLayout {
         int statusBottom = statusTop + statusHeight;
         statusTextView.layout(statusLeft, statusTop, statusRight, statusBottom);
 
-        int expandedAvatarTop = getPaddingTop() +
-            lerp(0, getCenteredOffset(expandedHeight - linesHeight, avatarImageView.getMeasuredHeight()), factor);
+        int avatarTopOffset = lerp(0, getPaddingTop(), factor);
+        // Center in full container height (factor = 0) or in half expanded space.
+        int expandedAvatarTop = getCenteredOffset(
+            lerp(getMeasuredHeight(), expandedHeight - linesHeight, factor),
+            avatarImageView.getMeasuredHeight()
+        );
         int avatarLeft = getCenteredOffset(getMeasuredWidth(), avatarImageView.getMeasuredWidth());
-        int avatarTop = lerp(-dp(24), expandedAvatarTop, expandCollapseProgress);
+        int avatarTop = lerp(
+            -dp(24),
+            avatarTopOffset + expandedAvatarTop,
+            Math.min(1f + .33f * factor, expandCollapseProgress)
+        );
         int avatarRight = avatarLeft + avatarImageView.getMeasuredWidth();
         int avatarBottom = avatarTop + avatarImageView.getMeasuredHeight();
         avatarImageView.layout(avatarLeft, avatarTop, avatarRight, avatarBottom);
