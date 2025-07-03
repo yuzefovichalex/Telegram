@@ -7,6 +7,7 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Path;
+import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.view.DisplayCutout;
@@ -29,9 +30,13 @@ import org.telegram.ui.profile.ShadingView;
 
 // TODO:
 //  - Maybe migrate from padding to separate collapsed/expanded offset (padding is too problematic)
+//  - Check stories integration
 public class ProfileHeader extends FrameLayout {
 
     private static final int SHADING_COLOR = 0x42000000;
+
+    @NonNull
+    private final RectF tmpRect = new RectF();
 
     @NonNull
     private final AvatarImageView avatarImageView;
@@ -65,6 +70,9 @@ public class ProfileHeader extends FrameLayout {
 
     @Nullable
     private Path cutoutPath;
+
+    @Nullable
+    private Callback callback;
 
 
     public ProfileHeader(@NonNull Context context) {
@@ -299,6 +307,10 @@ public class ProfileHeader extends FrameLayout {
         requestLayout();
     }
 
+    public void setCallback(@Nullable Callback callback) {
+        this.callback = callback;
+    }
+
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
@@ -365,6 +377,14 @@ public class ProfileHeader extends FrameLayout {
         }
     }
 
+    private int calculateMinOffset(int actionsOffset, int minOffset) {
+        return lerp(
+            Math.max(actionsOffset, minOffset),
+            minOffset,
+            Math.min(expandCollapseProgress, 1f)
+        );
+    }
+
     int linesHeight;
 
     @Override
@@ -427,18 +447,22 @@ public class ProfileHeader extends FrameLayout {
         int avatarRight = avatarLeft + avatarImageView.getMeasuredWidth();
         int avatarBottom = avatarTop + avatarImageView.getMeasuredHeight();
         avatarImageView.layout(avatarLeft, avatarTop, avatarRight, avatarBottom);
+        notifyAvatarPositionChanged();
     }
 
     private int getCenteredOffset(int parentSize, int childSize) {
         return (parentSize - childSize) / 2;
     }
 
-    private int calculateMinOffset(int actionsOffset, int minOffset) {
-        return lerp(
-            Math.max(actionsOffset, minOffset),
-            minOffset,
-            Math.min(expandCollapseProgress, 1f)
-        );
+    private void notifyAvatarPositionChanged() {
+        if (callback == null) {
+            return;
+        }
+
+        tmpRect.set(0f, 0f, avatarImageView.getMeasuredWidth(), avatarImageView.getMeasuredHeight());
+        avatarImageView.getMatrix().mapRect(tmpRect);
+        tmpRect.offset(avatarImageView.getLeft(), avatarImageView.getTop());
+        callback.onAvatarPositionChanged(tmpRect);
     }
 
     @Override
@@ -452,4 +476,10 @@ public class ProfileHeader extends FrameLayout {
 //            canvas.drawPath(cutoutPath, p);
 //        }
     }
+
+
+    public interface Callback {
+        void onAvatarPositionChanged(@NonNull RectF rect);
+    }
+
 }
