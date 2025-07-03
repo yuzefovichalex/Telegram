@@ -31,6 +31,7 @@ import org.telegram.ui.profile.ShadingView;
 // TODO:
 //  - Maybe migrate from padding to separate collapsed/expanded offset (padding is too problematic)
 //  - Check stories integration
+//  - Another avatar position on screen open/close
 public class ProfileHeader extends FrameLayout {
 
     private static final int SHADING_COLOR = 0x42000000;
@@ -245,6 +246,10 @@ public class ProfileHeader extends FrameLayout {
         statusTextView.setTextColor(color);
     }
 
+    public void setStatusAlpha(float alpha) {
+        statusTextView.setAlpha(alpha);
+    }
+
     public void setAvatarExpandCollapseProgress(float progress) {
         if (avatarExpandCollapseProgress == progress) {
             return;
@@ -431,6 +436,7 @@ public class ProfileHeader extends FrameLayout {
         int statusRight = statusLeft + statusWidth;
         int statusBottom = statusTop + statusHeight;
         statusTextView.layout(statusLeft, statusTop, statusRight, statusBottom);
+        notifyStatusPositionChanged(statusLeft, statusTop);
 
         int avatarTopOffset = lerp(0, getPaddingTop(), factor);
         // Center in full container height (factor = 0) or in half expanded space.
@@ -447,14 +453,20 @@ public class ProfileHeader extends FrameLayout {
         int avatarRight = avatarLeft + avatarImageView.getMeasuredWidth();
         int avatarBottom = avatarTop + avatarImageView.getMeasuredHeight();
         avatarImageView.layout(avatarLeft, avatarTop, avatarRight, avatarBottom);
-        notifyAvatarPositionChanged();
+        notifyAvatarRectChanged();
     }
 
     private int getCenteredOffset(int parentSize, int childSize) {
         return (parentSize - childSize) / 2;
     }
 
-    private void notifyAvatarPositionChanged() {
+    private void notifyStatusPositionChanged(float x, float y) {
+        if (callback != null) {
+            callback.onStatusPositionChanged(x, y);
+        }
+    }
+
+    private void notifyAvatarRectChanged() {
         if (callback == null) {
             return;
         }
@@ -462,7 +474,7 @@ public class ProfileHeader extends FrameLayout {
         tmpRect.set(0f, 0f, avatarImageView.getMeasuredWidth(), avatarImageView.getMeasuredHeight());
         avatarImageView.getMatrix().mapRect(tmpRect);
         tmpRect.offset(avatarImageView.getLeft(), avatarImageView.getTop());
-        callback.onAvatarPositionChanged(tmpRect);
+        callback.onAvatarRectChanged(tmpRect);
     }
 
     @Override
@@ -479,7 +491,8 @@ public class ProfileHeader extends FrameLayout {
 
 
     public interface Callback {
-        void onAvatarPositionChanged(@NonNull RectF rect);
+        void onStatusPositionChanged(float x, float y);
+        void onAvatarRectChanged(@NonNull RectF rect);
     }
 
 }
