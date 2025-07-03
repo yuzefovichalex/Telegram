@@ -6,11 +6,9 @@ import static org.telegram.messenger.AndroidUtilities.lerp;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
-import android.util.Log;
 import android.view.DisplayCutout;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
@@ -23,12 +21,17 @@ import androidx.annotation.Nullable;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ImageLocation;
 import org.telegram.messenger.ImageReceiver;
-import org.telegram.messenger.Utilities;
+import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.SimpleTextView;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.profile.AvatarImageView;
+import org.telegram.ui.profile.ShadingView;
 
+// TODO:
+//  - Maybe migrate from padding to separate collapsed/expanded offset (padding is too problematic)
 public class ProfileHeader extends FrameLayout {
+
+    private static final int SHADING_COLOR = 0x42000000;
 
     @NonNull
     private final AvatarImageView avatarImageView;
@@ -42,12 +45,20 @@ public class ProfileHeader extends FrameLayout {
     @NonNull
     private final TextView statusTextView;
 
+    @NonNull
+    private final ShadingView topShadingView;
+
+    @NonNull
+    private final ShadingView bottomShadingView;
+
     private int leftActionButtonsOffset, rightActionButtonsOffset;
 
     private float expandCollapseProgress;
     private float avatarExpandCollapseProgress;
 
     private int offsetLeft, offsetRight;
+
+    private final int linesOffset = dp(1.3f);
 
     private int collapsedHeight = AndroidUtilities.dp(56f);
     private int expandedHeight = AndroidUtilities.dp(144f);
@@ -63,6 +74,19 @@ public class ProfileHeader extends FrameLayout {
         avatarImageView = new AvatarImageView(context);
         avatarImageView.setRoundRadius(dp(48f));
         addView(avatarImageView, new LayoutParams(avatarSize, avatarSize));
+
+        topShadingView = new ShadingView(context);
+        topShadingView.setOrientation(ShadingView.TOP_BOTTOM);
+        topShadingView.setColor(SHADING_COLOR);
+        topShadingView.setGradientHeight(ActionBar.getCurrentActionBarHeight() + dp(16f));
+        topShadingView.setAlpha(0f);
+        addView(topShadingView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+
+        bottomShadingView = new ShadingView(context);
+        bottomShadingView.setOrientation(ShadingView.BOTTOM_TOP);
+        bottomShadingView.setColor(SHADING_COLOR);
+        bottomShadingView.setAlpha(0f);
+        addView(bottomShadingView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
 
         nameTextView = new SimpleTextView(context);
         nameTextView.setWidthWrapContent(true);
@@ -88,6 +112,10 @@ public class ProfileHeader extends FrameLayout {
 
     public void getAvatarLocation(int[] loc) {
         avatarImageView.getLocationInWindow(loc);
+    }
+
+    public void setOccupyStatusBar(boolean occupy) {
+        topShadingView.setSolidHeight(occupy ? AndroidUtilities.statusBarHeight : 0);
     }
 
     public void setCollapsedHeight(int collapsedHeight) {
@@ -216,6 +244,11 @@ public class ProfileHeader extends FrameLayout {
 
         avatarExpandCollapseProgress = progress;
 
+        topShadingView.setAlpha(progress);
+        topShadingView.setVisibility(progress > 0f ? VISIBLE : GONE);
+        bottomShadingView.setAlpha(progress);
+        bottomShadingView.setVisibility(progress > 0f ? VISIBLE : GONE);
+
         float avatarScale = lerp(
             1f,
             (float) getMeasuredWidth() / avatarImageView.getMeasuredWidth(),
@@ -293,34 +326,67 @@ public class ProfileHeader extends FrameLayout {
 
         offsetLeft = calculateMinOffset(leftActionButtonsOffset, getPaddingLeft());
         offsetRight = calculateMinOffset(rightActionButtonsOffset, getPaddingRight());
-        int usedWidth = offsetLeft + offsetRight;
-        int usedHeight = getPaddingTop() + getPaddingBottom();
+        int horizontalPadding = getPaddingLeft() + getPaddingRight();
+        // Minus horizontal padding since it's already included in measureChildWithMargins method
+        int usedWidth = offsetLeft + offsetRight - horizontalPadding;
 
-        // TODO re-check logic
-        float scaleX = nameTextView.getScaleX();
-        int availableWidth = MeasureSpec.getSize(widthMeasureSpec);
-        int maxOriginalWidth = Math.round(availableWidth / scaleX);
-        int childWidthSpec = MeasureSpec.makeMeasureSpec(maxOriginalWidth, MeasureSpec.AT_MOST);
+        int scaledWidth = Math.round(width / nameTextView.getScaleX());
+        int scaledWidthSpec = MeasureSpec.makeMeasureSpec(scaledWidth, MeasureSpec.AT_MOST);
         measureChildWithMargins(
             nameTextView,
-            childWidthSpec,
-            Math.round(usedWidth / scaleX),
+            scaledWidthSpec,
+            usedWidth,
             heightMeasureSpec,
-            usedHeight
+            0
         );
-        measureChildWithMargins(statusTextView, widthMeasureSpec, usedWidth, heightMeasureSpec, usedHeight);
+        measureChildWithMargins(statusTextView, widthMeasureSpec, usedWidth, heightMeasureSpec, 0);
+        linesHeight = nameTextView.getMeasuredHeight() + linesOffset + statusTextView.getMeasuredHeight();
+
+        if (topShadingView.getVisibility() == VISIBLE) {
+            measureChildWithMargins(
+                topShadingView,
+                widthMeasureSpec,
+                -horizontalPadding, // Do not include padding
+                heightMeasureSpec,
+                0
+            );
+        }
+
+        if (bottomShadingView.getVisibility() == VISIBLE) {
+            bottomShadingView.setSolidHeight((int) (linesHeight * .75f));
+            bottomShadingView.setGradientHeight((int) (linesHeight * 1.25f));
+            measureChildWithMargins(
+                bottomShadingView,
+                widthMeasureSpec,
+                -horizontalPadding, // Do not include padding
+                heightMeasureSpec,
+                0
+            );
+        }
     }
+
+    int linesHeight;
 
     @Override
     protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
+        if (topShadingView.getVisibility() == VISIBLE) {
+            topShadingView.layout(
+                0, 0,
+                topShadingView.getMeasuredWidth(), topShadingView.getMeasuredHeight()
+            );
+        }
+
+        if (bottomShadingView.getVisibility() == VISIBLE) {
+            int bsvTop = getMeasuredHeight() - bottomShadingView.getMeasuredHeight();
+            int bsvBottom = bsvTop + bottomShadingView.getMeasuredHeight();
+            bottomShadingView.layout(0, bsvTop, bottomShadingView.getMeasuredWidth(), bsvBottom);
+        }
+
         int nameWidth = nameTextView.getMeasuredWidth();
         int nameHeight = nameTextView.getMeasuredHeight();
         int statusWidth = statusTextView.getMeasuredWidth();
         int statusHeight = statusTextView.getMeasuredHeight();
-
         int availableParentWidth = getMeasuredWidth() - offsetLeft - offsetRight;
-        int linesOffset = dp(1.3f);
-        int linesHeight = nameHeight + linesOffset + statusHeight;
 
         float factor;
         if (expandCollapseProgress <= 1f) {
@@ -378,6 +444,7 @@ public class ProfileHeader extends FrameLayout {
     @Override
     protected void dispatchDraw(@NonNull Canvas canvas) {
         super.dispatchDraw(canvas);
+
 //        if (cutoutPath != null) {
 //            Paint p = new Paint();
 //            p.setColor(Color.RED);
