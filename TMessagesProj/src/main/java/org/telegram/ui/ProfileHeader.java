@@ -3,21 +3,26 @@ package org.telegram.ui;
 import static org.telegram.messenger.AndroidUtilities.dp;
 import static org.telegram.messenger.AndroidUtilities.lerp;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Path;
 import android.graphics.RectF;
+import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.view.DisplayCutout;
+import android.view.MotionEvent;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.TextView;
 
 import androidx.annotation.ColorInt;
+import androidx.annotation.DrawableRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.content.ContextCompat;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ImageLocation;
@@ -26,12 +31,17 @@ import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.SimpleTextView;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.profile.AvatarImageView;
+import org.telegram.ui.profile.ProfileActionButton;
 import org.telegram.ui.profile.ShadingView;
+
+import java.util.ArrayList;
+import java.util.List;
 
 // TODO:
 //  - Maybe migrate from padding to separate collapsed/expanded offset (padding is too problematic)
 //  - Check stories integration
 //  - Another avatar position on screen open/close
+//  - Add action button animation support (add/remove buttons)
 public class ProfileHeader extends FrameLayout {
 
     private static final int SHADING_COLOR = 0x42000000;
@@ -65,9 +75,17 @@ public class ProfileHeader extends FrameLayout {
     private int offsetLeft, offsetRight;
 
     private final int linesOffset = dp(1.3f);
+    private final int actionButtonHeight = dp(56f);
+    private final int actionButtonSpacing = dp(8f);
+    private final int contentSpacing = dp(12f);
 
     private int collapsedHeight = AndroidUtilities.dp(56f);
     private int expandedHeight = AndroidUtilities.dp(144f);
+    private int linesHeight;
+    private int buttonGroupHeight;
+
+    @NonNull
+    private final List<ProfileActionButton> actionButtons = new ArrayList<>();
 
     @Nullable
     private Path cutoutPath;
@@ -250,6 +268,31 @@ public class ProfileHeader extends FrameLayout {
         statusTextView.setAlpha(alpha);
     }
 
+    public void addAction(@DrawableRes int iconResId, @NonNull String label) {
+        Drawable icon = ContextCompat.getDrawable(getContext(), iconResId);
+        if (icon == null) {
+            icon = new ColorDrawable(Color.WHITE);
+        }
+        ProfileActionButton button = new ProfileActionButton(icon, label);
+        button.setCallback(this);
+        boolean needLayout = actionButtons.isEmpty();
+        actionButtons.add(button);
+        if (needLayout) {
+            buttonGroupHeight = actionButtonHeight + contentSpacing;
+            requestLayout();
+        }
+        invalidate();
+    }
+
+    public void clearAllActions(boolean invalidate) {
+        actionButtons.clear();
+        buttonGroupHeight = 0;
+        if (invalidate) {
+            requestLayout();
+            invalidate();
+        }
+    }
+
     public void setAvatarExpandCollapseProgress(float progress) {
         if (avatarExpandCollapseProgress == progress) {
             return;
@@ -309,11 +352,30 @@ public class ProfileHeader extends FrameLayout {
         nameTextView.setScaleX(nameScale);
         nameTextView.setScaleY(nameScale);
 
+        if (expandCollapseProgress <= 1f) {
+            float buttonsAlpha = Math.max(expandCollapseProgress - .33f, 0f) / .67f;
+            for (int i = 0; i < actionButtons.size(); i++) {
+                actionButtons.get(i).setAlpha(buttonsAlpha);
+            }
+        }
+
         requestLayout();
     }
 
     public void setCallback(@Nullable Callback callback) {
         this.callback = callback;
+    }
+
+    @Override
+    protected boolean verifyDrawable(@NonNull Drawable who) {
+        boolean verified = false;
+        for (int i = 0; i < actionButtons.size(); i++) {
+            verified = who == actionButtons.get(i);
+            if (verified) {
+                break;
+            }
+        }
+        return verified || super.verifyDrawable(who);
     }
 
     @Override
@@ -370,8 +432,9 @@ public class ProfileHeader extends FrameLayout {
         }
 
         if (bottomShadingView.getVisibility() == VISIBLE) {
-            bottomShadingView.setSolidHeight((int) (linesHeight * .75f));
-            bottomShadingView.setGradientHeight((int) (linesHeight * 1.25f));
+            int bottomContentHeight = linesHeight + contentSpacing + buttonGroupHeight;
+            bottomShadingView.setSolidHeight((int) (bottomContentHeight * .75f));
+            bottomShadingView.setGradientHeight((int) (bottomContentHeight * 1.25f));
             measureChildWithMargins(
                 bottomShadingView,
                 widthMeasureSpec,
@@ -389,8 +452,6 @@ public class ProfileHeader extends FrameLayout {
             Math.min(expandCollapseProgress, 1f)
         );
     }
-
-    int linesHeight;
 
     @Override
     protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
@@ -424,8 +485,13 @@ public class ProfileHeader extends FrameLayout {
 
         int nameLeft = offsetLeft +
             (int) (getCenteredOffset(availableParentWidth, nameWidth) * factor);
-        int nameTop =
-            getMeasuredHeight() - linesHeight - dp(8f);
+        int nameTop = expandCollapseProgress <= 1f
+            ? lerp(
+                getPaddingTop() + getCenteredOffset(collapsedHeight, linesHeight),
+                getPaddingTop() + expandedHeight - linesHeight - contentSpacing - buttonGroupHeight,
+                Math.min(expandCollapseProgress, 1f)
+            )
+            : getMeasuredHeight() - linesHeight - contentSpacing - buttonGroupHeight;
         int nameRight = nameLeft + nameWidth;
         int nameBottom = nameTop + nameHeight;
         nameTextView.layout(nameLeft, nameTop, nameRight, nameBottom);
@@ -441,7 +507,11 @@ public class ProfileHeader extends FrameLayout {
         int avatarTopOffset = lerp(0, getPaddingTop(), factor);
         // Center in full container height (factor = 0) or in half expanded space.
         int expandedAvatarTop = getCenteredOffset(
-            lerp(getMeasuredHeight(), expandedHeight - linesHeight, factor),
+            lerp(
+                getMeasuredHeight(),
+                expandedHeight - linesHeight - contentSpacing - buttonGroupHeight,
+                factor
+            ),
             avatarImageView.getMeasuredHeight()
         );
         int avatarLeft = getCenteredOffset(getMeasuredWidth(), avatarImageView.getMeasuredWidth());
@@ -477,10 +547,48 @@ public class ProfileHeader extends FrameLayout {
         callback.onAvatarRectChanged(tmpRect);
     }
 
+    @SuppressLint("ClickableViewAccessibility")
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        boolean handled = false;
+        for (int i = 0; i < actionButtons.size(); i++) {
+            handled = actionButtons.get(i).onTouchEvent(event);
+            if (handled) {
+                break;
+            }
+        }
+        return handled || super.onTouchEvent(event);
+    }
+
     @Override
     protected void dispatchDraw(@NonNull Canvas canvas) {
         super.dispatchDraw(canvas);
 
+        int actionButtonCount = actionButtons.size();
+        if (actionButtonCount == 0) {
+            return;
+        }
+
+        int availableWidth = getMeasuredWidth() - dp(12f) * 2;
+        int actionButtonWidth =
+            (availableWidth - actionButtonSpacing * (actionButtonCount - 1)) / actionButtonCount;
+        int actionButtonHeight =
+            (int) (Math.min(expandCollapseProgress, 1f) * this.actionButtonHeight);
+        int bottomOffset = lerp(
+            contentSpacing / 2,
+            contentSpacing,
+            Math.min(expandCollapseProgress, 1f)
+        );
+        int actionButtonTop = getMeasuredHeight() - bottomOffset - actionButtonHeight;
+        for (int i = 0; i < actionButtonCount; i++) {
+            ProfileActionButton button = actionButtons.get(i);
+            int left = dp(12f) + (actionButtonSpacing + actionButtonWidth) * i;
+            button.setBounds(
+                left, actionButtonTop,
+                left + actionButtonWidth, actionButtonTop + actionButtonHeight
+            );
+            button.draw(canvas);
+        }
 //        if (cutoutPath != null) {
 //            Paint p = new Paint();
 //            p.setColor(Color.RED);
