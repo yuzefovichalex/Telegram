@@ -27,13 +27,15 @@ public class ProfileActionButton extends Drawable implements Drawable.Callback {
         new int[] { android.R.attr.state_pressed, android.R.attr.state_enabled };
     private static final int[] STATE_ENABLED = new int[] { android.R.attr.state_enabled };
 
-    @Nullable
-    private Drawable background;
+    private static final int DEFAULT_BACKGROUND_COLOR = 0x14FFFFFF;
+
+    @NonNull
+    private final GradientDrawable backgroundContentDrawable;
+
+    @NonNull
+    private final Drawable background;
 
     private final int padding = dp(6f);
-
-    @ColorInt
-    private int backgroundColor = 0x14FFFFFF;
 
     @NonNull
     private final Drawable icon;
@@ -57,51 +59,38 @@ public class ProfileActionButton extends Drawable implements Drawable.Callback {
         this.icon = icon;
         this.label = label;
 
+        backgroundContentDrawable = new GradientDrawable();
+        backgroundContentDrawable.setColor(DEFAULT_BACKGROUND_COLOR);
+        backgroundContentDrawable.setCornerRadius(dp(12f));
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            GradientDrawable maskDrawable = new GradientDrawable();
+            maskDrawable.setColor(Color.WHITE);
+            maskDrawable.setCornerRadius(dp(12f));
+            background = new RippleDrawable(
+                ColorStateList.valueOf(0x1AFFFFFF),
+                backgroundContentDrawable,
+                maskDrawable
+            );
+        } else {
+            background = backgroundContentDrawable;
+        }
+        background.setCallback(this);
+
         icon.setCallback(this);
 
         labelPaint.setColor(Color.WHITE);
         labelPaint.setTextSize(dp(11f));
 
-        invalidateBackground();
         invalidateLabelLayout();
     }
 
 
     public void setBackgroundColor(int backgroundColor) {
-        this.backgroundColor = backgroundColor;
-        invalidateBackground();
+        backgroundContentDrawable.setColor(backgroundColor);
     }
 
     public void setClickListener(@Nullable OnClickListener clickListener) {
         this.clickListener = clickListener;
-    }
-
-    private void invalidateBackground() {
-        if (background != null) {
-            background.setCallback(null);
-        }
-        background = createBackgroundDrawable();
-        background.setCallback(this);
-        invalidateSelf();
-    }
-
-    @NonNull
-    private Drawable createBackgroundDrawable() {
-        GradientDrawable backgroundDrawable = new GradientDrawable();
-        backgroundDrawable.setColor(backgroundColor);
-        backgroundDrawable.setCornerRadius(dp(12f));
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
-            return backgroundDrawable;
-        }
-
-        GradientDrawable maskDrawable = new GradientDrawable();
-        maskDrawable.setColor(Color.WHITE);
-        maskDrawable.setCornerRadius(dp(12f));
-        return new RippleDrawable(
-            ColorStateList.valueOf(0x1AFFFFFF),
-            backgroundDrawable,
-            maskDrawable
-        );
     }
 
     private void invalidateLabelLayout() {
@@ -137,9 +126,7 @@ public class ProfileActionButton extends Drawable implements Drawable.Callback {
                 if (getBounds().contains((int) x, (int) y)) {
                     isTapObserving = true;
                     handled = true;
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP &&
-                        background != null
-                    ) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                         background.setHotspot(x, y);
                         background.setState(STATE_PRESSED);
                     }
@@ -149,9 +136,7 @@ public class ProfileActionButton extends Drawable implements Drawable.Callback {
             case MotionEvent.ACTION_UP:
                 if (isTapObserving) {
                     handled = true;
-                    if (background != null) {
-                        background.setState(STATE_ENABLED);
-                    }
+                    background.setState(STATE_ENABLED);
                     if (clickListener != null) {
                         clickListener.onClick(event.getX(), event.getY());
                     }
@@ -162,9 +147,7 @@ public class ProfileActionButton extends Drawable implements Drawable.Callback {
             case MotionEvent.ACTION_CANCEL:
                 if (isTapObserving) {
                     handled = true;
-                    if (background != null) {
-                        background.setState(STATE_ENABLED);
-                    }
+                    background.setState(STATE_ENABLED);
                 }
                 isTapObserving = false;
                 break;
@@ -175,9 +158,7 @@ public class ProfileActionButton extends Drawable implements Drawable.Callback {
                         handled = true;
                     } else {
                         isTapObserving = false;
-                        if (background != null) {
-                            background.setState(STATE_ENABLED);
-                        }
+                        background.setState(STATE_ENABLED);
                     }
                 }
                 break;
@@ -205,10 +186,8 @@ public class ProfileActionButton extends Drawable implements Drawable.Callback {
             textHeight = labelLayout.getHeight();
         }
 
-        if (background != null) {
-            background.setBounds(getBounds());
-            background.draw(canvas);
-        }
+        background.setBounds(getBounds());
+        background.draw(canvas);
 
         int iconSize = Math.min(
             dp(24f),
@@ -260,9 +239,7 @@ public class ProfileActionButton extends Drawable implements Drawable.Callback {
 
     @Override
     public void setAlpha(int alpha) {
-        if (background != null) {
-            background.setAlpha(alpha);
-        }
+        background.setAlpha(alpha);
         icon.setAlpha(alpha);
         labelPaint.setAlpha(alpha);
     }
