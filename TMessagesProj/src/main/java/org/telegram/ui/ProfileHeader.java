@@ -8,6 +8,7 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Path;
+import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
@@ -47,7 +48,16 @@ public class ProfileHeader extends FrameLayout {
     private static final int SHADING_COLOR = 0x42000000;
 
     @NonNull
-    private final RectF tmpRect = new RectF();
+    private final Rect tmpRect = new Rect();
+
+    @NonNull
+    private final RectF tmpRectF = new RectF();
+
+    @NonNull
+    private final int[] tmpIntArr1 = new int[2];
+
+    @NonNull
+    private final int[] tmpIntArr2 = new int[2];
 
     @NonNull
     private final AvatarImageView avatarImageView;
@@ -96,9 +106,33 @@ public class ProfileHeader extends FrameLayout {
 
     public ProfileHeader(@NonNull Context context) {
         super(context);
+        setWillNotDraw(false);
         setClipToPadding(false);
 
-        avatarImageView = new AvatarImageView(context);
+        avatarImageView = new AvatarImageView(context) {
+            @Override
+            public void draw(@NonNull Canvas canvas) {
+                super.draw(canvas);
+                Canvas blurCanvas = beginBottomBlurRecording();
+                if (blurCanvas != null) {
+                    int[] avatarLocation = tmpIntArr1;
+                    int[] blurLocation = tmpIntArr2;
+                    getLocationInWindow(avatarLocation);
+                    bottomShadingView.getLocationInWindow(blurLocation);
+
+                    float drawX = avatarLocation[0] - blurLocation[0];
+                    float drawY = avatarLocation[1] - blurLocation[1];
+
+                    blurCanvas.save();
+                    blurCanvas.translate(drawX, drawY);
+                    blurCanvas.scale(getScaleX(), getScaleY());
+                    super.draw(blurCanvas);
+                    blurCanvas.restore();
+
+                    endBottomBlurRecording();
+                }
+            }
+        };
         avatarImageView.setRoundRadius(dp(48f));
         addView(avatarImageView, new LayoutParams(avatarSize, avatarSize));
 
@@ -113,6 +147,7 @@ public class ProfileHeader extends FrameLayout {
         bottomShadingView.setOrientation(ShadingView.BOTTOM_TOP);
         bottomShadingView.setColor(SHADING_COLOR);
         bottomShadingView.setAlpha(0f);
+        bottomShadingView.setBlurEnabled(true);
         addView(bottomShadingView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
 
         nameTextView = new SimpleTextView(context);
@@ -131,6 +166,19 @@ public class ProfileHeader extends FrameLayout {
         addView(statusTextView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT));
     }
 
+
+    @Nullable
+    public Canvas beginBottomBlurRecording() {
+        return bottomShadingView.beginBlurRecording();
+    }
+
+    public void endBottomBlurRecording() {
+        bottomShadingView.endBlurRecording();
+    }
+
+    public float getBottomShadingY() {
+        return bottomShadingView.getY();
+    }
 
     @Nullable
     public ImageReceiver getAvatarImageReceiver() {
@@ -326,6 +374,7 @@ public class ProfileHeader extends FrameLayout {
         nameTextView.setPivotY(namePivotY);
 
         requestLayout();
+        invalidate();
     }
 
     public void setExpandCollapseProgress(float progress) {
@@ -360,6 +409,7 @@ public class ProfileHeader extends FrameLayout {
         }
 
         requestLayout();
+        avatarImageView.invalidate();
     }
 
     public void setCallback(@Nullable Callback callback) {
@@ -432,9 +482,8 @@ public class ProfileHeader extends FrameLayout {
         }
 
         if (bottomShadingView.getVisibility() == VISIBLE) {
-            int bottomContentHeight = linesHeight + contentSpacing + buttonGroupHeight;
-            bottomShadingView.setSolidHeight((int) (bottomContentHeight * .75f));
-            bottomShadingView.setGradientHeight((int) (bottomContentHeight * 1.25f));
+            bottomShadingView.setSolidHeight((int) (linesHeight * .4f) + contentSpacing + buttonGroupHeight);
+            bottomShadingView.setGradientHeight((int) (linesHeight * 1.35f));
             measureChildWithMargins(
                 bottomShadingView,
                 widthMeasureSpec,
@@ -442,6 +491,17 @@ public class ProfileHeader extends FrameLayout {
                 heightMeasureSpec,
                 0
             );
+            if (buttonGroupHeight > 0) {
+                tmpRect.set(
+                    0,
+                    bottomShadingView.getMeasuredHeight() - buttonGroupHeight - contentSpacing * 2,
+                    bottomShadingView.getMeasuredWidth(),
+                    bottomShadingView.getMeasuredHeight()
+                );
+            } else {
+                tmpRect.set(0, 0, 0, 0);
+            }
+            bottomShadingView.setBlurRect(tmpRect);
         }
     }
 
@@ -541,10 +601,10 @@ public class ProfileHeader extends FrameLayout {
             return;
         }
 
-        tmpRect.set(0f, 0f, avatarImageView.getMeasuredWidth(), avatarImageView.getMeasuredHeight());
-        avatarImageView.getMatrix().mapRect(tmpRect);
-        tmpRect.offset(avatarImageView.getLeft(), avatarImageView.getTop());
-        callback.onAvatarRectChanged(tmpRect);
+        tmpRectF.set(0f, 0f, avatarImageView.getMeasuredWidth(), avatarImageView.getMeasuredHeight());
+        avatarImageView.getMatrix().mapRect(tmpRectF);
+        tmpRectF.offset(avatarImageView.getLeft(), avatarImageView.getTop());
+        callback.onAvatarRectChanged(tmpRectF);
     }
 
     @SuppressLint("ClickableViewAccessibility")

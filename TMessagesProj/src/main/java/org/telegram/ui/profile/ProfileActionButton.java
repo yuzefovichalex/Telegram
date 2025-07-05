@@ -17,7 +17,6 @@ import android.text.TextPaint;
 import android.text.TextUtils;
 import android.view.MotionEvent;
 
-import androidx.annotation.ColorInt;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
@@ -27,7 +26,7 @@ public class ProfileActionButton extends Drawable implements Drawable.Callback {
         new int[] { android.R.attr.state_pressed, android.R.attr.state_enabled };
     private static final int[] STATE_ENABLED = new int[] { android.R.attr.state_enabled };
 
-    private static final int DEFAULT_BACKGROUND_COLOR = 0x14FFFFFF;
+    private static final int DEFAULT_BACKGROUND_COLOR = 0x1AFFFFFF;
 
     @NonNull
     private final GradientDrawable backgroundContentDrawable;
