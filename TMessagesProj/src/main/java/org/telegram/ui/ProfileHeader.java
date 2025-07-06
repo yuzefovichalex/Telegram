@@ -31,6 +31,7 @@ import org.telegram.messenger.ImageReceiver;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.SimpleTextView;
 import org.telegram.ui.Components.LayoutHelper;
+import org.telegram.ui.Components.ProfileGalleryView;
 import org.telegram.ui.profile.AvatarImageView;
 import org.telegram.ui.profile.ProfileActionButton;
 import org.telegram.ui.profile.ShadingView;
@@ -217,6 +218,10 @@ public class ProfileHeader extends FrameLayout {
         avatarImageView.drawForeground(draw);
     }
 
+    public void setAvatarsViewPager(@NonNull ProfileGalleryView avatarsViewPager) {
+        avatarImageView.setAvatarsViewPager(avatarsViewPager);
+    }
+
     public void setAvatarImageDrawable(@Nullable Drawable drawable) {
         avatarImageView.setImageDrawable(drawable);
     }
@@ -270,6 +275,12 @@ public class ProfileHeader extends FrameLayout {
         this.rightActionButtonsOffset = rightActionButtonsOffset;
     }
 
+    // TODO do not use outside
+    @NonNull
+    public SimpleTextView getNameTextView() {
+        return nameTextView;
+    }
+
     public boolean setName(@NonNull CharSequence name) {
         boolean changed = nameTextView.setText(name);
         if (changed) {
@@ -290,6 +301,10 @@ public class ProfileHeader extends FrameLayout {
         nameTextView.setRightDrawableOutside(outside);
     }
 
+    public void setRightDrawableOnClick(@Nullable OnClickListener clickListener) {
+        nameTextView.setRightDrawableOnClick(clickListener);
+    }
+
     public boolean setRightDrawable2(@Nullable Drawable drawable) {
         return nameTextView.setRightDrawable2(drawable);
     }
@@ -300,6 +315,11 @@ public class ProfileHeader extends FrameLayout {
 
     public void setLeftDrawableOutside(boolean outside) {
         nameTextView.setLeftDrawableOutside(outside);
+    }
+
+    @Nullable
+    public CharSequence getStatus() {
+        return statusTextView.getText();
     }
 
     public boolean setStatus(@NonNull CharSequence status) {
@@ -379,7 +399,8 @@ public class ProfileHeader extends FrameLayout {
         avatarImageView.setScaleX(avatarScale);
         avatarImageView.setScaleY(avatarScale);
         avatarImageView.setRoundRadius(avatarRadius);
-        avatarImageView.setForegroundAlpha(progress);
+        // TODO recheck with open/close animation
+        //avatarImageView.setForegroundAlpha(progress);
 
         float namePivotX = lerp(nameTextView.getMeasuredWidth() / 2f, 0f, progress);
         float namePivotY = lerp(

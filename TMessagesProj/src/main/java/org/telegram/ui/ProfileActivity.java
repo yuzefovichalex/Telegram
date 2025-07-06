@@ -4731,7 +4731,6 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             }
         };
         profileHeader.getAvatarImageReceiver().setAllowDecodeSingleFrame(true);
-        avatarImage.setRoundRadius(getSmallAvatarRoundRadius());
         //avatarContainer.addView(avatarImage, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
         avatarImage.setOnClickListener(v -> {
             if (avatarBig != null) {
@@ -4845,10 +4844,10 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         }
         avatarContainer2.addView(avatarsViewPager);
         frameLayout.addView(overlaysView);
-        avatarImage.setAvatarsViewPager(avatarsViewPager);
+        profileHeader.setAvatarsViewPager(avatarsViewPager);
 
         avatarsViewPagerIndicatorView = new PagerIndicatorView(context);
-        avatarContainer2.addView(avatarsViewPagerIndicatorView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+        frameLayout.addView(avatarsViewPagerIndicatorView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
 
         frameLayout.addView(actionBar);
 
@@ -5517,11 +5516,11 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         final int newTop = ActionBar.getCurrentActionBarHeight() + (actionBar.getOccupyStatusBar() ? AndroidUtilities.statusBarHeight : 0);
         final float value = currentExpandAnimatorValue = AndroidUtilities.lerp(expandAnimatorValues, currentExpanAnimatorFracture = animatedFracture);
         profileHeader.setAvatarExpandCollapseProgress(value);
+        profileHeader.setNameColor(ColorUtils.blendARGB(peerColor != null ? Color.WHITE : getThemedColor(Theme.key_profile_title), Color.WHITE, currentExpandAnimatorValue));
         checkPhotoDescriptionAlpha();
         avatarContainer.setScaleX(avatarScale);
         avatarContainer.setScaleY(avatarScale);
         avatarContainer.setTranslationY(AndroidUtilities.lerp((float) Math.ceil(avatarY), 0f, value));
-        avatarImage.setRoundRadius((int) AndroidUtilities.lerp(getSmallAvatarRoundRadius(), 0f, value));
         if (storyView != null) {
             storyView.setExpandProgress(value);
         }
@@ -6700,6 +6699,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             int color2 = getThemedColor(Theme.key_player_actionBarTitle);
             int c = AndroidUtilities.getOffsetColor(color1, color2, value, 1.0f);
             nameTextView[1].setTextColor(c);
+            profileHeader.setNameColor(c);
             if (lockIconDrawable != null) {
                 lockIconDrawable.setColorFilter(c, PorterDuff.Mode.MULTIPLY);
             }
@@ -7066,7 +7066,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         } else if (id == SharedMediaLayout.TAB_COMMON_GROUPS) {
             mediaCounterTextView.setText(LocaleController.formatPluralString("CommonGroups", userInfo.common_chats_count));
         } else if (id == SharedMediaLayout.TAB_GROUPUSERS) {
-            mediaCounterTextView.setText(onlineTextView[1].getText());
+            mediaCounterTextView.setText(profileHeader.getStatus());
         } else if (id == SharedMediaLayout.TAB_STORIES) {
             if (isBot) {
                 mediaCounterTextView.setText(sharedMediaLayout.getBotPreviewsSubtitle(false));
@@ -7355,7 +7355,6 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     giftsView.setExpandProgress(1f);
                 }
 
-                avatarImage.setRoundRadius((int) AndroidUtilities.lerp(getSmallAvatarRoundRadius(), 0f, avatarAnimationProgress));
                 avatarContainer.setTranslationY(AndroidUtilities.lerp((float) Math.ceil(avY), 0f, avatarAnimationProgress));
                 float extra = (int) AndroidUtilities.lerp(0f, (extraHeight + newTop - AndroidUtilities.dp(42)) / avatarScale, avatarAnimationProgress);
                 //float extra = (avatarContainer.getMeasuredWidth() - AndroidUtilities.dp(42)) * avatarScale;
@@ -8270,7 +8269,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         avatarAnimationProgress = currentExpandAnimatorValue = progress;
         checkPhotoDescriptionAlpha();
         if (playProfileAnimation == 2) {
-            avatarImage.setProgressToExpand(progress);
+            profileHeader.setAvatarExpandCollapseProgress(progress);
         }
 
         listView.setAlpha(progress);
@@ -8304,6 +8303,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             }
             nameTextView[i].setTextColor(ColorUtils.blendARGB(titleColor, color, progress));
         }
+        profileHeader.setNameColor(ColorUtils.blendARGB(titleColor, color, progress));
 
         color = isOnline[0] ? getThemedColor(Theme.key_profile_status) : AvatarDrawable.getProfileTextColorForId(userId != 0 || ChatObject.isChannel(chatId, currentAccount) && !currentChat.megagroup ? 5 : chatId, resourcesProvider);
         int subtitleColor = getThemedColor(isOnline[0] ? Theme.key_chat_status : Theme.key_actionBarDefaultSubtitle);
@@ -8313,12 +8313,13 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             }
             onlineTextView[i].setTextColor(ColorUtils.blendARGB(i == 0 ? subtitleColor : applyPeerColor(subtitleColor, true, isOnline[0]), i == 0 ? color : applyPeerColor(color, true, isOnline[0]), progress));
         }
+        profileHeader.setStatusColor(subtitleColor);
         extraHeight = initialAnimationExtraHeight * progress;
         color = AvatarDrawable.getProfileColorForId(userId != 0 ? userId : chatId, resourcesProvider);
         int color2 = AvatarDrawable.getColorForId(userId != 0 ? userId : chatId);
         if (color != color2) {
             avatarDrawable.setColor(ColorUtils.blendARGB(color2, color, progress));
-            avatarImage.invalidate();
+            profileHeader.invalidate();
         }
 
         if (navigationBarAnimationColorFrom != 0) {
@@ -9745,13 +9746,13 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     profileHeader.setRightDrawableOutside(true);
                 }
                 if (user.self && getMessagesController().isPremiumUser(user)) {
-                    nameTextView[a].setRightDrawableOnClick(v -> {
+                    profileHeader.setRightDrawableOnClick(v -> {
                         showStatusSelect();
                     });
                 }
                 if (!user.self && getMessagesController().isPremiumUser(user)) {
-                    final SimpleTextView textView = nameTextView[a];
-                    nameTextView[a].setRightDrawableOnClick(v -> {
+                    //final SimpleTextView textView = nameTextView[a];
+                    profileHeader.setRightDrawableOnClick(v -> {
                         if (user.emoji_status instanceof TLRPC.TL_emojiStatusCollectible) {
                             TLRPC.TL_emojiStatusCollectible status = (TLRPC.TL_emojiStatusCollectible) user.emoji_status;
                             if (status != null) {
@@ -9761,6 +9762,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         }
                         PremiumPreviewBottomSheet premiumPreviewBottomSheet = new PremiumPreviewBottomSheet(ProfileActivity.this, currentAccount, user, resourcesProvider);
                         int[] coords = new int[2];
+                        SimpleTextView textView = profileHeader.getNameTextView();
                         textView.getLocationOnScreen(coords);
                         premiumPreviewBottomSheet.startEnterFromX = textView.rightDrawableX;
                         premiumPreviewBottomSheet.startEnterFromY = textView.rightDrawableY;
@@ -10001,7 +10003,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 profileHeader.setLeftDrawable(null);
                 profileHeader.setRightDrawableOutside(true);
                 nameTextView[a].setRightDrawableOutside(a == 0);
-                nameTextView[a].setRightDrawableOnClick(null);
+                profileHeader.setRightDrawableOnClick(null);
                 if (a != 0) {
                     if (chat.scam || chat.fake) {
                         profileHeader.setRightDrawable2(getScamDrawable(chat.scam ? 0 : 1));
@@ -10018,7 +10020,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         profileHeader.setRightDrawableOutside(true);
                         nameTextViewRightDrawableContentDescription = null;
                         if (ChatObject.canChangeChatInfo(chat)) {
-                            nameTextView[a].setRightDrawableOnClick(v -> {
+                            profileHeader.setRightDrawableOnClick(v -> {
                                 showStatusSelect();
                             });
                             if (preloadedChannelEmojiStatuses) {
@@ -10027,7 +10029,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                             }
                         } else if (chat.emoji_status instanceof TLRPC.TL_emojiStatusCollectible) {
                             final String slug = ((TLRPC.TL_emojiStatusCollectible) chat.emoji_status).slug;
-                            nameTextView[a].setRightDrawableOnClick(v -> {
+                            profileHeader.setRightDrawableOnClick(v -> {
                                 Browser.openUrl(getContext(), "https://" + getMessagesController().linkPrefix + "/nft/" + slug);
                             });
                         }
@@ -13640,6 +13642,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     actionBar.setItemsColor(peerColor != null ? Color.WHITE : getThemedColor(Theme.key_actionBarDefaultIcon), false);
                     actionBar.setItemsBackgroundColor(peerColor != null ? 0x20ffffff : getThemedColor(Theme.key_avatar_actionBarSelectorBlue), false);
                 }
+                profileHeader.setNameColor(getThemedColor(Theme.key_profile_title));
             }
             updateEmojiStatusDrawableColor();
         };
