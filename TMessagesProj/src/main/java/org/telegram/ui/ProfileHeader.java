@@ -316,12 +316,27 @@ public class ProfileHeader extends FrameLayout {
         statusTextView.setAlpha(alpha);
     }
 
-    public void addAction(@DrawableRes int iconResId, @NonNull String label) {
+    public void addAction(
+        @DrawableRes int iconResId,
+        @NonNull String label,
+        @NonNull ProfileActionButton.OnClickListener clickListener
+    ) {
         Drawable icon = ContextCompat.getDrawable(getContext(), iconResId);
-        if (icon == null) {
+        if (icon != null) {
+            icon = icon.mutate();
+        } else {
             icon = new ColorDrawable(Color.WHITE);
         }
+        addAction(icon, label, clickListener);
+    }
+
+    public void addAction(
+        @NonNull Drawable icon,
+        @NonNull String label,
+        @NonNull ProfileActionButton.OnClickListener clickListener
+    ) {
         ProfileActionButton button = new ProfileActionButton(icon, label);
+        button.setClickListener(clickListener);
         button.setCallback(this);
         boolean needLayout = actionButtons.isEmpty();
         actionButtons.add(button);
@@ -387,7 +402,7 @@ public class ProfileHeader extends FrameLayout {
         int avatarSize = lerp(
             collapsedAvatarSize,
             this.avatarSize,
-            Math.min(expandCollapseProgress, 1.12f)
+            Math.min(expandCollapseProgress, 1.33f)
         );
         ViewGroup.LayoutParams lp = avatarImageView.getLayoutParams();
         lp.width = avatarSize;
