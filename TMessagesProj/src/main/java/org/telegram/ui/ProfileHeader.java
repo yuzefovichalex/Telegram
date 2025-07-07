@@ -338,7 +338,8 @@ public class ProfileHeader extends FrameLayout {
         statusTextView.setAlpha(alpha);
     }
 
-    public void addAction(
+    @NonNull
+    public ProfileActionButton addAction(
         @DrawableRes int iconResId,
         @NonNull String label,
         @NonNull ProfileActionButton.OnClickListener clickListener
@@ -349,16 +350,24 @@ public class ProfileHeader extends FrameLayout {
         } else {
             icon = new ColorDrawable(Color.WHITE);
         }
-        addAction(icon, label, clickListener);
+        return addAction(icon, label, clickListener);
     }
 
-    public void addAction(
+    @NonNull
+    public ProfileActionButton addAction(
         @NonNull Drawable icon,
         @NonNull String label,
         @NonNull ProfileActionButton.OnClickListener clickListener
     ) {
-        ProfileActionButton button = new ProfileActionButton(icon, label);
+        ProfileActionButton button = new ProfileActionButton();
+        button.setIcon(icon);
+        button.setLabel(label);
         button.setClickListener(clickListener);
+        return addAction(button);
+    }
+
+    @NonNull
+    public ProfileActionButton addAction(@NonNull ProfileActionButton button) {
         button.setCallback(this);
         boolean needLayout = actionButtons.isEmpty();
         actionButtons.add(button);
@@ -367,6 +376,7 @@ public class ProfileHeader extends FrameLayout {
             requestLayout();
         }
         invalidate();
+        return button;
     }
 
     public void clearAllActions(boolean invalidate) {

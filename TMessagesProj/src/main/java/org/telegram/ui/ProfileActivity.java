@@ -289,6 +289,7 @@ import org.telegram.ui.bots.BotWebViewAttachedSheet;
 import org.telegram.ui.bots.ChannelAffiliateProgramsFragment;
 import org.telegram.ui.bots.SetupEmojiStatusSheet;
 import org.telegram.ui.profile.AvatarImageView;
+import org.telegram.ui.profile.ProfileActionButton;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -10540,10 +10541,58 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         createProfileHeaderActionButtons();
     }
 
+    @Nullable
+    private ProfileActionButton muteButton;
+
+    @Nullable
+    private RLottieDrawable muteDrawable;
+
+    @Nullable
+    private RLottieDrawable unmuteDrawable;
+
+    @Nullable
+    private RLottieDrawable muteUnmuteDrawable;
+
     private void createProfileHeaderActionButtons() {
         if (profileHeader == null) {
             return;
         }
+
+        if (muteDrawable == null) {
+            muteDrawable = new RLottieDrawable(
+                R.raw.anim_profilemute,
+                "profile_mute",
+                dp(40f),
+                dp(40f),
+                true,
+                null
+            );
+        }
+
+        if (unmuteDrawable == null) {
+            unmuteDrawable = new RLottieDrawable(
+                R.raw.anim_profileunmute,
+                "profile_unmute",
+                dp(40f),
+                dp(40f),
+                true,
+                null
+            );
+        }
+
+        if (muteButton == null) {
+            muteButton = new ProfileActionButton();
+            muteButton.setIconPadding(-dp(6f));
+            muteButton.setClickListener(this::onMuteButtonClick);
+        }
+        if (isDialogMuted()) {
+            muteUnmuteDrawable = unmuteDrawable;
+            muteButton.setLabel("Unmute");
+        } else {
+            muteUnmuteDrawable = muteDrawable;
+            muteButton.setLabel("Mute");
+        }
+        muteButton.setIcon(muteUnmuteDrawable);
 
         profileHeader.clearAllActions(false);
 
@@ -10561,11 +10610,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 );
             }
 
-            profileHeader.addAction(
-                R.drawable.ic_profile_action_mute_24dp,
-                "Mute",
-                this::showNotificationsSettingsPopup
-            );
+            profileHeader.addAction(muteButton);
 
             if (userInfo != null) {
                 if (userInfo.phone_calls_available) {
@@ -10650,11 +10695,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 );
             }
 
-            profileHeader.addAction(
-                R.drawable.ic_profile_action_mute_24dp,
-                "Mute",
-                this::showNotificationsSettingsPopup
-            );
+            profileHeader.addAction(muteButton);
 
             if (!showJoin &&
                 !showDiscuss &&
@@ -10867,7 +10908,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         }, getResourceProvider());
     }
 
-    private void showNotificationsSettingsPopup(float x, float y) {
+    private void onMuteButtonClick(float x, float y) {
         final long did;
         if (dialogId != 0) {
             did = dialogId;
@@ -10876,6 +10917,12 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         } else {
             did = -chatId;
         }
+
+        if (isDialogMuted(did)) {
+            setDialogMuted(did, false);
+            return;
+        }
+
         ChatNotificationsPopupWrapper chatNotificationsPopupWrapper = new ChatNotificationsPopupWrapper(getContext(), currentAccount, null, true, true, new ChatNotificationsPopupWrapper.Callback() {
             @Override
             public void toggleSound() {
@@ -10901,10 +10948,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     if (BulletinFactory.canShowBulletin(ProfileActivity.this)) {
                         BulletinFactory.createMuteBulletin(ProfileActivity.this, NotificationsController.SETTING_MUTE_CUSTOM, timeInSeconds, getResourceProvider()).show();
                     }
-                    updateExceptions();
-                    if (notificationsRow >= 0 && listAdapter != null) {
-                        listAdapter.notifyItemChanged(notificationsRow);
-                    }
+                    updateMuteUI(true);
                 }
             }
 
@@ -10920,15 +10964,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
 
             @Override
             public void toggleMute() {
-                boolean muted = getMessagesController().isDialogMuted(did, topicId);
-                getNotificationsController().muteDialog(did, topicId, !muted);
-                if (ProfileActivity.this.fragmentView != null) {
-                    BulletinFactory.createMuteBulletin(ProfileActivity.this, !muted, null).show();
-                }
-                updateExceptions();
-                if (notificationsRow >= 0 && listAdapter != null) {
-                    listAdapter.notifyItemChanged(notificationsRow);
-                }
+                setDialogMuted(did, true);
             }
 
             @Override
@@ -10947,6 +10983,51 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             y += v.getY() + v.getPaddingTop();
         }
         chatNotificationsPopupWrapper.showAsOptions(ProfileActivity.this, profileHeader, x, y);
+    }
+
+    private boolean isDialogMuted() {
+        final long did;
+        if (dialogId != 0) {
+            did = dialogId;
+        } else if (userId != 0) {
+            did = userId;
+        } else {
+            did = -chatId;
+        }
+        return isDialogMuted(did);
+    }
+
+    private boolean isDialogMuted(long did) {
+        return getMessagesController().isDialogMuted(did, topicId);
+    }
+
+    private void setDialogMuted(long did, boolean muted) {
+        getNotificationsController().muteDialog(did, topicId, muted);
+        if (ProfileActivity.this.fragmentView != null) {
+            BulletinFactory.createMuteBulletin(ProfileActivity.this, muted, null).show();
+        }
+        updateMuteUI(muted);
+    }
+
+    private void updateMuteUI(boolean muted) {
+        updateExceptions();
+        if (notificationsRow >= 0 && listAdapter != null) {
+            listAdapter.notifyItemChanged(notificationsRow);
+        }
+
+        if (muteUnmuteDrawable != null) {
+            muteUnmuteDrawable.stop();
+            muteUnmuteDrawable.setProgress(0f);
+        }
+
+        if (muteButton != null) {
+            muteUnmuteDrawable = muted ? muteDrawable : unmuteDrawable;
+            muteButton.setIcon(muteUnmuteDrawable);
+            muteButton.setLabel(muted ? "Unmute" : "Mute");
+            if (muteUnmuteDrawable != null) {
+                muteUnmuteDrawable.start();
+            }
+        }
     }
 
     private void createAutoDeleteItem(Context context) {

@@ -36,11 +36,15 @@ public class ProfileActionButton extends Drawable implements Drawable.Callback {
 
     private final int padding = dp(6f);
 
-    @NonNull
-    private final Drawable icon;
+    @Nullable
+    private Drawable icon;
 
-    @NonNull
-    private final String label;
+    private final int iconSize = dp(24f);
+
+    private int iconPaddingLeft, iconPaddingTop, iconPaddingRight, iconPaddingBottom;
+
+    @Nullable
+    private String label;
 
     @NonNull
     private final TextPaint labelPaint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
@@ -54,10 +58,7 @@ public class ProfileActionButton extends Drawable implements Drawable.Callback {
     private OnClickListener clickListener;
 
 
-    public ProfileActionButton(@NonNull Drawable icon, @NonNull String label) {
-        this.icon = icon;
-        this.label = label;
-
+    public ProfileActionButton() {
         backgroundContentDrawable = new GradientDrawable();
         backgroundContentDrawable.setColor(DEFAULT_BACKGROUND_COLOR);
         backgroundContentDrawable.setCornerRadius(dp(12f));
@@ -75,12 +76,8 @@ public class ProfileActionButton extends Drawable implements Drawable.Callback {
         }
         background.setCallback(this);
 
-        icon.setCallback(this);
-
         labelPaint.setColor(Color.WHITE);
         labelPaint.setTextSize(dp(11f));
-
-        invalidateLabelLayout();
     }
 
 
@@ -88,13 +85,52 @@ public class ProfileActionButton extends Drawable implements Drawable.Callback {
         backgroundContentDrawable.setColor(backgroundColor);
     }
 
+    public void setIcon(@Nullable Drawable icon) {
+        if (this.icon == icon) {
+            return;
+        }
+
+        if (this.icon != null) {
+            this.icon.setCallback(null);
+        }
+
+        this.icon = icon;
+
+        if (icon != null) {
+            icon.setCallback(this);
+        }
+
+        invalidateSelf();
+    }
+
+    public void setIconPadding(int padding) {
+        setIconPadding(padding, padding, padding, padding);
+    }
+
+    public void setIconPadding(int left, int top, int right, int bottom) {
+        iconPaddingLeft = left;
+        iconPaddingTop = top;
+        iconPaddingRight = right;
+        iconPaddingBottom = bottom;
+        invalidateSelf();
+    }
+
+    public void setLabel(@Nullable String label) {
+        if (TextUtils.equals(this.label, label)) {
+            return;
+        }
+
+        this.label = label;
+        invalidateLabelLayout();
+    }
+
     public void setClickListener(@Nullable OnClickListener clickListener) {
         this.clickListener = clickListener;
     }
 
     private void invalidateLabelLayout() {
-        int availableWidth = getAvailableWidth();
-        if (availableWidth == 0f) {
+        int availableWidth;
+        if (label == null || (availableWidth = getAvailableWidth()) == 0f) {
             labelLayout = null;
             return;
         }
@@ -188,21 +224,35 @@ public class ProfileActionButton extends Drawable implements Drawable.Callback {
         background.setBounds(getBounds());
         background.draw(canvas);
 
-        int iconSize = Math.min(
-            dp(24f),
+        int currentIconSize = Math.min(
+            iconSize,
             Math.min(availableWidth, Math.max(availableHeight - textHeight, 0))
         );
-        float textScale = Math.min((float) iconSize / dp(16f), 1f);
-        icon.setBounds(0, 0, iconSize, iconSize);
-        canvas.save();
-        canvas.translate(
-            left + getCenteredOffset(availableWidth, iconSize),
-            top +
-                getCenteredOffset((int) ((availableHeight - textHeight) / textScale), iconSize) -
-                dp(2f)
-        );
-        icon.draw(canvas);
-        canvas.restore();
+        float iconScale = (float) currentIconSize / iconSize;
+        float textScale = Math.min((float) currentIconSize / dp(16f), 1f);
+
+        Drawable icon = this.icon;
+        if (icon != null) {
+            icon.setBounds(
+                iconPaddingLeft,
+                iconPaddingTop,
+                iconSize - iconPaddingRight,
+                iconSize - iconPaddingBottom
+            );
+            canvas.save();
+            canvas.translate(
+                left + getCenteredOffset(availableWidth, currentIconSize),
+                top +
+                    getCenteredOffset(
+                        (int) ((availableHeight - textHeight) / textScale),
+                        currentIconSize
+                    ) -
+                    dp(2f)
+            );
+            canvas.scale(iconScale, iconScale);
+            icon.draw(canvas);
+            canvas.restore();
+        }
 
         StaticLayout labelLayout = this.labelLayout;
         if (labelLayout != null) {
@@ -239,7 +289,9 @@ public class ProfileActionButton extends Drawable implements Drawable.Callback {
     @Override
     public void setAlpha(int alpha) {
         background.setAlpha(alpha);
-        icon.setAlpha(alpha);
+        if (icon != null) {
+            icon.setAlpha(alpha);
+        }
         labelPaint.setAlpha(alpha);
     }
 
