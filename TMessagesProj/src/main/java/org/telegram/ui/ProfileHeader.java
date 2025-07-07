@@ -34,6 +34,7 @@ import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.ProfileGalleryView;
 import org.telegram.ui.profile.AvatarImageView;
 import org.telegram.ui.profile.ProfileActionButton;
+import org.telegram.ui.profile.ProfileStarGiftsPattern;
 import org.telegram.ui.profile.ShadingView;
 
 import java.util.ArrayList;
@@ -96,6 +97,9 @@ public class ProfileHeader extends FrameLayout {
     private int expandedHeight = AndroidUtilities.dp(144f);
     private int linesHeight;
     private int buttonGroupHeight;
+
+    @NonNull
+    private ProfileStarGiftsPattern starGiftsPattern = new ProfileStarGiftsPattern(this);
 
     @NonNull
     private final List<ProfileActionButton> actionButtons = new ArrayList<>();
@@ -167,6 +171,8 @@ public class ProfileHeader extends FrameLayout {
         statusTextView.setTextSize(14);
         statusTextView.setTextColor(Color.WHITE);
         addView(statusTextView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT));
+
+        starGiftsPattern.setDefaultAvatarSize(avatarSize);
     }
 
 
@@ -338,6 +344,18 @@ public class ProfileHeader extends FrameLayout {
         statusTextView.setAlpha(alpha);
     }
 
+    public void setStarGiftsPattern(long emojiId, boolean animated) {
+        starGiftsPattern.setEmoji(emojiId, animated);
+    }
+
+    public void setStarGiftsPatternColor(@ColorInt int color) {
+        starGiftsPattern.setEmojiColor(color);
+    }
+
+    public void setStarGiftsBackgroundColor(@ColorInt int color) {
+        starGiftsPattern.setBackgroundColor(color);
+    }
+
     @NonNull
     public ProfileActionButton addAction(
         @DrawableRes int iconResId,
@@ -421,6 +439,8 @@ public class ProfileHeader extends FrameLayout {
         nameTextView.setPivotX(namePivotX);
         nameTextView.setPivotY(namePivotY);
 
+        starGiftsPattern.setAlpha(1f - progress);
+
         requestLayout();
         invalidate();
     }
@@ -435,7 +455,7 @@ public class ProfileHeader extends FrameLayout {
         int avatarSize = lerp(
             collapsedAvatarSize,
             this.avatarSize,
-            Math.min(expandCollapseProgress, 1.33f)
+            Math.min(progress, 1.33f)
         );
         ViewGroup.LayoutParams lp = avatarImageView.getLayoutParams();
         lp.width = avatarSize;
@@ -443,14 +463,16 @@ public class ProfileHeader extends FrameLayout {
         avatarImageView.setLayoutParams(lp);
         avatarImageView.setRoundRadius((int) (avatarSize / 2f * (1f - avatarExpandCollapseProgress)));
 
-        float nameScale = expandCollapseProgress <= 1f
-            ? lerp(1f, 1.12f, expandCollapseProgress)
-            : lerp(1.12f, 1.67f, expandCollapseProgress - 1f);
+        float nameScale = progress <= 1f
+            ? lerp(1f, 1.12f, progress)
+            : lerp(1.12f, 1.67f, progress - 1f);
         nameTextView.setScaleX(nameScale);
         nameTextView.setScaleY(nameScale);
 
-        if (expandCollapseProgress <= 1f) {
-            float buttonsAlpha = Math.max(expandCollapseProgress - .33f, 0f) / .67f;
+        if (progress <= 1f) {
+            starGiftsPattern.setExpandCollapseProgress(progress);
+
+            float buttonsAlpha = Math.max(progress - .33f, 0f) / .67f;
             for (int i = 0; i < actionButtons.size(); i++) {
                 actionButtons.get(i).setAlpha(buttonsAlpha);
             }
@@ -551,6 +573,9 @@ public class ProfileHeader extends FrameLayout {
             }
             bottomShadingView.setBlurRect(tmpRect);
         }
+
+        tmpRect.set(0, 0, getMeasuredWidth(), getMeasuredHeight());
+        starGiftsPattern.setBounds(tmpRect);
     }
 
     private int calculateMinOffset(int actionsOffset, int minOffset) {
@@ -631,7 +656,7 @@ public class ProfileHeader extends FrameLayout {
         int avatarRight = avatarLeft + avatarImageView.getMeasuredWidth();
         int avatarBottom = avatarTop + avatarImageView.getMeasuredHeight();
         avatarImageView.layout(avatarLeft, avatarTop, avatarRight, avatarBottom);
-        notifyAvatarRectChanged();
+        dispatchAvatarRectChanged();
     }
 
     private int getCenteredOffset(int parentSize, int childSize) {
@@ -644,15 +669,16 @@ public class ProfileHeader extends FrameLayout {
         }
     }
 
-    private void notifyAvatarRectChanged() {
-        if (callback == null) {
-            return;
-        }
-
+    private void dispatchAvatarRectChanged() {
         tmpRectF.set(0f, 0f, avatarImageView.getMeasuredWidth(), avatarImageView.getMeasuredHeight());
         avatarImageView.getMatrix().mapRect(tmpRectF);
         tmpRectF.offset(avatarImageView.getLeft(), avatarImageView.getTop());
-        callback.onAvatarRectChanged(tmpRectF);
+
+        starGiftsPattern.setAvatarBounds(tmpRectF);
+
+        if (callback != null) {
+            callback.onAvatarRectChanged(tmpRectF);
+        }
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -670,6 +696,10 @@ public class ProfileHeader extends FrameLayout {
 
     @Override
     protected void dispatchDraw(@NonNull Canvas canvas) {
+        if (starGiftsPattern.hasEmoji()) {
+            starGiftsPattern.draw(canvas);
+        }
+
         super.dispatchDraw(canvas);
 
         int actionButtonCount = actionButtons.size();

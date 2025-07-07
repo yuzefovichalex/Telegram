@@ -783,6 +783,18 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
 
     private final int profileHeaderExpandedExtraHeight = AndroidUtilities.dp(192f);
 
+    @Nullable
+    private ProfileActionButton muteButton;
+
+    @Nullable
+    private RLottieDrawable muteDrawable;
+
+    @Nullable
+    private RLottieDrawable unmuteDrawable;
+
+    @Nullable
+    private RLottieDrawable muteUnmuteDrawable;
+
     public static ProfileActivity of(long dialogId) {
         Bundle bundle = new Bundle();
         if (dialogId >= 0) {
@@ -860,6 +872,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 color1Animated.set(color1, true);
                 color2Animated.set(color2, true);
             }
+            profileHeader.setStarGiftsPatternColor(emojiColor);
+            profileHeader.setStarGiftsBackgroundColor(actionBarBackgroundColor);
             invalidate();
         }
 
@@ -884,13 +898,15 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         private boolean hasEmoji;
         private boolean emojiIsCollectible;
         public void setBackgroundEmojiId(long emojiId, boolean isCollectible, boolean animated) {
-            emoji.set(emojiId, animated);
-            emoji.setColor(emojiColor);
+            //emoji.set(emojiId, animated);
+            //emoji.setColor(emojiColor);
             emojiIsCollectible = isCollectible;
             if (!animated) {
                 emojiFullT.force(isCollectible);
             }
             hasEmoji = hasEmoji || emojiId != 0 && emojiId != -1;
+            profileHeader.setStarGiftsPattern(emojiId, animated);
+            profileHeader.setStarGiftsPatternColor(emojiColor);
             invalidate();
         }
 
@@ -950,7 +966,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     if (loadedScale > 0) {
                         canvas.save();
                         canvas.clipRect(0, 0, getMeasuredWidth(), y1);
-                        StarGiftPatterns.drawProfilePattern(canvas, emoji, getMeasuredWidth(), ((actionBar.getOccupyStatusBar() ? AndroidUtilities.statusBarHeight : 0) + dp(144)) - (1f - extraHeight / dp(88)) * dp(50), Math.min(1f, extraHeight / dp(88)), full);
+                        //StarGiftPatterns.drawProfilePattern(canvas, emoji, getMeasuredWidth(), ((actionBar.getOccupyStatusBar() ? AndroidUtilities.statusBarHeight : 0) + dp(144)) - (1f - extraHeight / dp(88)) * dp(50), Math.min(1f, extraHeight / dp(88)), full);
                         canvas.restore();
                     }
                 }
@@ -10540,18 +10556,6 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         updateStoriesViewBounds(false);
         createProfileHeaderActionButtons();
     }
-
-    @Nullable
-    private ProfileActionButton muteButton;
-
-    @Nullable
-    private RLottieDrawable muteDrawable;
-
-    @Nullable
-    private RLottieDrawable unmuteDrawable;
-
-    @Nullable
-    private RLottieDrawable muteUnmuteDrawable;
 
     private void createProfileHeaderActionButtons() {
         if (profileHeader == null) {
