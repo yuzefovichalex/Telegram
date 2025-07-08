@@ -4,6 +4,8 @@ import static org.telegram.messenger.AndroidUtilities.dp;
 import static org.telegram.messenger.AndroidUtilities.lerp;
 import static org.telegram.messenger.Utilities.clamp;
 
+import static java.lang.Math.toRadians;
+
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.ColorFilter;
@@ -52,13 +54,13 @@ public class ProfileStarGiftsPattern extends Drawable {
     private float expandCollapseProgress;
 
     @NonNull
-    private final int[][] circles = new int[][] {
-        { 0, 90, 270 },
-        { dp(4), 35, 145, 215, 325 },
-        { dp(32), 0, 180 },
-        { dp(40), 60, 120, 240, 300 },
-        { dp(64), 30, 150, 210, 330 },
-        { dp(80), 0, 180 }
+    private final double[][] circles = new double[][] {
+        { 0, toRadians(90), toRadians(270) },
+        { dp(4), toRadians(35), toRadians(145), toRadians(215), toRadians(325) },
+        { dp(32), toRadians(0), toRadians(180) },
+        { dp(40), toRadians(60), toRadians(120), toRadians(240), toRadians(300) },
+        { dp(64), toRadians(30), toRadians(150), toRadians(210), toRadians(330) },
+        { dp(80), toRadians(0), toRadians(180) }
     };
 
     @NonNull
@@ -199,8 +201,9 @@ public class ProfileStarGiftsPattern extends Drawable {
             (float) Math.sqrt(avatarWidth * avatarWidth + avatarHeight * avatarHeight) / 2f;
 
         for (int i = 0; i < circles.length; i++) {
-            int[] circle = circles[i];
-            float r = innerRadius + circle[0];
+            double[] circle = circles[i];
+            float r = innerRadius + (float) circle[0];
+            float distanceFactor = (float) i / circles.length;
             for (int j = 1; j < circle.length; j++) {
                 float velocity = velocities[i][j - 1];
                 float localProgress = clamp(
@@ -209,17 +212,9 @@ public class ProfileStarGiftsPattern extends Drawable {
                     0f
                 ) / (1f - velocity);
 
-                double angle = Math.toRadians(circle[j]);
-                float scale = lerp(
-                    1f,
-                    lerp(.32f, .64f, localProgress * localProgress),
-                    (float) i / circles.length
-                );
-                int alpha = (int) (lerp(
-                    80,
-                    25,
-                    (float) i / circles.length) * localProgress * commonAlpha
-                );
+                double angle = circle[j];
+                float scale = lerp(1f, .64f, distanceFactor) * lerp(.8f, 1f, localProgress);
+                int alpha = (int) (lerp(80, 25, distanceFactor) * localProgress * commonAlpha);
 
                 float patternX = avatarCx + r * (float) Math.cos(angle);
                 float patternY = avatarCy + r * (float) Math.sin(angle);
