@@ -7,6 +7,8 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.ColorFilter;
 import android.graphics.PixelFormat;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffColorFilter;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.RippleDrawable;
@@ -80,6 +82,18 @@ public class ProfileActionButton extends Drawable implements Drawable.Callback {
         labelPaint.setTextSize(dp(11f));
     }
 
+
+    public void setContentColor(int color) {
+        if (labelPaint.getColor() == color) {
+            return;
+        }
+
+        if (icon != null) {
+            icon.setColorFilter(new PorterDuffColorFilter(color, PorterDuff.Mode.SRC_IN));
+        }
+        labelPaint.setColor(color);
+        invalidateSelf();
+    }
 
     public void setBackgroundColor(int backgroundColor) {
         backgroundContentDrawable.setColor(backgroundColor);

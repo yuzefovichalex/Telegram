@@ -3185,6 +3185,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 avatarContainer2.setPivotY(avatarContainer.getPivotY() + avatarContainer.getMeasuredHeight() / 2f);
                 avatarContainer2.setPivotX(avatarContainer2.getMeasuredWidth() / 2f);
                 AndroidUtilities.updateViewVisibilityAnimated(avatarContainer2, !expanded, 0.95f, true);
+                AndroidUtilities.updateViewVisibilityAnimated(profileHeader, !expanded, 0.95f, true);
 
                 callItem.setVisibility(expanded || !callItemVisible ? GONE : INVISIBLE);
                 videoCallItem.setVisibility(expanded || !videoCallItemVisible ? GONE : INVISIBLE);
@@ -4674,6 +4675,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         fallbackImage = new ImageReceiver(avatarContainer2);
         fallbackImage.setRoundRadius(AndroidUtilities.dp(11));
         AndroidUtilities.updateViewVisibilityAnimated(avatarContainer2, true, 1f, false);
+        AndroidUtilities.updateViewVisibilityAnimated(profileHeader, true, 1f, false);
         frameLayout.addView(avatarContainer2, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.START));
         frameLayout.addView(profileHeader, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
         avatarContainer2.addView(avatarContainer, LayoutHelper.createFrame(42, 42, Gravity.CENTER_HORIZONTAL));
@@ -5054,6 +5056,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         profileHeader.setOccupyStatusBar(actionBar.getOccupyStatusBar());
         profileHeader.setLeftActionButtonsOffset(AndroidUtilities.dp(72f));
         profileHeader.setRightActionButtonsOffset(AndroidUtilities.dp(104f));
+        profileHeader.setNameColor(getThemedColor(Theme.key_profile_title));
         profileHeader.setStatusColor(applyPeerColor(getThemedColor(Theme.key_avatar_subtitleInProfileBlue), true, null));
         profileHeader.setCollapsedHeight(ActionBar.getCurrentActionBarHeight());
         profileHeader.setExpandedHeight(ActionBar.getCurrentActionBarHeight() + profileHeaderExpandedExtraHeight);
@@ -11155,6 +11158,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         needLayout(true);
 
         profileHeader.setAvatarVisibility(View.VISIBLE);
+        profileHeader.setNameVisibility(View.VISIBLE);
+        profileHeader.setStatusVisibility(View.VISIBLE);
         avatarContainer.setVisibility(View.VISIBLE);
         nameTextView[1].setVisibility(View.VISIBLE);
         onlineTextView[1].setVisibility(View.VISIBLE);
@@ -11202,6 +11207,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             searchListView.setScaleY(1f + 0.05f * searchTransitionProgress);
             emptyView.setAlpha(1f - progressHalf);
 
+            profileHeader.setNameAlpha(progressHalf);
+            profileHeader.setStatusAlpha(progressHalf);
             avatarContainer.setAlpha(progressHalf);
             if (storyView != null) {
                 storyView.setAlpha(progressHalf);
@@ -11283,6 +11290,10 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         actionBar.onSearchFieldVisibilityChanged(enter);
 
         profileHeader.setAvatarVisibility(hide);
+        profileHeader.setNameAlpha(1f);
+        profileHeader.setNameVisibility(hide);
+        profileHeader.setStatusAlpha(1f);
+        profileHeader.setStatusVisibility(hide);
         avatarContainer.setVisibility(hide);
         if (storyView != null) {
             storyView.setVisibility(hide);
