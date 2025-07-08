@@ -860,6 +860,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 } else {
                     emojiColor = PeerColorActivity.adaptProfileEmojiColor(color1);
                 }
+                profileHeader.setActionBarColor(actionBarBackgroundColor, true);
             } else {
                 actionBarBackgroundColor = currentColor;
                 hasColorById = false;
@@ -870,6 +871,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 } else {
                     emojiColor = PeerColorActivity.adaptProfileEmojiColor(getThemedColor(Theme.key_actionBarDefault));
                 }
+                profileHeader.setActionBarColor(getThemedColor(Theme.key_avatar_backgroundActionBarBlue), false);
             }
             if (!animated) {
                 color1Animated.set(color1, true);
@@ -5055,6 +5057,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         profileHeader.setStatusColor(applyPeerColor(getThemedColor(Theme.key_avatar_subtitleInProfileBlue), true, null));
         profileHeader.setCollapsedHeight(ActionBar.getCurrentActionBarHeight());
         profileHeader.setExpandedHeight(ActionBar.getCurrentActionBarHeight() + profileHeaderExpandedExtraHeight);
+        profileHeader.setOnActionBarColor(getThemedColor(Theme.key_profile_actionBackground));
         profileHeader.setCallback(new ProfileHeader.Callback() {
             @Override
             public void onStatusPositionChanged(float x, float y) {

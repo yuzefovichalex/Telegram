@@ -24,12 +24,14 @@ import androidx.annotation.DrawableRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
+import androidx.core.graphics.ColorUtils;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ImageLocation;
 import org.telegram.messenger.ImageReceiver;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.SimpleTextView;
+import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.ProfileGalleryView;
 import org.telegram.ui.profile.AvatarImageView;
@@ -50,6 +52,7 @@ import java.util.List;
 public class ProfileHeader extends FrameLayout {
 
     private static final int SHADING_COLOR = 0x42000000;
+    private static final int ON_PHOTO_ACTION_BUTTON_COLOR = 0x21000000;
 
     @NonNull
     private final Rect tmpRect = new Rect();
@@ -97,6 +100,12 @@ public class ProfileHeader extends FrameLayout {
     private int expandedHeight = AndroidUtilities.dp(144f);
     private int linesHeight;
     private int buttonGroupHeight;
+
+    private int actionBarColor = Color.WHITE;
+    private int onActionBarColor = Color.BLACK;
+    private int actionButtonColor = Color.TRANSPARENT;
+    private int lastActionButtonColor = actionButtonColor;
+    private boolean isActionBarColorPeer;
 
     @NonNull
     private final ProfileStarGiftsPattern starGiftsPattern = new ProfileStarGiftsPattern(this);
@@ -173,6 +182,8 @@ public class ProfileHeader extends FrameLayout {
         addView(statusTextView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT));
 
         starGiftsPattern.setDefaultAvatarSize(avatarSize);
+
+        actionButtonColor = calculateActionButtonColor();
     }
 
 
@@ -356,6 +367,61 @@ public class ProfileHeader extends FrameLayout {
         starGiftsPattern.setBackgroundColor(color);
     }
 
+    public void setActionBarColor(@ColorInt int color, boolean isPeer) {
+        if (actionBarColor == color && isActionBarColorPeer == isPeer) {
+            return;
+        }
+
+        actionBarColor = color;
+        isActionBarColorPeer = isPeer;
+        invalidateActionButtonsColor(true);
+    }
+
+    public void setOnActionBarColor(@ColorInt int color) {
+        if (onActionBarColor == color) {
+            return;
+        }
+
+        onActionBarColor = color;
+        invalidateActionButtonsColor(true);
+    }
+
+    private void invalidateActionButtonsColor(boolean recalculateColor) {
+        if (recalculateColor) {
+            actionButtonColor = calculateActionButtonColor();
+        }
+
+        if (actionButtons.isEmpty()) {
+            return;
+        }
+
+        lastActionButtonColor = ColorUtils.blendARGB(
+            actionButtonColor,
+            ON_PHOTO_ACTION_BUTTON_COLOR,
+            avatarExpandCollapseProgress
+        );
+        for (int i = 0; i < actionButtons.size(); i++) {
+            actionButtons.get(i).setBackgroundColor(lastActionButtonColor);
+        }
+    }
+
+    private int calculateActionButtonColor() {
+        int overlayColor;
+        float blendRatio;
+        if (Theme.isCurrentThemeDark() && !isActionBarColorPeer) {
+            overlayColor = Color.WHITE;
+            blendRatio = .3f;
+        } else {
+            if (ColorUtils.calculateLuminance(actionBarColor) > .9f) {
+                return onActionBarColor;
+            }
+            overlayColor = Color.BLACK;
+            blendRatio = .5f;
+        }
+        int blendedColor = ColorUtils.blendARGB(actionBarColor, overlayColor, blendRatio);
+        return ColorUtils.setAlphaComponent(blendedColor, 59);
+    }
+
     @NonNull
     public ProfileActionButton addAction(
         @DrawableRes int iconResId,
@@ -386,6 +452,7 @@ public class ProfileHeader extends FrameLayout {
 
     @NonNull
     public ProfileActionButton addAction(@NonNull ProfileActionButton button) {
+        button.setBackgroundColor(lastActionButtonColor);
         button.setCallback(this);
         boolean needLayout = actionButtons.isEmpty();
         actionButtons.add(button);
@@ -433,6 +500,8 @@ public class ProfileHeader extends FrameLayout {
         nameTextView.setPivotY(namePivotY);
 
         starGiftsPattern.setAlpha(1f - progress);
+
+        invalidateActionButtonsColor(false);
 
         requestLayout();
         invalidate();
