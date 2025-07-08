@@ -269,7 +269,6 @@ import org.telegram.ui.Gifts.GiftSheet;
 import org.telegram.ui.Stars.BotStarsActivity;
 import org.telegram.ui.Stars.BotStarsController;
 import org.telegram.ui.Stars.ProfileGiftsView;
-import org.telegram.ui.Stars.StarGiftPatterns;
 import org.telegram.ui.Stars.StarGiftSheet;
 import org.telegram.ui.Stars.StarsController;
 import org.telegram.ui.Stars.StarsIntroActivity;
@@ -846,6 +845,10 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         private LinearGradient backgroundGradient;
         private final Paint backgroundPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
+        private int emojiColor;
+
+        private final Rect blurBounds = new Rect();
+
         public void setBackgroundColorId(MessagesController.PeerColor peerColor, boolean animated) {
             if (peerColor != null) {
                 hasColorById = true;
@@ -877,55 +880,14 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             invalidate();
         }
 
-        private int emojiColor;
-        private final AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable emoji = new AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable(this, false, dp(20), AnimatedEmojiDrawable.CACHE_TYPE_ALERT_PREVIEW_STATIC);
-
-        @Override
-        protected void onAttachedToWindow() {
-            super.onAttachedToWindow();
-            emoji.attach();
-        }
-
-        @Override
-        protected void onDetachedFromWindow() {
-            super.onDetachedFromWindow();
-            emoji.detach();
-        }
-
-        public final AnimatedFloat emojiLoadedT = new AnimatedFloat(this, 0, 440, CubicBezierInterpolator.EASE_OUT_QUINT);
-        public final AnimatedFloat emojiFullT = new AnimatedFloat(this, 0, 440, CubicBezierInterpolator.EASE_OUT_QUINT);
-
-        private boolean hasEmoji;
-        private boolean emojiIsCollectible;
         public void setBackgroundEmojiId(long emojiId, boolean isCollectible, boolean animated) {
-            //emoji.set(emojiId, animated);
-            //emoji.setColor(emojiColor);
-            emojiIsCollectible = isCollectible;
-            if (!animated) {
-                emojiFullT.force(isCollectible);
-            }
-            hasEmoji = hasEmoji || emojiId != 0 && emojiId != -1;
             profileHeader.setStarGiftsPattern(emojiId, animated);
             profileHeader.setStarGiftsPatternColor(emojiColor);
             invalidate();
         }
 
-        private boolean emojiLoaded;
-        private boolean isEmojiLoaded() {
-            if (emojiLoaded) {
-                return true;
-            }
-            if (emoji != null && emoji.getDrawable() instanceof AnimatedEmojiDrawable) {
-                AnimatedEmojiDrawable drawable = (AnimatedEmojiDrawable) emoji.getDrawable();
-                if (drawable.getImageReceiver() != null && drawable.getImageReceiver().hasImageLoaded()) {
-                    return emojiLoaded = true;
-                }
-            }
-            return false;
-        }
-
         @Override
-        protected void onDraw(Canvas canvas) {
+        protected void onDraw(@NonNull Canvas canvas) {
             final int height = ActionBar.getCurrentActionBarHeight() + (actionBar.getOccupyStatusBar() ? AndroidUtilities.statusBarHeight : 0);
             final float v = extraHeight + height + searchTransitionOffset;
 
@@ -960,16 +922,6 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     backgroundPaint.setAlpha((int) (0xFF * progressToGradient));
                     canvas.drawRect(0, 0, getMeasuredWidth(), y1, backgroundPaint);
                 }
-                if (hasEmoji) {
-                    final float loadedScale = emojiLoadedT.set(isEmojiLoaded());
-                    final float full = emojiFullT.set(emojiIsCollectible);
-                    if (loadedScale > 0) {
-                        canvas.save();
-                        canvas.clipRect(0, 0, getMeasuredWidth(), y1);
-                        //StarGiftPatterns.drawProfilePattern(canvas, emoji, getMeasuredWidth(), ((actionBar.getOccupyStatusBar() ? AndroidUtilities.statusBarHeight : 0) + dp(144)) - (1f - extraHeight / dp(88)) * dp(50), Math.min(1f, extraHeight / dp(88)), full);
-                        canvas.restore();
-                    }
-                }
                 if (previousTransitionFragment != null) {
                     ActionBar actionBar = previousTransitionFragment.getActionBar();
                     ActionBarMenu menu = actionBar.menu;
@@ -993,7 +945,6 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 parentLayout.drawHeaderShadow(canvas, (int) (headerShadowAlpha * 255), (int) v);
             }
         }
-        private Rect blurBounds = new Rect();
     }
 
     private class OverlaysView extends View implements ProfileGalleryView.Callback {

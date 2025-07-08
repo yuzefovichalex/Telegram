@@ -2,6 +2,7 @@ package org.telegram.ui.profile;
 
 import static org.telegram.messenger.AndroidUtilities.dp;
 import static org.telegram.messenger.AndroidUtilities.lerp;
+import static org.telegram.messenger.Utilities.clamp;
 
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -20,10 +21,12 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.graphics.ColorUtils;
 
-import org.telegram.messenger.Utilities;
 import org.telegram.ui.Components.AnimatedEmojiDrawable;
 
 public class ProfileStarGiftsPattern extends Drawable {
+
+    @NonNull
+    private final PointF tmpPointF = new PointF();
 
     @NonNull
     private final AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable pattern;
@@ -38,12 +41,17 @@ public class ProfileStarGiftsPattern extends Drawable {
     private final RectF avatarBounds = new RectF();
 
     private final int patternSize = dp(24f);
+    private final int patternHalfSize = patternSize / 2;
 
     private boolean hasEmoji;
+    private boolean isEmojiLoaded;
 
     @NonNull
     private final Paint glowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
+    private float expandCollapseProgress;
+
+    @NonNull
     private final int[][] circles = new int[][] {
         { 0, 90, 270 },
         { dp(4), 35, 145, 215, 325 },
@@ -53,12 +61,13 @@ public class ProfileStarGiftsPattern extends Drawable {
         { dp(80), 0, 180 }
     };
 
-    private final float[][] delays = new float[][] {
+    @NonNull
+    private final float[][] velocities = new float[][] {
         { 0.85f, 0.9f },
         { 0.83f, 0.79f, 0.85f, 0.75f },
         { 0.67f, 0.6f },
-        { 0.1f, 0.59f, 0.1f, 0.3f },
-        { 0.25f, 0.33f, 0.6f, 0.25f },
+        { 0.23f, 0.59f, 0.2f, 0.4f },
+        { 0.45f, 0.51f, 0.6f, 0.29f },
         { 0.4f, 0.5f }
     };
 
@@ -83,6 +92,9 @@ public class ProfileStarGiftsPattern extends Drawable {
                 pattern.detach();
             }
         });
+        if (parentView.isAttachedToWindow()) {
+            pattern.attach();
+        }
     }
 
 
@@ -138,14 +150,25 @@ public class ProfileStarGiftsPattern extends Drawable {
         avatarBounds.set(rect);
     }
 
-    float expandCollapseProgress;
-
     public void setExpandCollapseProgress(float progress) {
         expandCollapseProgress = progress;
     }
 
     public void release() {
         pattern.detach();
+    }
+
+    private boolean isEmojiLoaded() {
+        if (isEmojiLoaded) {
+            return true;
+        }
+        if (pattern.getDrawable() instanceof AnimatedEmojiDrawable) {
+            AnimatedEmojiDrawable drawable = (AnimatedEmojiDrawable) pattern.getDrawable();
+            if (drawable.getImageReceiver() != null && drawable.getImageReceiver().hasImageLoaded()) {
+                return isEmojiLoaded = true;
+            }
+        }
+        return false;
     }
 
     @Override
@@ -166,6 +189,10 @@ public class ProfileStarGiftsPattern extends Drawable {
         canvas.drawRect(0, 0, glowSize, glowSize, glowPaint);
         canvas.restore();
 
+        if (!isEmojiLoaded()) {
+            return;
+        }
+
         pattern.setBounds(0, 0, patternSize, patternSize);
 
         float innerRadius =
@@ -175,61 +202,53 @@ public class ProfileStarGiftsPattern extends Drawable {
             int[] circle = circles[i];
             float r = innerRadius + circle[0];
             for (int j = 1; j < circle.length; j++) {
-                float patternIndex = i * circle.length + (j - 1);
-                float totalPatterns = circles.length * (circle.length - 1);
-                float delayFactor = 1f - (patternIndex / totalPatterns);
-                float localProgress = Utilities.clamp((expandCollapseProgress - delays[i][j - 1]), 1f, 0f)  / (1f - delays[i][j - 1]);
+                float velocity = velocities[i][j - 1];
+                float localProgress = clamp(
+                    (expandCollapseProgress - velocity),
+                    1f,
+                    0f
+                ) / (1f - velocity);
+
                 double angle = Math.toRadians(circle[j]);
                 float scale = lerp(
                     1f,
                     lerp(.32f, .64f, localProgress * localProgress),
                     (float) i / circles.length
                 );
-                int alpha = (int) (lerp(80, 25, (float) i / circles.length) * commonAlpha);
-
-//                float x = lerp(
-//                    avatarCx,
-//                    avatarCx + r * (float) Math.cos(angle),
-//                    localProgress
-//                ) - patternSize / 2f;
-//                float y = lerp(
-//                    avatarCy,
-//                    avatarCy + r * (float) Math.sin(angle),
-//                    localProgress
-//                ) - patternSize / 2f;
-
-                PointF start = new PointF(avatarCx, avatarCy);
-                PointF end = new PointF(
-                    avatarCx + r * (float) Math.cos(angle),
-                    avatarCy + r * (float) Math.sin(angle)
+                int alpha = (int) (lerp(
+                    80,
+                    25,
+                    (float) i / circles.length) * localProgress * commonAlpha
                 );
 
-                float dx = end.x - start.x;
-                float dy = end.y - start.y;
+                float patternX = avatarCx + r * (float) Math.cos(angle);
+                float patternY = avatarCy + r * (float) Math.sin(angle);
 
+                float dx = patternX - avatarCx;
+                float dy = patternY - avatarCy;
                 float nx = -dy;
                 float ny = dx;
-
                 float length = (float) Math.sqrt(nx * nx + ny * ny);
                 nx /= length;
                 ny /= length;
-
                 float side = Math.signum(dx);
-
                 float curvature = r * .4f;
-                PointF control = new PointF(
-                    (start.x + end.x) / 2 + nx * curvature * side,
-                    (start.y + end.y) / 2 + ny * curvature * side
+                float controlX = (avatarCx + patternX) / 2 + nx * curvature * side;
+                float controlY = (avatarCy + patternY) / 2 + ny * curvature * side;
+
+                PointF currentPatternPos = quadraticBezier(
+                    avatarCx, avatarCy,
+                    controlX, controlY,
+                    patternX, patternY,
+                    localProgress
                 );
 
-                PointF p = quadraticBezier(start, control, end, localProgress);
-
-                float x = p.x - patternSize / 2f;
-                float y = p.y - patternSize / 2f;
-
                 canvas.save();
-                canvas.translate(x, y);
-                canvas.scale(scale, scale, patternSize / 2f, patternSize / 2f);
+                canvas.translate(
+                    currentPatternPos.x - patternHalfSize,
+                    currentPatternPos.y - patternHalfSize
+                );
+                canvas.scale(scale, scale, patternHalfSize, patternHalfSize);
                 pattern.setAlpha(alpha);
                 pattern.draw(canvas);
                 canvas.restore();
@@ -237,11 +256,21 @@ public class ProfileStarGiftsPattern extends Drawable {
         }
     }
 
-    PointF quadraticBezier(PointF p0, PointF p1, PointF p2, float t) {
+    @NonNull
+    private PointF quadraticBezier(
+        float p1x,
+        float p1y,
+        float cpx,
+        float cpy,
+        float p2x,
+        float p2y,
+        float t
+    ) {
         float u = 1 - t;
-        float x = u * u * p0.x + 2 * u * t * p1.x + t * t * p2.x;
-        float y = u * u * p0.y + 2 * u * t * p1.y + t * t * p2.y;
-        return new PointF(x, y);
+        float x = u * u * p1x + 2 * u * t * cpx + t * t * p2x;
+        float y = u * u * p1y + 2 * u * t * cpy + t * t * p2y;
+        tmpPointF.set(x, y);
+        return tmpPointF;
     }
 
     @Override
