@@ -99,7 +99,7 @@ public class ProfileHeader extends FrameLayout {
     private int buttonGroupHeight;
 
     @NonNull
-    private ProfileStarGiftsPattern starGiftsPattern = new ProfileStarGiftsPattern(this);
+    private final ProfileStarGiftsPattern starGiftsPattern = new ProfileStarGiftsPattern(this);
 
     @NonNull
     private final List<ProfileActionButton> actionButtons = new ArrayList<>();
@@ -418,14 +418,7 @@ public class ProfileHeader extends FrameLayout {
         bottomShadingView.setAlpha(progress);
         bottomShadingView.setVisibility(progress > 0f ? VISIBLE : GONE);
 
-        float avatarScale = lerp(
-            1f,
-            (float) getMeasuredWidth() / avatarImageView.getMeasuredWidth(),
-            progress
-        );
         int avatarRadius = lerp(avatarImageView.getMeasuredWidth() / 2, 0, progress);
-        avatarImageView.setScaleX(avatarScale);
-        avatarImageView.setScaleY(avatarScale);
         avatarImageView.setRoundRadius(avatarRadius);
         // TODO recheck with open/close animation
         //avatarImageView.setForegroundAlpha(progress);
@@ -523,6 +516,8 @@ public class ProfileHeader extends FrameLayout {
 
         super.onMeasure(widthMeasureSpec, heightSpec);
 
+        invalidateAvatarScale();
+
         offsetLeft = calculateMinOffset(leftActionButtonsOffset, getPaddingLeft());
         offsetRight = calculateMinOffset(rightActionButtonsOffset, getPaddingRight());
         int horizontalPadding = getPaddingLeft() + getPaddingRight();
@@ -584,6 +579,21 @@ public class ProfileHeader extends FrameLayout {
             minOffset,
             Math.min(expandCollapseProgress, 1f)
         );
+    }
+
+    private void invalidateAvatarScale() {
+        float avatarWidth = avatarImageView.getMeasuredWidth();
+        if (avatarWidth == 0) {
+            return;
+        }
+
+        float avatarScale = lerp(
+            1f,
+            (float) Math.max(getMeasuredWidth(), getMeasuredHeight()) / avatarWidth,
+            avatarExpandCollapseProgress
+        );
+        avatarImageView.setScaleX(avatarScale);
+        avatarImageView.setScaleY(avatarScale);
     }
 
     @Override
