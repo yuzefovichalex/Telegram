@@ -288,6 +288,7 @@ import org.telegram.ui.bots.BotWebViewAttachedSheet;
 import org.telegram.ui.bots.ChannelAffiliateProgramsFragment;
 import org.telegram.ui.bots.SetupEmojiStatusSheet;
 import org.telegram.ui.profile.AvatarImageView;
+import org.telegram.ui.profile.MuteActionButton;
 import org.telegram.ui.profile.ProfileActionButton;
 
 import java.io.BufferedInputStream;
@@ -783,16 +784,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     private final int profileHeaderExpandedExtraHeight = AndroidUtilities.dp(192f);
 
     @Nullable
-    private ProfileActionButton muteButton;
-
-    @Nullable
-    private RLottieDrawable muteDrawable;
-
-    @Nullable
-    private RLottieDrawable unmuteDrawable;
-
-    @Nullable
-    private RLottieDrawable muteUnmuteDrawable;
+    private MuteActionButton muteButton;
 
     public static ProfileActivity of(long dialogId) {
         Bundle bundle = new Bundle();
@@ -10519,41 +10511,12 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             return;
         }
 
-        if (muteDrawable == null) {
-            muteDrawable = new RLottieDrawable(
-                R.raw.anim_profilemute,
-                "profile_mute",
-                dp(40f),
-                dp(40f),
-                true,
-                null
-            );
-        }
-
-        if (unmuteDrawable == null) {
-            unmuteDrawable = new RLottieDrawable(
-                R.raw.anim_profileunmute,
-                "profile_unmute",
-                dp(40f),
-                dp(40f),
-                true,
-                null
-            );
-        }
-
         if (muteButton == null) {
-            muteButton = new ProfileActionButton();
-            muteButton.setIconPadding(-dp(6f));
+            muteButton = new MuteActionButton(isDialogMuted());
             muteButton.setClickListener(this::onMuteButtonClick);
-        }
-        if (isDialogMuted()) {
-            muteUnmuteDrawable = unmuteDrawable;
-            muteButton.setLabel("Unmute");
         } else {
-            muteUnmuteDrawable = muteDrawable;
-            muteButton.setLabel("Mute");
+            muteButton.setMuted(isDialogMuted(), false);
         }
-        muteButton.setIcon(muteUnmuteDrawable);
 
         profileHeader.clearAllActions(false);
 
@@ -10976,18 +10939,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             listAdapter.notifyItemChanged(notificationsRow);
         }
 
-        if (muteUnmuteDrawable != null) {
-            muteUnmuteDrawable.stop();
-            muteUnmuteDrawable.setProgress(0f);
-        }
-
         if (muteButton != null) {
-            muteUnmuteDrawable = muted ? muteDrawable : unmuteDrawable;
-            muteButton.setIcon(muteUnmuteDrawable);
-            muteButton.setLabel(muted ? "Unmute" : "Mute");
-            if (muteUnmuteDrawable != null) {
-                muteUnmuteDrawable.start();
-            }
+            muteButton.setMuted(muted, true);
         }
     }
 

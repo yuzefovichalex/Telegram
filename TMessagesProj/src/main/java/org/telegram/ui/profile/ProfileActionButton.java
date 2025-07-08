@@ -19,6 +19,7 @@ import android.text.TextPaint;
 import android.text.TextUtils;
 import android.view.MotionEvent;
 
+import androidx.annotation.ColorInt;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
@@ -29,6 +30,9 @@ public class ProfileActionButton extends Drawable implements Drawable.Callback {
     private static final int[] STATE_ENABLED = new int[] { android.R.attr.state_enabled };
 
     private static final int DEFAULT_BACKGROUND_COLOR = 0x1AFFFFFF;
+
+    protected int backgroundColor = DEFAULT_BACKGROUND_COLOR;
+    protected int contentColor = Color.WHITE;
 
     @NonNull
     private final GradientDrawable backgroundContentDrawable;
@@ -62,7 +66,7 @@ public class ProfileActionButton extends Drawable implements Drawable.Callback {
 
     public ProfileActionButton() {
         backgroundContentDrawable = new GradientDrawable();
-        backgroundContentDrawable.setColor(DEFAULT_BACKGROUND_COLOR);
+        backgroundContentDrawable.setColor(backgroundColor);
         backgroundContentDrawable.setCornerRadius(dp(12f));
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             GradientDrawable maskDrawable = new GradientDrawable();
@@ -78,25 +82,41 @@ public class ProfileActionButton extends Drawable implements Drawable.Callback {
         }
         background.setCallback(this);
 
-        labelPaint.setColor(Color.WHITE);
+        labelPaint.setColor(contentColor);
         labelPaint.setTextSize(dp(11f));
     }
 
 
     public void setContentColor(int color) {
-        if (labelPaint.getColor() == color) {
+        if (contentColor == color) {
             return;
         }
+
+        contentColor = color;
 
         if (icon != null) {
             icon.setColorFilter(new PorterDuffColorFilter(color, PorterDuff.Mode.SRC_IN));
         }
+
+        setLabelColor(color);
+    }
+
+    protected void setLabelColor(@ColorInt int color) {
+        if (labelPaint.getColor() == color) {
+            return;
+        }
+
         labelPaint.setColor(color);
         invalidateSelf();
     }
 
-    public void setBackgroundColor(int backgroundColor) {
-        backgroundContentDrawable.setColor(backgroundColor);
+    public void setBackgroundColor(@ColorInt int color) {
+        if (backgroundColor == color) {
+            return;
+        }
+
+        backgroundColor = color;
+        backgroundContentDrawable.setColor(color);
     }
 
     public void setIcon(@Nullable Drawable icon) {
