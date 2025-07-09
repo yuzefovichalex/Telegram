@@ -276,11 +276,11 @@ public class StoryRecorder implements NotificationCenter.NotificationCenterDeleg
 
                 @Override
                 protected void hide() {
+                    button.cancelRipple();
                     button.setVisible(false);
                 }
             };
 
-            button.cancelRipple();
             ProfileActionButton duplicate = new ProfileActionButton();
             Drawable icon = button.getIcon();
             if (icon != null) {

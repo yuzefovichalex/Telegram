@@ -4804,7 +4804,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             avatarsViewPager.onDestroy();
         }
         overlaysView = new OverlaysView(context);
-        avatarsViewPager = new ProfileGalleryView(context, userId != 0 ? userId : -chatId, actionBar, listView, avatarImage, getClassGuid(), overlaysView) {
+        avatarsViewPager = new ProfileGalleryView(context, userId != 0 ? userId : -chatId, actionBar, listView, profileHeader.getAvatarImageView(), getClassGuid(), overlaysView) {
             @Override
             protected void setCustomAvatarProgress(float progress) {
                 customAvatarProgress = progress;
@@ -4987,7 +4987,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         };
         mediaCounterTextView.setAlpha(0.0f);
         avatarContainer2.addView(mediaCounterTextView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.LEFT | Gravity.TOP));
-        storyView = new ProfileStoriesView(context, currentAccount, getDialogId(), isTopic, avatarImage, resourcesProvider) {
+        storyView = new ProfileStoriesView(context, currentAccount, getDialogId(), isTopic, profileHeader.getAvatarImageView(), resourcesProvider) {
             @Override
             protected void onTap(StoryViewer.PlaceProvider provider) {
                 long did = getDialogId();
@@ -10052,7 +10052,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 imageLocation = null;
                 thumbLocation = null;
                 videoLocation = null;
-                ForumUtilities.setTopicIcon(avatarImage, topic, true, true, resourcesProvider);
+                ForumUtilities.setTopicIcon(profileHeader.getAvatarImageView(), topic, true, true, resourcesProvider);
             } else if (ChatObject.isMonoForum(currentChat)) {
                 TLRPC.Chat channel = getMessagesController().getMonoForumLinkedChat(currentChat.id);
                 avatarDrawable.setInfo(currentAccount, channel);
@@ -10616,7 +10616,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 if (!ChatObject.isChannel(chat) || chat.megagroup && !chat.gigagroup) {
                     profileHeader.addAction(
                         R.drawable.ic_profile_action_live_stream_24dp,
-                        "Voice Chat",
+                        "Video Chat",
                         (x, y) -> startGroupCall(chatId)
                     );
                 } else {

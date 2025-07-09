@@ -281,7 +281,7 @@ public class ProfileActionButton extends Drawable implements Drawable.Callback {
 
     @Override
     public void draw(@NonNull Canvas canvas) {
-        if (!isVisible()) {
+        if (!isVisible() || getBounds().width() == 0 || getBounds().height() == 0) {
             return;
         }
 
@@ -305,7 +305,7 @@ public class ProfileActionButton extends Drawable implements Drawable.Callback {
         float textScale = Math.min((float) currentIconSize / dp(16f), 1f);
 
         Drawable icon = this.icon;
-        if (icon != null) {
+        if (icon != null && icon.getAlpha() > 0) {
             icon.setBounds(
                 iconPaddingLeft,
                 iconPaddingTop,
@@ -328,7 +328,7 @@ public class ProfileActionButton extends Drawable implements Drawable.Callback {
         }
 
         StaticLayout labelLayout = this.labelLayout;
-        if (labelLayout != null) {
+        if (labelLayout != null && labelPaint.getAlpha() > 0) {
             canvas.save();
             canvas.translate(
                 left + getCenteredOffset(availableWidth, labelLayout.getWidth()),

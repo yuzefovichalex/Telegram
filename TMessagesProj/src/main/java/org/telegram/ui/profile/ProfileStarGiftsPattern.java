@@ -212,9 +212,13 @@ public class ProfileStarGiftsPattern extends Drawable {
                     0f
                 ) / (1f - velocity);
 
+                int alpha = (int) (lerp(80, 25, distanceFactor) * localProgress * commonAlpha);
+                if (alpha == 0) {
+                    continue;
+                }
+
                 double angle = circle[j];
                 float scale = lerp(1f, .64f, distanceFactor) * lerp(.8f, 1f, localProgress);
-                int alpha = (int) (lerp(80, 25, distanceFactor) * localProgress * commonAlpha);
 
                 float patternX = avatarCx + r * (float) Math.cos(angle);
                 float patternY = avatarCy + r * (float) Math.sin(angle);
