@@ -231,6 +231,12 @@ public class ProfileHeader extends FrameLayout {
         }
     }
 
+    // TODO try to not use outside
+    @NonNull
+    public AvatarImageView getAvatarImageView() {
+        return avatarImageView;
+    }
+
     public void setAvatarVisibility(int visibility) {
         avatarImageView.setVisibility(visibility);
     }
@@ -453,7 +459,7 @@ public class ProfileHeader extends FrameLayout {
     public ProfileActionButton addAction(
         @DrawableRes int iconResId,
         @NonNull String label,
-        @NonNull ProfileActionButton.OnClickListener clickListener
+        @Nullable ProfileActionButton.OnClickListener clickListener
     ) {
         Drawable icon = ContextCompat.getDrawable(getContext(), iconResId);
         if (icon != null) {
@@ -468,7 +474,7 @@ public class ProfileHeader extends FrameLayout {
     public ProfileActionButton addAction(
         @NonNull Drawable icon,
         @NonNull String label,
-        @NonNull ProfileActionButton.OnClickListener clickListener
+        @Nullable ProfileActionButton.OnClickListener clickListener
     ) {
         ProfileActionButton button = new ProfileActionButton();
         button.setIcon(icon);
@@ -533,6 +539,10 @@ public class ProfileHeader extends FrameLayout {
 
         requestLayout();
         invalidate();
+    }
+
+    public float getExpandCollapseProgress() {
+        return expandCollapseProgress;
     }
 
     public void setExpandCollapseProgress(float progress) {

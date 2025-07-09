@@ -15,7 +15,6 @@ import android.view.MotionEvent;
 import android.view.View;
 
 import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.MessagesController;
@@ -30,31 +29,32 @@ import org.telegram.ui.Components.AnimatedEmojiDrawable;
 import org.telegram.ui.Components.AnimatedFloat;
 import org.telegram.ui.Components.ButtonBounce;
 import org.telegram.ui.Components.CubicBezierInterpolator;
-import org.telegram.ui.ProfileActivity;
-import org.telegram.ui.profile.AvatarImageView;
 
 import java.util.ArrayList;
 import java.util.HashSet;
 
 public class ProfileGiftsView extends View implements NotificationCenter.NotificationCenterDelegate {
 
+    @NonNull
+    private final RectF avatarRect = new RectF();
+
     private final int currentAccount;
     private final long dialogId;
-    private final View avatarContainer;
-    private final AvatarImageView avatarImage;
-    private final Theme.ResourcesProvider resourcesProvider;
 
-    public ProfileGiftsView(Context context, int currentAccount, long dialogId, @NonNull View avatarContainer, AvatarImageView avatarImage, Theme.ResourcesProvider resourcesProvider) {
+    public ProfileGiftsView(Context context, int currentAccount, long dialogId) {
         super(context);
 
         this.currentAccount = currentAccount;
         this.dialogId = dialogId;
+    }
 
-        this.avatarContainer = avatarContainer;
-        this.avatarImage = avatarImage;
+    public void setAvatarPosition(@NonNull RectF rect) {
+        if (avatarRect.equals(rect)) {
+            return;
+        }
 
-        this.resourcesProvider = resourcesProvider;
-
+        avatarRect.set(rect);
+        invalidate();
     }
 
     private float expandProgress;
@@ -325,10 +325,10 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
     protected void dispatchDraw(@NonNull Canvas canvas) {
         if (gifts.isEmpty() || expandProgress >= 1.0f) return;
 
-        final float ax = avatarContainer.getX();
-        final float ay = avatarContainer.getY();
-        final float aw = (avatarContainer.getWidth()) * avatarContainer.getScaleX();
-        final float ah = (avatarContainer.getHeight()) * avatarContainer.getScaleY();
+        final float ax = avatarRect.left;
+        final float ay = avatarRect.top;
+        final float aw = avatarRect.width();
+        final float ah = avatarRect.height();
 
         canvas.save();
         canvas.clipRect(0, 0, getWidth(), expandY);
@@ -345,80 +345,93 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
             final Gift gift = gifts.get(i);
             final float alpha = gift.animatedFloat.set(1.0f);
             final float scale = lerp(0.5f, 1.0f, alpha);
-            final int index = i; // gifts.size() == maxCount ? i - 1 : i;
-            if (index == 0) {
-                gift.draw(
-                    canvas,
-                    (float) (acx + ar * Math.cos(-65 / 180.0f * Math.PI)),
-                    (float) (acy + ar * Math.sin(-65 / 180.0f * Math.PI)),
-                    scale, -65 + 90,
-                    alpha * (1.0f - expandProgress), lerp(0.9f, 0.25f, actionBarProgress)
-                );
-            } else if (index == 1) {
-                gift.draw(
-                    canvas,
-                    lerp(cacx + Math.min(getWidth() * .27f, dp(62)), cx, 0.5f * actionBarProgress), acy - dp(52),
-                    scale, -4.0f,
-                    alpha * alpha * (1.0f - expandProgress) * (1.0f - actionBarProgress) * (closedAlpha),
-                    1.0f
-                );
-            } else if (index == 2) {
-                gift.draw(
-                    canvas,
-                    lerp(cacx + Math.min(getWidth() * .46f, dp(105)), cx, 0.5f * actionBarProgress), acy - dp(72),
-                    scale, 8.0f,
-                    alpha * (1.0f - expandProgress) * (1.0f - actionBarProgress) * (closedAlpha),
-                    1.0f
-                );
-            } else if (index == 3) {
-                gift.draw(
-                    canvas,
-                    lerp(cacx + Math.min(getWidth() * .60f, dp(136)), cx, 0.5f * actionBarProgress), acy - dp(46),
-                    scale, 3.0f,
-                    alpha * (1.0f - expandProgress) * (1.0f - actionBarProgress) * (closedAlpha),
-                    1.0f
-                );
-            } else if (index == 4) {
-                gift.draw(
-                    canvas,
-                    lerp(cacx + Math.min(getWidth() * .08f, dp(21.6f)), cx, 0.5f * actionBarProgress), acy - dp(82f),
-                    scale, -3.0f,
-                    alpha * (1.0f - expandProgress) * (1.0f - actionBarProgress) * (closedAlpha),
-                    1.0f
-                );
-            } else if (index == 5) {
-                gift.draw(
-                    canvas,
-                    lerp(cacx + Math.min(getWidth() * .745f, dp(186)), cx, 0.5f * actionBarProgress), acy - dp(39),
-                    scale, 2.0f,
-                    alpha * (1.0f - expandProgress) * (1.0f - actionBarProgress) * (closedAlpha),
-                    1.0f
-                );
-            } else if (index == 6) {
-                gift.draw(
-                    canvas,
-                    cacx + Math.min(getWidth() * .38f, dp(102)), expandY - dp(12),
-                    scale, 0,
-                    alpha * (1.0f - expandProgress) * (1.0f - actionBarProgress) * (closedAlpha),
-                    1.0f
-                );
-            } else if (index == 7) {
-                gift.draw(
-                    canvas,
-                    cacx + Math.min(getWidth() * .135f, dp(36)), expandY - dp(17.6f),
-                    scale, -5.0f,
-                    alpha * (1.0f - expandProgress) * (1.0f - actionBarProgress) * (closedAlpha),
-                    1.0f
-                );
-            } else if (index == 8) {
-                gift.draw(
-                    canvas,
-                    cacx + Math.min(getWidth() * .76f, dp(178)), expandY - dp(21.66f),
-                    scale, 5.0f,
-                    alpha * (1.0f - expandProgress) * (1.0f - actionBarProgress) * (closedAlpha),
-                    1.0f
-                );
-            }
+            final int index = i;
+
+            float x = acx + ar * (float) Math.cos(Math.toRadians(60f * i));
+            float y = acy + ar * (float) Math.sin(Math.toRadians(60f * i));
+            gift.draw(
+                canvas,
+                x, y,
+                scale,
+                0f,
+                alpha * (1.0f - expandProgress),
+                lerp(0.9f, 0.25f, actionBarProgress)
+            );
+
+
+//            if (index == 0) {
+//                gift.draw(
+//                    canvas,
+//                    (float) (acx + ar * Math.cos(-65 / 180.0f * Math.PI)),
+//                    (float) (acy + ar * Math.sin(-65 / 180.0f * Math.PI)),
+//                    scale, -65 + 90,
+//                    alpha * (1.0f - expandProgress), lerp(0.9f, 0.25f, actionBarProgress)
+//                );
+//            } else if (index == 1) {
+//                gift.draw(
+//                    canvas,
+//                    lerp(cacx + Math.min(getWidth() * .27f, dp(62)), cx, 0.5f * actionBarProgress), acy - dp(52),
+//                    scale, -4.0f,
+//                    alpha * alpha * (1.0f - expandProgress) * (1.0f - actionBarProgress) * (closedAlpha),
+//                    1.0f
+//                );
+//            } else if (index == 2) {
+//                gift.draw(
+//                    canvas,
+//                    lerp(cacx + Math.min(getWidth() * .46f, dp(105)), cx, 0.5f * actionBarProgress), acy - dp(72),
+//                    scale, 8.0f,
+//                    alpha * (1.0f - expandProgress) * (1.0f - actionBarProgress) * (closedAlpha),
+//                    1.0f
+//                );
+//            } else if (index == 3) {
+//                gift.draw(
+//                    canvas,
+//                    lerp(cacx + Math.min(getWidth() * .60f, dp(136)), cx, 0.5f * actionBarProgress), acy - dp(46),
+//                    scale, 3.0f,
+//                    alpha * (1.0f - expandProgress) * (1.0f - actionBarProgress) * (closedAlpha),
+//                    1.0f
+//                );
+//            } else if (index == 4) {
+//                gift.draw(
+//                    canvas,
+//                    lerp(cacx + Math.min(getWidth() * .08f, dp(21.6f)), cx, 0.5f * actionBarProgress), acy - dp(82f),
+//                    scale, -3.0f,
+//                    alpha * (1.0f - expandProgress) * (1.0f - actionBarProgress) * (closedAlpha),
+//                    1.0f
+//                );
+//            } else if (index == 5) {
+//                gift.draw(
+//                    canvas,
+//                    lerp(cacx + Math.min(getWidth() * .745f, dp(186)), cx, 0.5f * actionBarProgress), acy - dp(39),
+//                    scale, 2.0f,
+//                    alpha * (1.0f - expandProgress) * (1.0f - actionBarProgress) * (closedAlpha),
+//                    1.0f
+//                );
+//            } else if (index == 6) {
+//                gift.draw(
+//                    canvas,
+//                    cacx + Math.min(getWidth() * .38f, dp(102)), expandY - dp(12),
+//                    scale, 0,
+//                    alpha * (1.0f - expandProgress) * (1.0f - actionBarProgress) * (closedAlpha),
+//                    1.0f
+//                );
+//            } else if (index == 7) {
+//                gift.draw(
+//                    canvas,
+//                    cacx + Math.min(getWidth() * .135f, dp(36)), expandY - dp(17.6f),
+//                    scale, -5.0f,
+//                    alpha * (1.0f - expandProgress) * (1.0f - actionBarProgress) * (closedAlpha),
+//                    1.0f
+//                );
+//            } else if (index == 8) {
+//                gift.draw(
+//                    canvas,
+//                    cacx + Math.min(getWidth() * .76f, dp(178)), expandY - dp(21.66f),
+//                    scale, 5.0f,
+//                    alpha * (1.0f - expandProgress) * (1.0f - actionBarProgress) * (closedAlpha),
+//                    1.0f
+//                );
+//            }
         }
 
         canvas.restore();

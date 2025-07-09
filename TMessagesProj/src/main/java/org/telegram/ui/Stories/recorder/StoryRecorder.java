@@ -158,13 +158,12 @@ import org.telegram.ui.Stories.StoryViewer;
 import org.telegram.ui.Stories.StoryWaveEffectView;
 import org.telegram.ui.WrappedResourceProvider;
 import org.telegram.ui.profile.AvatarImageView;
+import org.telegram.ui.profile.ProfileActionButton;
 
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
 
 public class StoryRecorder implements NotificationCenter.NotificationCenterDelegate {
@@ -267,11 +266,42 @@ public class StoryRecorder implements NotificationCenter.NotificationCenterDeleg
         protected void hide() {}
         protected void drawAbove(Canvas canvas, float alpha) {}
 
+        @NonNull
+        public static SourceView fromProfileActionButton(@NonNull ProfileActionButton button) {
+            SourceView src = new SourceView() {
+                @Override
+                protected void show(boolean sent) {
+                    AndroidUtilities.runOnUIThread(() -> button.setVisible(true), 17);
+                }
+
+                @Override
+                protected void hide() {
+                    button.setVisible(false);
+                }
+            };
+
+            button.cancelRipple();
+            ProfileActionButton duplicate = new ProfileActionButton();
+            Drawable icon = button.getIcon();
+            if (icon != null) {
+                icon = icon.getConstantState() != null ? icon.getConstantState().newDrawable() : icon;
+                icon.mutate();
+                duplicate.setIcon(icon);
+            }
+            duplicate.setLabel(button.getLabel());
+            duplicate.setContentColor(button.getContentColor());
+            duplicate.setBackgroundColor(button.getBackgroundColor());
+            duplicate.setAlpha(button.getAlpha());
+            src.screenRect.set(button.getBounds());
+            src.backgroundDrawable = duplicate;
+            return src;
+        }
+
         public static SourceView fromAvatarImage(AvatarImageView avatarImage, boolean isForum) {
             if (avatarImage == null || avatarImage.getRootView() == null) {
                 return null;
             }
-            float scale = ((View)avatarImage.getParent()).getScaleX();
+            float scale = avatarImage.getScaleX();
             final float size = avatarImage.getImageReceiver().getImageWidth() * scale;
             final float rounding = isForum ? size * 0.32f : size;
             SourceView src = new SourceView() {

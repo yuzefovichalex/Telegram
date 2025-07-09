@@ -87,6 +87,10 @@ public class ProfileActionButton extends Drawable implements Drawable.Callback {
     }
 
 
+    public int getContentColor() {
+        return contentColor;
+    }
+
     public void setContentColor(int color) {
         if (contentColor == color) {
             return;
@@ -110,6 +114,10 @@ public class ProfileActionButton extends Drawable implements Drawable.Callback {
         invalidateSelf();
     }
 
+    public int getBackgroundColor() {
+        return backgroundColor;
+    }
+
     public void setBackgroundColor(@ColorInt int color) {
         if (backgroundColor == color) {
             return;
@@ -117,6 +125,11 @@ public class ProfileActionButton extends Drawable implements Drawable.Callback {
 
         backgroundColor = color;
         backgroundContentDrawable.setColor(color);
+    }
+
+    @Nullable
+    public Drawable getIcon() {
+        return icon;
     }
 
     public void setIcon(@Nullable Drawable icon) {
@@ -149,6 +162,11 @@ public class ProfileActionButton extends Drawable implements Drawable.Callback {
         invalidateSelf();
     }
 
+    @Nullable
+    public String getLabel() {
+        return label;
+    }
+
     public void setLabel(@Nullable String label) {
         if (TextUtils.equals(this.label, label)) {
             return;
@@ -156,6 +174,19 @@ public class ProfileActionButton extends Drawable implements Drawable.Callback {
 
         this.label = label;
         invalidateLabelLayout();
+    }
+
+    public void setVisible(boolean isVisible) {
+        setVisible(isVisible, false);
+    }
+
+    public void cancelRipple() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP &&
+            background instanceof RippleDrawable
+        ) {
+            background.setState(STATE_ENABLED);
+            background.jumpToCurrentState();
+        }
     }
 
     public void setClickListener(@Nullable OnClickListener clickListener) {
@@ -187,6 +218,10 @@ public class ProfileActionButton extends Drawable implements Drawable.Callback {
     }
 
     public boolean onTouchEvent(@NonNull MotionEvent event) {
+        if (!isVisible()) {
+            return false;
+        }
+
         boolean handled = false;
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
@@ -246,6 +281,10 @@ public class ProfileActionButton extends Drawable implements Drawable.Callback {
 
     @Override
     public void draw(@NonNull Canvas canvas) {
+        if (!isVisible()) {
+            return;
+        }
+
         int availableWidth = getAvailableWidth();
         int availableHeight = getAvailableHeight();
         int left = getBounds().left + padding;

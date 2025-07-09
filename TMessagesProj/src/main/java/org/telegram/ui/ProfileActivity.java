@@ -1274,8 +1274,13 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         innerListView.scrollBy(0, dyUnconsumed);
                     }
                 }
-                if (dyConsumed != 0 && type == TYPE_TOUCH) {
-                    hideFloatingButton(!(sharedMediaLayout == null || sharedMediaLayout.getClosestTab() == SharedMediaLayout.TAB_STORIES || sharedMediaLayout.getClosestTab() == SharedMediaLayout.TAB_ARCHIVED_STORIES) || dyConsumed > 0);
+                if (dyConsumed != 0) {
+                    hideFloatingButton(
+                        !(sharedMediaLayout == null ||
+                            sharedMediaLayout.getClosestTab() == SharedMediaLayout.TAB_STORIES ||
+                            sharedMediaLayout.getClosestTab() == SharedMediaLayout.TAB_ARCHIVED_STORIES) ||
+                            dyConsumed > 0 || profileHeader.getExpandCollapseProgress() > 0f
+                    );
                 }
             } catch (Throwable e) {
                 FileLog.e(e);
@@ -3058,7 +3063,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                                             return null;
                                         }
                                         updateAvatarRoundRadius();
-                                        return StoryRecorder.SourceView.fromAvatarImage(avatarImage, ChatObject.isForum(currentChat));
+                                        return StoryRecorder.SourceView.fromAvatarImage(profileHeader.getAvatarImageView(), ChatObject.isForum(currentChat));
                                     }
                                 })
                                 .open(null);
@@ -3154,6 +3159,12 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             @Override
             protected void onSelectedTabChanged() {
                 updateSelectedMediaTabText();
+                hideFloatingButton(
+                    !(sharedMediaLayout == null ||
+                        sharedMediaLayout.getClosestTab() == SharedMediaLayout.TAB_STORIES ||
+                        sharedMediaLayout.getClosestTab() == SharedMediaLayout.TAB_ARCHIVED_STORIES) ||
+                        profileHeader.getExpandCollapseProgress() > 0f
+                );
             }
             @Override
             protected boolean includeSavedDialogs() {
@@ -3276,7 +3287,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                                 return null;
                             }
                             updateAvatarRoundRadius();
-                            return StoryRecorder.SourceView.fromAvatarImage(avatarImage, ChatObject.isForum(currentChat));
+                            return StoryRecorder.SourceView.fromAvatarImage(profileHeader.getAvatarImageView(), ChatObject.isForum(currentChat));
                         }
                     })
                     .open(StoryRecorder.SourceView.fromFloatingButton(floatingButtonContainer), true);
@@ -5007,7 +5018,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             avatarImage.setHasStories(needInsetForStories());
         }
         frameLayout.addView(storyView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
-        giftsView = new ProfileGiftsView(context, currentAccount, getDialogId(), avatarContainer, avatarImage, resourcesProvider);
+        giftsView = new ProfileGiftsView(context, currentAccount, getDialogId());
         avatarContainer2.addView(giftsView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
         updateProfileData(true);
 
@@ -5064,6 +5075,9 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             public void onAvatarRectChanged(@NonNull RectF rect) {
                 if (storyView != null) {
                     storyView.setAvatarPosition(rect);
+                }
+                if (giftsView != null) {
+                    giftsView.setAvatarPosition(rect);
                 }
             }
         });
@@ -5285,7 +5299,12 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         storiesController.canSendStoryFor(getDialogId(), canSend -> {
             waitCanSendStoryRequest = false;
             showBoostsAlert = !canSend;
-            hideFloatingButton(!(sharedMediaLayout == null || sharedMediaLayout.getClosestTab() == SharedMediaLayout.TAB_STORIES || sharedMediaLayout.getClosestTab() == SharedMediaLayout.TAB_ARCHIVED_STORIES));
+            hideFloatingButton(
+                !(sharedMediaLayout == null ||
+                    sharedMediaLayout.getClosestTab() == SharedMediaLayout.TAB_STORIES ||
+                    sharedMediaLayout.getClosestTab() == SharedMediaLayout.TAB_ARCHIVED_STORIES) ||
+                    profileHeader.getExpandCollapseProgress() > 0f
+            );
         }, false, resourcesProvider);
     }
 
@@ -5314,55 +5333,12 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         floatingButtonContainer = new FrameLayout(context);
         floatingButtonContainer.setVisibility(View.VISIBLE);
         contentView.addView(floatingButtonContainer, LayoutHelper.createFrame((Build.VERSION.SDK_INT >= 21 ? 56 : 60), (Build.VERSION.SDK_INT >= 21 ? 56 : 60), (LocaleController.isRTL ? Gravity.LEFT : Gravity.RIGHT) | Gravity.BOTTOM, LocaleController.isRTL ? 14 : 0, 0, LocaleController.isRTL ? 0 : 14, 14));
-        floatingButtonContainer.setOnClickListener(v -> {
-            if (showBoostsAlert) {
-                if (loadingBoostsStats) {
-                    return;
-                }
-                MessagesController messagesController = MessagesController.getInstance(currentAccount);
-                loadingBoostsStats = true;
-                messagesController.getBoostsController().getBoostsStats(dialogId, boostsStatus -> {
-                    loadingBoostsStats = false;
-                    if (boostsStatus == null) {
-                        return;
-                    }
-                    messagesController.getBoostsController().userCanBoostChannel(dialogId, boostsStatus, canApplyBoost -> {
-                        if (canApplyBoost == null) {
-                            return;
-                        }
-                        BaseFragment lastFragment = LaunchActivity.getLastFragment();
-                        LimitReachedBottomSheet.openBoostsForPostingStories(lastFragment, dialogId, canApplyBoost, boostsStatus, () -> {
-                            TLRPC.Chat chat = getMessagesController().getChat(chatId);
-                            presentFragment(StatisticActivity.create(chat));
-                        });
-                    });
-                });
-                return;
-            }
-            StoryRecorder recorder = StoryRecorder.getInstance(getParentActivity(), currentAccount)
-                    .selectedPeerId(getDialogId())
-                    .canChangePeer(false)
-                    .closeToWhenSent(new StoryRecorder.ClosingViewProvider() {
-                        @Override
-                        public void preLayout(long dialogId, Runnable runnable) {
-                            avatarImage.setHasStories(needInsetForStories());
-                            if (dialogId == getDialogId()) {
-                                collapseAvatarInstant();
-                            }
-                            AndroidUtilities.runOnUIThread(runnable, 30);
-                        }
-
-                        @Override
-                        public StoryRecorder.SourceView getView(long dialogId) {
-                            if (dialogId != getDialogId()) {
-                                return null;
-                            }
-                            updateAvatarRoundRadius();
-                            return StoryRecorder.SourceView.fromAvatarImage(avatarImage, ChatObject.isForum(currentChat));
-                        }
-                    });
-            recorder.open(StoryRecorder.SourceView.fromFloatingButton(floatingButtonContainer), true);
-        });
+        floatingButtonContainer.setOnClickListener(v ->
+            openChatStoryRecorder(
+                StoryRecorder.SourceView.fromFloatingButton(floatingButtonContainer),
+                dialogId
+            )
+        );
 
         floatingButton = new RLottieImageView(context);
         floatingButton.setScaleType(ImageView.ScaleType.CENTER);
@@ -10652,6 +10628,26 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 }
             }
 
+            if (getMessagesController().storiesEnabled() &&
+                getDialogId() <= 0L &&
+                ChatObject.isBoostSupported(chat) &&
+                getMessagesController().getStoriesController().canPostStories(getDialogId())
+            ) {
+                long dialogId = getDialogId();
+                checkCanSendStoryForPosting();
+                ProfileActionButton storyButton = profileHeader.addAction(
+                    R.drawable.ic_profile_action_story_24dp,
+                    "Add Story",
+                    null
+                );
+                storyButton.setClickListener((x, y) ->
+                    openChatStoryRecorder(
+                        StoryRecorder.SourceView.fromProfileActionButton(storyButton),
+                        dialogId
+                    )
+                );
+            }
+
             if (ChatObject.isPublic(chat)) {
                 profileHeader.addAction(
                     R.drawable.ic_profile_action_share_24dp,
@@ -10942,6 +10938,59 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         if (muteButton != null) {
             muteButton.setMuted(muted, true);
         }
+    }
+
+    private void openChatStoryRecorder(@NonNull StoryRecorder.SourceView sourceView, long dialogId) {
+        if (waitCanSendStoryRequest) {
+            return;
+        }
+
+        if (showBoostsAlert) {
+            if (loadingBoostsStats) {
+                return;
+            }
+            MessagesController messagesController = MessagesController.getInstance(currentAccount);
+            loadingBoostsStats = true;
+            messagesController.getBoostsController().getBoostsStats(dialogId, boostsStatus -> {
+                loadingBoostsStats = false;
+                if (boostsStatus == null) {
+                    return;
+                }
+                messagesController.getBoostsController().userCanBoostChannel(dialogId, boostsStatus, canApplyBoost -> {
+                    if (canApplyBoost == null) {
+                        return;
+                    }
+                    BaseFragment lastFragment = LaunchActivity.getLastFragment();
+                    LimitReachedBottomSheet.openBoostsForPostingStories(lastFragment, dialogId, canApplyBoost, boostsStatus, () -> {
+                        TLRPC.Chat chat = getMessagesController().getChat(chatId);
+                        presentFragment(StatisticActivity.create(chat));
+                    });
+                });
+            });
+            return;
+        }
+        StoryRecorder recorder = StoryRecorder.getInstance(getParentActivity(), currentAccount)
+            .selectedPeerId(getDialogId())
+            .canChangePeer(false)
+            .closeToWhenSent(new StoryRecorder.ClosingViewProvider() {
+                @Override
+                public void preLayout(long dialogId, Runnable runnable) {
+                    avatarImage.setHasStories(needInsetForStories());
+                    if (dialogId == getDialogId()) {
+                        collapseAvatarInstant();
+                    }
+                    AndroidUtilities.runOnUIThread(runnable, 30);
+                }
+
+                @Override
+                public StoryRecorder.SourceView getView(long dialogId) {
+                    if (dialogId != getDialogId()) {
+                        return null;
+                    }
+                    return StoryRecorder.SourceView.fromAvatarImage(profileHeader.getAvatarImageView(), ChatObject.isForum(currentChat));
+                }
+            });
+        recorder.open(sourceView, true);
     }
 
     private void createAutoDeleteItem(Context context) {
