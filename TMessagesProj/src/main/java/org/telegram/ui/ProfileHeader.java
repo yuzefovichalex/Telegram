@@ -5,6 +5,7 @@ import static org.telegram.messenger.AndroidUtilities.lerp;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
+import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Path;
@@ -36,6 +37,7 @@ import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.ProfileGalleryView;
 import org.telegram.ui.profile.AvatarImageView;
+import org.telegram.ui.profile.LiquidAvatarRenderer;
 import org.telegram.ui.profile.ProfileActionButton;
 import org.telegram.ui.profile.ProfileStarGiftsPattern;
 import org.telegram.ui.profile.ShadingView;
@@ -71,7 +73,7 @@ public class ProfileHeader extends FrameLayout {
     @NonNull
     private final AvatarImageView avatarImageView;
 
-    private final int collapsedAvatarSize = AndroidUtilities.dp(24f);
+    private final int collapsedAvatarSize = AndroidUtilities.dp(42f);
     private final int avatarSize = AndroidUtilities.dp(92f);
 
     @NonNull
@@ -116,6 +118,12 @@ public class ProfileHeader extends FrameLayout {
 
     @NonNull
     private final List<ProfileActionButton> actionButtons = new ArrayList<>();
+
+    @NonNull
+    private final LiquidAvatarRenderer liquidAvatarRenderer;
+
+    @Nullable
+    private Bitmap avatarLiquidBackground;
 
     @Nullable
     private Path cutoutPath;
@@ -186,6 +194,14 @@ public class ProfileHeader extends FrameLayout {
         addView(statusTextView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT));
 
         starGiftsPattern.setDefaultAvatarSize(avatarSize);
+
+        liquidAvatarRenderer = new LiquidAvatarRenderer(context);
+        liquidAvatarRenderer.setCallback(bmp -> {
+            if (shouldDrawAvatarLiquidBackground()) {
+                avatarLiquidBackground = bmp;
+                invalidate();
+            }
+        });
 
         invalidateActionButtonsColors(true);
     }
@@ -579,7 +595,7 @@ public class ProfileHeader extends FrameLayout {
         }
 
         requestLayout();
-        avatarImageView.invalidate();
+        invalidate();
     }
 
     public void setCallback(@Nullable Callback callback) {
@@ -601,12 +617,27 @@ public class ProfileHeader extends FrameLayout {
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
+        liquidAvatarRenderer.init();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             DisplayCutout cutout = getRootWindowInsets().getDisplayCutout();
             if (cutout != null) {
-                cutoutPath = cutout.getCutoutPath();
+                //cutoutPath = cutout.getCutoutPath();
             }
         }
+
+        if (cutoutPath == null) {
+            cutoutPath = new Path();
+            cutoutPath.addRect(0, 0, getRootView().getMeasuredWidth(), 1, Path.Direction.CW);
+        } else {
+
+        }
+        liquidAvatarRenderer.setShape(cutoutPath);
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        super.onDetachedFromWindow();
+        liquidAvatarRenderer.release();
     }
 
     @Override
@@ -678,6 +709,8 @@ public class ProfileHeader extends FrameLayout {
 
         tmpRect.set(0, 0, getMeasuredWidth(), getMeasuredHeight());
         starGiftsPattern.setBounds(tmpRect);
+
+        liquidAvatarRenderer.setSize(getMeasuredWidth(), getMeasuredWidth());
     }
 
     private int calculateMinOffset(int actionsOffset, int minOffset) {
@@ -766,7 +799,7 @@ public class ProfileHeader extends FrameLayout {
         );
         int avatarLeft = getCenteredOffset(getMeasuredWidth(), avatarImageView.getMeasuredWidth());
         int avatarTop = lerp(
-            -dp(24),
+            -collapsedAvatarSize - dp(8f),
             avatarTopOffset + expandedAvatarTop,
             Math.min(1f + .33f * factor, expandCollapseProgress)
         );
@@ -791,11 +824,23 @@ public class ProfileHeader extends FrameLayout {
         avatarImageView.getMatrix().mapRect(tmpRectF);
         tmpRectF.offset(avatarImageView.getLeft(), avatarImageView.getTop());
 
+        if (shouldDrawAvatarLiquidBackground()) {
+            liquidAvatarRenderer.requestRender(
+                tmpRectF.centerX(),
+                tmpRectF.centerY(),
+                (tmpRectF.width() - dp(2f)) / 2f
+            );
+        }
+
         starGiftsPattern.setAvatarBounds(tmpRectF);
 
         if (callback != null) {
             callback.onAvatarRectChanged(tmpRectF);
         }
+    }
+
+    private boolean shouldDrawAvatarLiquidBackground() {
+        return expandCollapseProgress < 1f && avatarImageView.getTop() < dp(16f);
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -815,6 +860,12 @@ public class ProfileHeader extends FrameLayout {
     protected void dispatchDraw(@NonNull Canvas canvas) {
         if (starGiftsPattern.hasEmoji()) {
             starGiftsPattern.draw(canvas);
+        }
+
+        if (shouldDrawAvatarLiquidBackground() && avatarLiquidBackground != null) {
+            canvas.drawBitmap(avatarLiquidBackground, 0, 0, null);
+        } else {
+            avatarLiquidBackground = null;
         }
 
         super.dispatchDraw(canvas);
@@ -844,12 +895,6 @@ public class ProfileHeader extends FrameLayout {
             );
             button.draw(canvas);
         }
-//        if (cutoutPath != null) {
-//            Paint p = new Paint();
-//            p.setColor(Color.RED);
-//            p.setStyle(Paint.Style.FILL);
-//            canvas.drawPath(cutoutPath, p);
-//        }
     }
 
 
