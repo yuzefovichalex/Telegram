@@ -4880,7 +4880,6 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         );
         profileHeader.setOccupyStatusBar(actionBar.getOccupyStatusBar());
         profileHeader.setLeftActionButtonsOffset(AndroidUtilities.dp(72f));
-        profileHeader.setRightActionButtonsOffset(AndroidUtilities.dp(104f));
         profileHeader.setNameColor(getThemedColor(Theme.key_profile_title));
         profileHeader.setStatusColor(applyPeerColor(getThemedColor(Theme.key_avatar_subtitleInProfileBlue), true, null));
         profileHeader.setCollapsedHeight(ActionBar.getCurrentActionBarHeight());
@@ -10203,6 +10202,16 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         if (sharedMediaLayout != null) {
             sharedMediaLayout.getSearchItem().requestLayout();
         }
+
+        int actionBarButtonsOffset = 64;
+        if (editItemVisible) {
+            actionBarButtonsOffset += 40;
+        }
+        if (searchItem != null) {
+            actionBarButtonsOffset += 40;
+        }
+        profileHeader.setRightActionButtonsOffset(AndroidUtilities.dp(actionBarButtonsOffset));
+
         updateStoriesViewBounds(false);
         createProfileHeaderActionButtons();
     }

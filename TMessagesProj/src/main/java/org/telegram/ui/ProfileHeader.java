@@ -313,12 +313,22 @@ public class ProfileHeader extends FrameLayout {
         avatarImageView.setForegroundImageDrawable(holder);
     }
 
-    public void setLeftActionButtonsOffset(int leftActionButtonsOffset) {
-        this.leftActionButtonsOffset = leftActionButtonsOffset;
+    public void setLeftActionButtonsOffset(int offset) {
+        if (leftActionButtonsOffset == offset) {
+            return;
+        }
+
+        leftActionButtonsOffset = offset;
+        requestLayout();
     }
 
-    public void setRightActionButtonsOffset(int rightActionButtonsOffset) {
-        this.rightActionButtonsOffset = rightActionButtonsOffset;
+    public void setRightActionButtonsOffset(int offset) {
+        if (rightActionButtonsOffset == offset) {
+            return;
+        }
+
+        rightActionButtonsOffset = offset;
+        requestLayout();
     }
 
     // TODO do not use outside
