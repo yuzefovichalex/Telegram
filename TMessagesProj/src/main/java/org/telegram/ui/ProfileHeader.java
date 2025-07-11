@@ -13,6 +13,7 @@ import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.Rect;
 import android.graphics.RectF;
+import android.graphics.Region;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
@@ -75,8 +76,11 @@ public class ProfileHeader extends FrameLayout {
     @NonNull
     private final AvatarImageView avatarImageView;
 
-    private final int collapsedAvatarSize = AndroidUtilities.dp(42f);
+    private final int defaultCollapsedAvatarSize = AndroidUtilities.dp(42f);
+    private int collapsedAvatarSize = defaultCollapsedAvatarSize;
     private final int avatarSize = AndroidUtilities.dp(92f);
+
+    private int collapsedAvatarOffsetLeft, collapsedAvatarTop;
 
     @NonNull
     private final SimpleTextView nameTextView;
@@ -129,6 +133,11 @@ public class ProfileHeader extends FrameLayout {
 
     @Nullable
     private Path cutoutPath;
+
+    @NonNull
+    private final Rect cutoutRect = new Rect();
+
+    private boolean isCutoutCalculated;
 
     @Nullable
     private Callback callback;
@@ -639,20 +648,6 @@ public class ProfileHeader extends FrameLayout {
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
         liquidAvatarRenderer.init();
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            DisplayCutout cutout = getRootWindowInsets().getDisplayCutout();
-            if (cutout != null) {
-                //cutoutPath = cutout.getCutoutPath();
-            }
-        }
-
-        if (cutoutPath == null) {
-            cutoutPath = new Path();
-            cutoutPath.addRect(0, 0, getRootView().getMeasuredWidth(), 1, Path.Direction.CW);
-        } else {
-
-        }
-        liquidAvatarRenderer.setShape(cutoutPath);
     }
 
     @Override
@@ -731,7 +726,59 @@ public class ProfileHeader extends FrameLayout {
         tmpRect.set(0, 0, getMeasuredWidth(), getMeasuredHeight());
         starGiftsPattern.setBounds(tmpRect);
 
+        if (!isCutoutCalculated) {
+            calculateCutoutPath();
+            if (cutoutPath != null) {
+                liquidAvatarRenderer.setShape(cutoutPath);
+            }
+            isCutoutCalculated = true;
+        }
+
         liquidAvatarRenderer.setSize(getMeasuredWidth(), getMeasuredWidth());
+    }
+
+    private void calculateCutoutPath() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            DisplayCutout cutout = getRootWindowInsets().getDisplayCutout();
+            if (cutout != null) {
+                cutoutPath = cutout.getCutoutPath();
+                if (cutoutPath != null) {
+                    cutoutRect.set(intersectRectAndPath(cutout.getBoundingRectTop(), cutoutPath));
+                }
+            }
+        }
+
+        int defaultCollapseLeft = (getMeasuredWidth() - defaultCollapsedAvatarSize) / 2;
+        int defaultCollapseRight = defaultCollapseLeft + defaultCollapsedAvatarSize;
+        if (cutoutPath == null || cutoutRect.isEmpty() ||
+            cutoutRect.right < defaultCollapseLeft ||
+            cutoutRect.left > defaultCollapseRight
+        ) {
+            cutoutRect.set(0, 0, getMeasuredWidth(), 1);
+            cutoutPath = new Path();
+            tmpRectF.set(cutoutRect);
+            cutoutPath.addRect(tmpRectF, Path.Direction.CW);
+            collapsedAvatarSize = dp(42f);
+            collapsedAvatarTop = -collapsedAvatarSize - dp(12f);
+        } else {
+            collapsedAvatarSize = 0;
+            collapsedAvatarOffsetLeft = cutoutRect.centerX() - getMeasuredWidth() / 2;
+            collapsedAvatarTop = cutoutRect.centerY() - collapsedAvatarSize / 2;
+        }
+    }
+
+    @NonNull
+    public Rect intersectRectAndPath(@NonNull Rect rect, @NonNull Path path) {
+        Region clipRegion = new Region(rect);
+        Region pathRegion = new Region();
+        pathRegion.setPath(path, clipRegion);
+        Region intersectionRegion = new Region(pathRegion);
+        intersectionRegion.op(rect, Region.Op.INTERSECT);
+        if (!intersectionRegion.isEmpty()) {
+            return intersectionRegion.getBounds();
+        } else {
+            return new Rect();
+        }
     }
 
     private int calculateMinOffset(int actionsOffset, int minOffset) {
@@ -818,9 +865,10 @@ public class ProfileHeader extends FrameLayout {
             ),
             avatarImageView.getMeasuredHeight()
         );
-        int avatarLeft = getCenteredOffset(getMeasuredWidth(), avatarImageView.getMeasuredWidth());
+        int avatarLeft = lerp(collapsedAvatarOffsetLeft, 0, Math.min(expandCollapseProgress, 1f)) +
+            getCenteredOffset(getMeasuredWidth(), avatarImageView.getMeasuredWidth());
         int avatarTop = lerp(
-            -collapsedAvatarSize - dp(12f),
+            collapsedAvatarTop,
             avatarTopOffset + expandedAvatarTop,
             Math.min(1f + .33f * factor, expandCollapseProgress)
         );
@@ -861,7 +909,8 @@ public class ProfileHeader extends FrameLayout {
     }
 
     private boolean shouldDrawAvatarLiquidBackground() {
-        return expandCollapseProgress < 1f && avatarImageView.getTop() < dp(20f);
+        return expandCollapseProgress < 1f &&
+            avatarImageView.getTop() - cutoutRect.bottom < dp(20f);
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -911,6 +960,11 @@ public class ProfileHeader extends FrameLayout {
             Utilities.stackBlurBitmap(blurredBmp, dp(20));
             isSet++;
         }
+
+        // TODO for testing cutout
+//        Paint paint = new Paint();
+//        paint.setColor(Color.RED);
+//        canvas.drawRect(cutoutRectt, paint);
 
         if (expandCollapseProgress <= 1f) {
             int a = (int) (thresholdRemap(.3f, .65f, expandCollapseProgress) * 255);
