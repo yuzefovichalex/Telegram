@@ -596,7 +596,6 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     private int notificationsDividerRow;
     private int bizHoursRow;
     private int bizLocationRow;
-    private int notificationsSimpleRow;
     private int infoStartRow, infoEndRow;
     private int infoSectionRow;
     private int affiliateRow;
@@ -851,6 +850,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 }
                 profileHeader.setActionBarColor(getThemedColor(Theme.key_avatar_backgroundActionBarBlue), false);
             }
+            profileHeader.setStatusClickListener(isTopic ? v -> goToForum() : null);
             if (!animated) {
                 color1Animated.set(color1, true);
                 color2Animated.set(color2, true);
@@ -3564,14 +3564,6 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 } else if (user != null && user.bot_can_edit) {
                     presentFragment(new AffiliateProgramFragment(userId));
                 }
-            } else if (position == notificationsSimpleRow) {
-                boolean muted = getMessagesController().isDialogMuted(did, topicId);
-                getNotificationsController().muteDialog(did, topicId, !muted);
-                BulletinFactory.createMuteBulletin(ProfileActivity.this, !muted, null).show();
-                updateExceptions();
-                if (notificationsSimpleRow >= 0 && listAdapter != null) {
-                    listAdapter.notifyItemChanged(notificationsSimpleRow);
-                }
             } else if (position == addToContactsRow) {
                 TLRPC.User user = getMessagesController().getUser(userId);
                 Bundle args = new Bundle();
@@ -4870,6 +4862,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         profileHeader.setExpandedHeight(ActionBar.getCurrentActionBarHeight() + profileHeaderExpandedExtraHeight);
         profileHeader.setOnActionBarColor(getThemedColor(Theme.key_profile_actionBackground));
         profileHeader.initGiftsController(currentAccount, getDialogId());
+        profileHeader.setDrawAvatarLiquidBackground(!isTopic);
         profileHeader.setCallback(new ProfileHeader.Callback() {
             @Override
             public void onStatusPositionChanged(float x, float y) {
@@ -8603,7 +8596,6 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         membersSectionRow = -1;
         channelBalanceSectionRow = -1;
         sharedMediaRow = -1;
-        notificationsSimpleRow = -1;
         settingsRow = -1;
         botStarsBalanceRow = -1;
         botTonBalanceRow = -1;
@@ -8847,7 +8839,6 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         } else if (isTopic) {
             topPaddingRow = rowCount++;
             usernameRow = rowCount++;
-            notificationsSimpleRow = rowCount++;
             infoSectionRow = rowCount++;
             if (hasMedia) {
                 sharedMediaRow = rowCount++;
@@ -10237,7 +10228,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             TLRPC.Chat chat = getMessagesController().getChat(chatId);
 
             boolean showJoin = false;
-            if (ChatObject.isChannel(currentChat) && currentChat.left && !currentChat.kicked) {
+            if (ChatObject.isChannel(currentChat) && !isTopic && currentChat.left && !currentChat.kicked) {
                 long requestedTime = MessagesController.getNotificationsSettings(currentAccount).getLong("dialog_join_requested_time_" + dialogId, -1);
                 if (!(requestedTime > 0 && System.currentTimeMillis() - requestedTime < 1000 * 60 * 2)) {
                     showJoin = true;
@@ -10315,7 +10306,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 );
             }
 
-            if (ChatObject.isPublic(chat)) {
+            if (ChatObject.isPublic(chat) && !isTopic) {
                 profileHeader.addAction(
                     R.drawable.ic_profile_action_share_24dp,
                     "Share",
@@ -10528,7 +10519,10 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             did = -chatId;
         }
 
-        if (isDialogMuted(did)) {
+        if (isTopic) {
+            setDialogMuted(did, !isDialogMuted(did));
+            return;
+        } else if (isDialogMuted(did)) {
             setDialogMuted(did, false);
             return;
         }
@@ -12377,8 +12371,6 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 return VIEW_TYPE_TEXT;
             } else if (position == notificationsDividerRow) {
                 return VIEW_TYPE_DIVIDER;
-            } else if (position == notificationsSimpleRow) {
-                return VIEW_TYPE_NOTIFICATIONS_CHECK_SIMPLE;
             } else if (position == lastSectionRow || position == membersSectionRow ||
                     position == secretSettingsSectionRow || position == settingsSectionRow || position == devicesSectionRow ||
                     position == helpSectionCell || position == passwordSuggestionSectionRow ||
@@ -13714,7 +13706,6 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             put(++pointer, addToGroupInfoRow, sparseIntArray);
             put(++pointer, joinRow, sparseIntArray);
             put(++pointer, lastSectionRow, sparseIntArray);
-            put(++pointer, notificationsSimpleRow, sparseIntArray);
             put(++pointer, bizHoursRow, sparseIntArray);
             put(++pointer, bizLocationRow, sparseIntArray);
             put(++pointer, birthdayRow, sparseIntArray);

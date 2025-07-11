@@ -37,7 +37,7 @@ import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.PinchToZoomHelper;
-import org.telegram.ui.ProfileActivity;
+import org.telegram.ui.profile.AvatarImageView;
 
 import java.util.ArrayList;
 
@@ -121,7 +121,7 @@ public class ProfileGalleryView extends CircularViewPager implements Notificatio
     private static class Item {
         boolean isActiveVideo;
         private View textureViewStubView;
-        private AvatarImageView imageView;
+        private AvatarImageView2 imageView;
     }
 
     public interface Callback {
@@ -265,7 +265,7 @@ public class ProfileGalleryView extends CircularViewPager implements Notificatio
         imagesLayerNum = value;
     }
 
-    public ProfileGalleryView(Context context, long dialogId, ActionBar parentActionBar, RecyclerListView parentListView, ProfileActivity.AvatarImageView parentAvatarImageView, int parentClassGuid, Callback callback) {
+    public ProfileGalleryView(Context context, long dialogId, ActionBar parentActionBar, RecyclerListView parentListView, AvatarImageView parentAvatarImageView, int parentClassGuid, Callback callback) {
         super(context);
         setVisibility(View.GONE);
         setOverScrollMode(View.OVER_SCROLL_NEVER);
@@ -1090,7 +1090,7 @@ public class ProfileGalleryView extends CircularViewPager implements Notificatio
         private BackupImageView parentAvatarImageView;
         private final ActionBar parentActionBar;
 
-        public ViewPagerAdapter(Context context, ProfileActivity.AvatarImageView parentAvatarImageView, ActionBar parentActionBar) {
+        public ViewPagerAdapter(Context context, AvatarImageView parentAvatarImageView, ActionBar parentActionBar) {
             this.context = context;
             this.parentAvatarImageView = parentAvatarImageView;
             this.parentActionBar = parentActionBar;
@@ -1140,7 +1140,7 @@ public class ProfileGalleryView extends CircularViewPager implements Notificatio
                 container.removeView(item.textureViewStubView);
             }
             if (item.imageView == null) {
-                item.imageView = new AvatarImageView(context, position, placeholderPaint);
+                item.imageView = new AvatarImageView2(context, position, placeholderPaint);
                 imageViews.set(position, item.imageView);
             }
 
@@ -1362,7 +1362,7 @@ public class ProfileGalleryView extends CircularViewPager implements Notificatio
         this.createThumbFromParent = createThumbFromParent;
     }
 
-    private class AvatarImageView extends BackupImageView {
+    private class AvatarImageView2 extends BackupImageView {
 
         private final int radialProgressSize = AndroidUtilities.dp(64f);
 
@@ -1374,7 +1374,7 @@ public class ProfileGalleryView extends CircularViewPager implements Notificatio
         private final int position;
         private final Paint placeholderPaint;
 
-        public AvatarImageView(Context context, int position, Paint placeholderPaint) {
+        public AvatarImageView2(Context context, int position, Paint placeholderPaint) {
             super(context);
             this.position = position;
             this.placeholderPaint = placeholderPaint;

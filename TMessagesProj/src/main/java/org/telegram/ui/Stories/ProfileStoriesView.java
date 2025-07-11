@@ -32,7 +32,6 @@ import com.google.zxing.common.detector.MathUtils;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ChatObject;
-import org.telegram.messenger.DialogObject;
 import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessagesController;
@@ -48,7 +47,7 @@ import org.telegram.ui.Components.AnimatedFloat;
 import org.telegram.ui.Components.AnimatedTextView;
 import org.telegram.ui.Components.CubicBezierInterpolator;
 import org.telegram.ui.Components.RadialProgress;
-import org.telegram.ui.ProfileActivity;
+import org.telegram.ui.profile.AvatarImageView;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -66,8 +65,7 @@ public class ProfileStoriesView extends View implements NotificationCenter.Notif
     private final int currentAccount;
     private final long dialogId;
     private final boolean isTopic;
-    private final View avatarContainer;
-    private final ProfileActivity.AvatarImageView avatarImage;
+    private final AvatarImageView avatarImage;
 
     private final AnimatedTextView.AnimatedTextDrawable titleDrawable = new AnimatedTextView.AnimatedTextDrawable(false, true, true);
 
@@ -142,13 +140,19 @@ public class ProfileStoriesView extends View implements NotificationCenter.Notif
 
     StoriesController storiesController;
 
-    public ProfileStoriesView(Context context, int currentAccount, long dialogId, boolean isTopic, @NonNull View avatarContainer, ProfileActivity.AvatarImageView avatarImage, Theme.ResourcesProvider resourcesProvider) {
+    public ProfileStoriesView(
+        Context context,
+        int currentAccount,
+        long dialogId,
+        boolean isTopic,
+        AvatarImageView avatarImage,
+        Theme.ResourcesProvider resourcesProvider
+    ) {
         super(context);
 
         this.currentAccount = currentAccount;
         this.dialogId = dialogId;
         this.isTopic = isTopic;
-        this.avatarContainer = avatarContainer;
         this.avatarImage = avatarImage;
         storiesController = MessagesController.getInstance(currentAccount).getStoriesController();
 
@@ -483,17 +487,25 @@ public class ProfileStoriesView extends View implements NotificationCenter.Notif
 
     float w;
 
+    private RectF avatarRect = new RectF();
+
+    public void setAvatarPosition(@NonNull RectF rect) {
+        avatarRect.set(rect);
+        invalidate();
+    }
+
     @Override
     protected void dispatchDraw(Canvas canvas) {
         float rright = rightAnimated.set(this.right);
-        float avatarPullProgress = Utilities.clamp((avatarContainer.getScaleX() - 1f) / 0.4f, 1f, 0f);
-        float insetMain = AndroidUtilities.lerp(AndroidUtilities.dpf2(4f), AndroidUtilities.dpf2(3.5f), avatarPullProgress);
-        insetMain *= progressToInsets;
-        float ax = avatarContainer.getX() + insetMain * avatarContainer.getScaleX();
-        float ay = avatarContainer.getY() + insetMain * avatarContainer.getScaleY();
-        float aw = (avatarContainer.getWidth() - insetMain * 2) * avatarContainer.getScaleX();
-        float ah = (avatarContainer.getHeight() - insetMain * 2) * avatarContainer.getScaleY();
-        rect1.set(ax, ay, ax + aw, ay + ah);
+        float avatarPullProgress = 0f;//Utilities.clamp((avatarContainer.getScaleX() - 1f) / 0.4f, 1f, 0f);
+        //float insetMain = AndroidUtilities.lerp(AndroidUtilities.dpf2(4f), AndroidUtilities.dpf2(3.5f), avatarPullProgress);
+        //insetMain *= progressToInsets;
+//        float ax = avatarContainer.getX() + insetMain * avatarContainer.getScaleX();
+//        float ay = avatarContainer.getY() + insetMain * avatarContainer.getScaleY();
+//        float aw = (avatarContainer.getWidth() - insetMain * 2) * avatarContainer.getScaleX();
+//        float ah = (avatarContainer.getHeight() - insetMain * 2) * avatarContainer.getScaleY();
+//        rect1.set(ax, ay, ax + aw, ay + ah);
+        rect1.set(avatarRect);
 
         float maxX = this.left;
         boolean needsSort = false;

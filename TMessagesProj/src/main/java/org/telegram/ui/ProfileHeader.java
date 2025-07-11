@@ -6,6 +6,7 @@ import static org.telegram.messenger.Utilities.clamp;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
+import android.content.res.ColorStateList;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -16,9 +17,10 @@ import android.graphics.RectF;
 import android.graphics.Region;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.RippleDrawable;
 import android.os.Build;
 import android.text.TextUtils;
-import android.view.DisplayCutout;
 import android.view.MotionEvent;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
@@ -127,6 +129,8 @@ public class ProfileHeader extends FrameLayout {
 
     @NonNull
     private final List<ProfileActionButton> actionButtons = new ArrayList<>();
+
+    private boolean shouldDrawAvatarLiquidBackground;
 
     @NonNull
     private final LiquidAvatarRenderer liquidAvatarRenderer;
@@ -463,6 +467,32 @@ public class ProfileHeader extends FrameLayout {
         statusTextView.setVisibility(visibility);
     }
 
+    public void setStatusClickListener(@Nullable OnClickListener listener) {
+        Drawable background = null;
+        if (listener != null) {
+            GradientDrawable gradientDrawable = new GradientDrawable();
+            gradientDrawable.setColor(actionButtonBackgroundColor);
+            gradientDrawable.setCornerRadius(dp(8f));
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                GradientDrawable maskDrawable = new GradientDrawable();
+                maskDrawable.setColor(Color.WHITE);
+                maskDrawable.setCornerRadius(dp(12f));
+                background = new RippleDrawable(
+                    ColorStateList.valueOf(0x1AFFFFFF),
+                    gradientDrawable,
+                    maskDrawable
+                );
+            } else {
+                background = gradientDrawable;
+            }
+            statusTextView.setPadding(dp(8), 2, dp(8), 2);
+        } else {
+            statusTextView.setPadding(0, 0, 0, 0);
+        }
+        statusTextView.setOnClickListener(listener);
+        statusTextView.setBackground(background);
+    }
+
     public void setStarGiftsPattern(long emojiId, boolean animated) {
         starGiftsPattern.setEmoji(emojiId, animated);
     }
@@ -648,7 +678,7 @@ public class ProfileHeader extends FrameLayout {
         avatarImageView.setLayoutParams(lp);
         avatarImageView.setRoundRadius((int) (avatarSize / 2f * (1f - avatarExpandCollapseProgress)));
 
-        float avatarAlpha = progress <= 1f
+        float avatarAlpha = shouldDrawAvatarLiquidBackground && progress <= 1f
             ? thresholdRemap(.5f, .75f, progress)
             : 1f;
         avatarImageView.setAlpha(avatarAlpha);
@@ -674,6 +704,12 @@ public class ProfileHeader extends FrameLayout {
 
     private float thresholdRemap(float n, float m, float x) {
         return clamp((x - n) / (m - n), 1f, 0f);
+    }
+
+    public void setDrawAvatarLiquidBackground(boolean draw) {
+        if (shouldDrawAvatarLiquidBackground != draw) {
+            shouldDrawAvatarLiquidBackground = draw;
+        }
     }
 
     public void setCallback(@Nullable Callback callback) {
@@ -964,7 +1000,8 @@ public class ProfileHeader extends FrameLayout {
     }
 
     private boolean shouldDrawAvatarLiquidBackground() {
-        return expandCollapseProgress < 1f &&
+        return shouldDrawAvatarLiquidBackground &&
+            expandCollapseProgress < 1f &&
             avatarImageView.getTop() - cutoutRect.bottom < dp(20f);
     }
 
@@ -1019,7 +1056,7 @@ public class ProfileHeader extends FrameLayout {
 //        paint.setColor(Color.RED);
 //        canvas.drawRect(cutoutRect, paint);
 
-        if (expandCollapseProgress <= 1f) {
+        if (shouldDrawAvatarLiquidBackground && expandCollapseProgress <= 1f) {
             int a = (int) (thresholdRemap(.3f, .65f, expandCollapseProgress) * 255);
             blurredAvatarPaint.setAlpha(a);
             canvas.save();
