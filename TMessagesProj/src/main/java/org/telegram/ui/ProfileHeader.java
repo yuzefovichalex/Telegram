@@ -53,7 +53,6 @@ import java.util.List;
 //  - Check stories integration
 //  - Another avatar position on screen open/close
 //  - Add action button animation support (add/remove buttons)
-//  - Remove all app bar menu buttons for their action buttons analogues
 //  - Invite links for restricted calls
 public class ProfileHeader extends FrameLayout {
 
