@@ -3,7 +3,6 @@ package org.telegram.ui.profile;
 import static org.telegram.messenger.AndroidUtilities.dp;
 import static org.telegram.messenger.AndroidUtilities.lerp;
 import static org.telegram.messenger.Utilities.clamp;
-
 import static java.lang.Math.toRadians;
 
 import android.graphics.Canvas;
@@ -16,6 +15,7 @@ import android.graphics.RadialGradient;
 import android.graphics.RectF;
 import android.graphics.Shader;
 import android.graphics.drawable.Drawable;
+import android.view.MotionEvent;
 import android.view.View;
 
 import androidx.annotation.ColorInt;
@@ -24,6 +24,8 @@ import androidx.annotation.Nullable;
 import androidx.core.graphics.ColorUtils;
 
 import org.telegram.ui.Components.AnimatedEmojiDrawable;
+
+import java.util.List;
 
 public class ProfileStarGiftsPattern extends Drawable {
 
@@ -72,6 +74,28 @@ public class ProfileStarGiftsPattern extends Drawable {
         { 0.45f, 0.51f, 0.6f, 0.29f },
         { 0.4f, 0.5f }
     };
+
+    // distance, angle, velocity
+    private final float[][] giftsParams = new float[][] {
+        { dp(8), (float) toRadians(35), .82f },
+        { dp(8), (float) toRadians(215), .78f },
+        { dp(8), (float) toRadians(145), .58f },
+        { dp(8), (float) toRadians(325), .62f },
+        { dp(32), (float) toRadians(0), .38f },
+        { dp(32), (float) toRadians(180), .42f },
+        { dp(64), (float) toRadians(343), .2f },
+        { dp(64), (float) toRadians(197), .1f },
+        { dp(4), (float) toRadians(270), .9f }
+    };
+
+    @Nullable
+    private List<ProfileGiftsController.Gift> gifts;
+
+    @Nullable
+    private ProfileGiftsController.Gift pressedGift;
+
+    @Nullable
+    private Callback callback;
 
 
     public ProfileStarGiftsPattern(@NonNull View parentView) {
@@ -173,96 +197,152 @@ public class ProfileStarGiftsPattern extends Drawable {
         return false;
     }
 
+    public void setGifts(@Nullable List<ProfileGiftsController.Gift> gifts) {
+        this.gifts = gifts;
+        invalidateSelf();
+    }
+
+    public void setCallback(@Nullable Callback callback) {
+        this.callback = callback;
+    }
+
     @Override
     public void draw(@NonNull Canvas canvas) {
+        if (commonAlpha == 0f || expandCollapseProgress >= 2f) {
+            return;
+        }
+
         float avatarWidth = avatarBounds.width();
         float avatarHeight = avatarBounds.height();
         float avatarCx = avatarBounds.centerX();
         float avatarCy = avatarBounds.centerY();
-
-        float glowSize = defaultAvatarSize * 5f;
-        float glowHalfSize = glowSize / 2f;
-        float glowScaleX = avatarWidth / defaultAvatarSize;
-        float glowScaleY = avatarHeight / defaultAvatarSize;
-        glowPaint.setAlpha((int) (255 * expandCollapseProgress * expandCollapseProgress * commonAlpha));
-        canvas.save();
-        canvas.translate(avatarCx - glowHalfSize, avatarCy - glowHalfSize);
-        canvas.scale(glowScaleX, glowScaleY, glowHalfSize, glowHalfSize);
-        canvas.drawRect(0, 0, glowSize, glowSize, glowPaint);
-        canvas.restore();
-
-        if (!isEmojiLoaded()) {
-            return;
-        }
-
-        pattern.setBounds(0, 0, patternSize, patternSize);
-
-        float innerRadius =
+        float avatarRadius =
             (float) Math.sqrt(avatarWidth * avatarWidth + avatarHeight * avatarHeight) / 2f;
 
-        for (int i = 0; i < circles.length; i++) {
-            double[] circle = circles[i];
-            float r = innerRadius + (float) circle[0];
-            float distanceFactor = (float) i / circles.length;
-            for (int j = 1; j < circle.length; j++) {
-                float velocity = velocities[i][j - 1];
+        if (hasEmoji) {
+            float glowSize = defaultAvatarSize * 5f;
+            float glowHalfSize = glowSize / 2f;
+            float glowScaleX = avatarWidth / defaultAvatarSize;
+            float glowScaleY = avatarHeight / defaultAvatarSize;
+            glowPaint.setAlpha((int) (255 * expandCollapseProgress * expandCollapseProgress * commonAlpha));
+            canvas.save();
+            canvas.translate(avatarCx - glowHalfSize, avatarCy - glowHalfSize);
+            canvas.scale(glowScaleX, glowScaleY, glowHalfSize, glowHalfSize);
+            canvas.drawRect(0, 0, glowSize, glowSize, glowPaint);
+            canvas.restore();
+        }
+
+        if (isEmojiLoaded()) {
+            pattern.setBounds(0, 0, patternSize, patternSize);
+
+            for (int i = 0; i < circles.length; i++) {
+                double[] circle = circles[i];
+                float r = avatarRadius + (float) circle[0];
+                float distanceFactor = (float) i / circles.length;
+                for (int j = 1; j < circle.length; j++) {
+                    float velocity = velocities[i][j - 1];
+                    float localProgress = clamp(
+                        (expandCollapseProgress - velocity),
+                        1f,
+                        0f
+                    ) / (1f - velocity);
+
+                    int alpha = (int) (lerp(80, 25, distanceFactor) * localProgress * commonAlpha);
+                    if (alpha == 0) {
+                        continue;
+                    }
+
+                    double angle = circle[j];
+                    float scale = lerp(1f, .64f, distanceFactor) * lerp(.8f, 1f, localProgress);
+
+                    float patternX = avatarCx + r * (float) Math.cos(angle);
+                    float patternY = avatarCy + r * (float) Math.sin(angle);
+
+                    PointF currentPatternPos =
+                        qerp(avatarCx, avatarCy, patternX, patternY, r, localProgress);
+
+                    canvas.save();
+                    canvas.translate(
+                        currentPatternPos.x - patternHalfSize,
+                        currentPatternPos.y - patternHalfSize
+                    );
+                    canvas.scale(scale, scale, patternHalfSize, patternHalfSize);
+                    pattern.setAlpha(alpha);
+                    pattern.draw(canvas);
+                    canvas.restore();
+                }
+            }
+        }
+
+        if (gifts != null && !gifts.isEmpty()) {
+            int count = Math.min(9, gifts.size());
+            for (int i = 0; i < count; ++i) {
+                ProfileGiftsController.Gift gift = gifts.get(i);
+                float[] params = giftsParams[i];
+                float r = avatarRadius + params[0];
+                float angle = params[1];
+                float velocity = params[2];
+
                 float localProgress = clamp(
                     (expandCollapseProgress - velocity),
                     1f,
                     0f
                 ) / (1f - velocity);
 
-                int alpha = (int) (lerp(80, 25, distanceFactor) * localProgress * commonAlpha);
-                if (alpha == 0) {
-                    continue;
-                }
+                float visibilityAlpha = gift.animatedFloat.set(1f);
+                float visibilityScale = lerp(.5f, 1f, visibilityAlpha);
+                float alpha = visibilityAlpha * localProgress;
+                float scale = visibilityScale * lerp(.8f, 1f, localProgress);
+                float x = avatarCx + r * (float) Math.cos(angle);
+                float y = avatarCy + r * (float) Math.sin(angle);
 
-                double angle = circle[j];
-                float scale = lerp(1f, .64f, distanceFactor) * lerp(.8f, 1f, localProgress);
+                PointF currentPatternPos =
+                    qerp(avatarCx, avatarCy, x, y, r, localProgress);
 
-                float patternX = avatarCx + r * (float) Math.cos(angle);
-                float patternY = avatarCy + r * (float) Math.sin(angle);
-
-                float dx = patternX - avatarCx;
-                float dy = patternY - avatarCy;
-                float nx = -dy;
-                float ny = dx;
-                float length = (float) Math.sqrt(nx * nx + ny * ny);
-                nx /= length;
-                ny /= length;
-                float side = Math.signum(dx);
-                float curvature = r * .4f;
-                float controlX = (avatarCx + patternX) / 2 + nx * curvature * side;
-                float controlY = (avatarCy + patternY) / 2 + ny * curvature * side;
-
-                PointF currentPatternPos = quadraticBezier(
-                    avatarCx, avatarCy,
-                    controlX, controlY,
-                    patternX, patternY,
-                    localProgress
+                gift.draw(
+                    canvas,
+                    currentPatternPos.x, currentPatternPos.y,
+                    scale,
+                    0f,
+                    alpha,
+                    lerp(0f, .9f, Math.min(expandCollapseProgress, 1f))
                 );
-
-                canvas.save();
-                canvas.translate(
-                    currentPatternPos.x - patternHalfSize,
-                    currentPatternPos.y - patternHalfSize
-                );
-                canvas.scale(scale, scale, patternHalfSize, patternHalfSize);
-                pattern.setAlpha(alpha);
-                pattern.draw(canvas);
-                canvas.restore();
             }
         }
     }
 
     @NonNull
+    private PointF qerp(
+        float x1, float y1,
+        float x2, float y2,
+        float r,
+        float p
+    ) {
+        float dx = x2 - x1;
+        float dy = y2 - y1;
+        float nx = -dy;
+        float ny = dx;
+        float length = (float) Math.sqrt(nx * nx + ny * ny);
+        nx /= length;
+        ny /= length;
+        float side = Math.signum(dx);
+        float curvature = r * .4f;
+        float controlX = (x1 + x2) / 2 + nx * curvature * side;
+        float controlY = (y1 + y2) / 2 + ny * curvature * side;
+
+        return quadraticBezier(
+            x1, y1,
+            controlX, controlY,
+            x2, y2,
+            p
+        );
+    }
+
+    @NonNull
     private PointF quadraticBezier(
-        float p1x,
-        float p1y,
-        float cpx,
-        float cpy,
-        float p2x,
-        float p2y,
+        float p1x, float p1y,
+        float cpx, float cpy,
+        float p2x, float p2y,
         float t
     ) {
         float u = 1 - t;
@@ -292,6 +372,52 @@ public class ProfileStarGiftsPattern extends Drawable {
     @Override
     public int getOpacity() {
         return PixelFormat.TRANSLUCENT;
+    }
+
+    public boolean onTouchEvent(@NonNull MotionEvent event) {
+        final ProfileGiftsController.Gift hit = getGiftUnder(event.getX(), event.getY());
+        if (event.getAction() == MotionEvent.ACTION_DOWN) {
+            pressedGift = hit;
+            if (pressedGift != null) {
+                pressedGift.bounce.setPressed(true);
+            }
+        } else if (event.getAction() == MotionEvent.ACTION_MOVE) {
+            if (pressedGift != hit && pressedGift != null) {
+                pressedGift.bounce.setPressed(false);
+                pressedGift = null;
+            }
+        } else if (event.getAction() == MotionEvent.ACTION_UP) {
+            if (pressedGift != null) {
+                if (callback != null) {
+                    callback.onGiftClick(pressedGift);
+                }
+                pressedGift.bounce.setPressed(false);
+                pressedGift = null;
+            }
+        } else if (event.getAction() == MotionEvent.ACTION_CANCEL) {
+            if (pressedGift != null) {
+                pressedGift.bounce.setPressed(false);
+                pressedGift = null;
+            }
+        }
+        return pressedGift != null;
+    }
+
+    public ProfileGiftsController.Gift getGiftUnder(float x, float y) {
+        if (gifts == null) {
+            return null;
+        }
+
+        for (int i = 0; i < gifts.size(); ++i) {
+            if (gifts.get(i).bounds.contains(x, y))
+                return gifts.get(i);
+        }
+        return null;
+    }
+
+
+    public interface Callback {
+        void onGiftClick(@NonNull ProfileGiftsController.Gift gift);
     }
 
 }

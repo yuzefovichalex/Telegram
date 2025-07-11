@@ -35,6 +35,7 @@ import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ImageLocation;
 import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.Utilities;
+import org.telegram.messenger.browser.Browser;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.SimpleTextView;
 import org.telegram.ui.ActionBar.Theme;
@@ -43,6 +44,7 @@ import org.telegram.ui.Components.ProfileGalleryView;
 import org.telegram.ui.profile.AvatarImageView;
 import org.telegram.ui.profile.LiquidAvatarRenderer;
 import org.telegram.ui.profile.ProfileActionButton;
+import org.telegram.ui.profile.ProfileGiftsController;
 import org.telegram.ui.profile.ProfileStarGiftsPattern;
 import org.telegram.ui.profile.ShadingView;
 
@@ -142,6 +144,9 @@ public class ProfileHeader extends FrameLayout {
     @Nullable
     private Callback callback;
 
+    @Nullable
+    private ProfileGiftsController giftsController;
+
 
     public ProfileHeader(@NonNull Context context) {
         super(context);
@@ -205,6 +210,9 @@ public class ProfileHeader extends FrameLayout {
         addView(statusTextView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT));
 
         starGiftsPattern.setDefaultAvatarSize(avatarSize);
+        starGiftsPattern.setCallback(gift ->
+            Browser.openUrl(getContext(), "https://t.me/nft/" + gift.slug)
+        );
 
         liquidAvatarRenderer = new LiquidAvatarRenderer(context);
         liquidAvatarRenderer.setCallback(bmp -> {
@@ -217,6 +225,23 @@ public class ProfileHeader extends FrameLayout {
         invalidateActionButtonsColors(true);
     }
 
+
+    public void initGiftsController(int currentAccount, long dialogId) {
+        if (giftsController != null) {
+            giftsController.detach();
+        }
+        giftsController = new ProfileGiftsController(this, currentAccount, dialogId);
+        giftsController.setCallback(() -> {
+            starGiftsPattern.setGifts(giftsController.gifts);
+        });
+        invalidate();
+    }
+
+    public void updateGifts() {
+        if (giftsController != null) {
+            giftsController.update();
+        }
+    }
 
     @Nullable
     public Canvas beginBottomBlurRecording() {
@@ -923,6 +948,11 @@ public class ProfileHeader extends FrameLayout {
                 break;
             }
         }
+
+        if (!handled) {
+            handled = starGiftsPattern.onTouchEvent(event);
+        }
+
         return handled || super.onTouchEvent(event);
     }
 
@@ -933,9 +963,7 @@ public class ProfileHeader extends FrameLayout {
 
     @Override
     protected void dispatchDraw(@NonNull Canvas canvas) {
-        if (starGiftsPattern.hasEmoji()) {
-            starGiftsPattern.draw(canvas);
-        }
+        starGiftsPattern.draw(canvas);
 
         if (shouldDrawAvatarLiquidBackground() &&
             expandCollapseProgress > 0 &&
@@ -964,7 +992,7 @@ public class ProfileHeader extends FrameLayout {
         // TODO for testing cutout
 //        Paint paint = new Paint();
 //        paint.setColor(Color.RED);
-//        canvas.drawRect(cutoutRectt, paint);
+//        canvas.drawRect(cutoutRect, paint);
 
         if (expandCollapseProgress <= 1f) {
             int a = (int) (thresholdRemap(.3f, .65f, expandCollapseProgress) * 255);
