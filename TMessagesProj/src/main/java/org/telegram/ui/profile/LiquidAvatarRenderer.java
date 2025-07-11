@@ -150,6 +150,10 @@ public class LiquidAvatarRenderer {
             EGL10.EGL_NONE
         };
         eglContext = egl.eglCreateContext(eglDisplay, eglConfig, EGL10.EGL_NO_CONTEXT, contextAttribs);
+
+        if (width > 0 && height > 0) {
+            dispatchSizeChanged(width, height);
+        }
     }
 
     public void setSize(int width, int height) {
@@ -360,7 +364,7 @@ public class LiquidAvatarRenderer {
     public void requestRender(float dropX, float dropY, float radius) {
         if (renderHandler != null) {
             renderHandler.post(() ->
-                render(dropX / width, dropY / height, radius / width, .03f)
+                render(dropX / width, dropY / height, radius / width, .06f)
             );
         }
     }
@@ -406,8 +410,13 @@ public class LiquidAvatarRenderer {
             return;
         }
 
+        isDestroying = true;
         if (renderHandler != null) {
-            renderHandler.post(this::releaseEGL);
+            renderHandler.post(() -> {
+                releaseEGL();
+                isDestroying = false;
+                isInitialized = false;
+            });
         }
     }
 
@@ -431,6 +440,8 @@ public class LiquidAvatarRenderer {
         GLES30.glDeleteProgram(programJfa);
         GLES30.glDeleteProgram(programFinal);
 
+        areResourcesInitialized = false;
+
         if (egl != null) {
             if (eglSurface != EGL10.EGL_NO_SURFACE) {
                 egl.eglDestroySurface(eglDisplay, eglSurface);
@@ -446,6 +457,7 @@ public class LiquidAvatarRenderer {
                 egl.eglTerminate(eglDisplay);
                 eglDisplay = null;
             }
+            egl = null;
         }
 
         if (imageReader != null) {

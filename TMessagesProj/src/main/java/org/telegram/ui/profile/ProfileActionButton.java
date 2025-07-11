@@ -1,6 +1,7 @@
 package org.telegram.ui.profile;
 
 import static org.telegram.messenger.AndroidUtilities.dp;
+import static org.telegram.messenger.AndroidUtilities.lerp;
 
 import android.content.res.ColorStateList;
 import android.graphics.Canvas;
@@ -302,7 +303,7 @@ public class ProfileActionButton extends Drawable implements Drawable.Callback {
             Math.min(availableWidth, Math.max(availableHeight - textHeight, 0))
         );
         float iconScale = (float) currentIconSize / iconSize;
-        float textScale = Math.min((float) currentIconSize / dp(16f), 1f);
+        float textScale = Math.min((float) currentIconSize / dp(8f), 1f);
 
         Drawable icon = this.icon;
         if (icon != null && icon.getAlpha() > 0) {
@@ -335,7 +336,7 @@ public class ProfileActionButton extends Drawable implements Drawable.Callback {
                 top + availableHeight - textHeight
             );
             canvas.scale(
-                textScale, textScale,
+                lerp(.85f, 1f, textScale), textScale,
                 labelLayout.getWidth() / 2f, labelLayout.getHeight() / 2f
             );
             labelLayout.draw(canvas);

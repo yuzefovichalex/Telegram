@@ -2331,6 +2331,10 @@ public class ImageReceiver implements NotificationCenter.NotificationCenterDeleg
         return staticThumbDrawable != null;
     }
 
+    public boolean isThumbOnly() {
+        return staticThumbDrawable != null && (staticThumbDrawable instanceof AvatarDrawable) && currentImageKey == null && currentMediaKey == null;
+    }
+
     public void setAspectFit(boolean value) {
         isAspectFit = value;
     }

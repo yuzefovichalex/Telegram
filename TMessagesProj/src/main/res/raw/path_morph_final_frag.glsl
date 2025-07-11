@@ -23,9 +23,9 @@ void main() {
     float distToDrop = length(uv - uDrop);
     float dD = distToDrop - uRadius;
 
-    if (distToDrop < uRadius + 0.001 && uv.y > uDrop.y) {
-        discard;
-    }
+//    if (distToDrop < uRadius + 0.001 && uv.y > uDrop.y) {
+//        discard;
+//    }
 
     float d = smoothU(dW, dD, uK);
     outColor = vec4(0.0, 0.0, 0.0, smoothstep(-0.001, 0.0, -d));

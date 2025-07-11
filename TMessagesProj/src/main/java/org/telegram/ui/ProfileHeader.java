@@ -2,12 +2,14 @@ package org.telegram.ui;
 
 import static org.telegram.messenger.AndroidUtilities.dp;
 import static org.telegram.messenger.AndroidUtilities.lerp;
+import static org.telegram.messenger.Utilities.clamp;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.Rect;
 import android.graphics.RectF;
@@ -31,6 +33,7 @@ import androidx.core.graphics.ColorUtils;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ImageLocation;
 import org.telegram.messenger.ImageReceiver;
+import org.telegram.messenger.Utilities;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.SimpleTextView;
 import org.telegram.ui.ActionBar.Theme;
@@ -579,9 +582,14 @@ public class ProfileHeader extends FrameLayout {
         avatarImageView.setLayoutParams(lp);
         avatarImageView.setRoundRadius((int) (avatarSize / 2f * (1f - avatarExpandCollapseProgress)));
 
+        float avatarAlpha = progress <= 1f
+            ? thresholdRemap(.5f, .75f, progress)
+            : 1f;
+        avatarImageView.setAlpha(avatarAlpha);
+
         float nameScale = progress <= 1f
             ? lerp(1f, 1.12f, progress)
-            : lerp(1.12f, 1.67f, progress - 1f);
+            : lerp(1.12f, 1.67f, Math.min(progress - 1f, 1f));
         nameTextView.setScaleX(nameScale);
         nameTextView.setScaleY(nameScale);
 
@@ -596,6 +604,10 @@ public class ProfileHeader extends FrameLayout {
 
         requestLayout();
         invalidate();
+    }
+
+    private float thresholdRemap(float n, float m, float x) {
+        return clamp((x - n) / (m - n), 1f, 0f);
     }
 
     public void setCallback(@Nullable Callback callback) {
@@ -799,7 +811,7 @@ public class ProfileHeader extends FrameLayout {
         );
         int avatarLeft = getCenteredOffset(getMeasuredWidth(), avatarImageView.getMeasuredWidth());
         int avatarTop = lerp(
-            -collapsedAvatarSize - dp(8f),
+            -collapsedAvatarSize - dp(12f),
             avatarTopOffset + expandedAvatarTop,
             Math.min(1f + .33f * factor, expandCollapseProgress)
         );
@@ -828,7 +840,7 @@ public class ProfileHeader extends FrameLayout {
             liquidAvatarRenderer.requestRender(
                 tmpRectF.centerX(),
                 tmpRectF.centerY(),
-                (tmpRectF.width() - dp(2f)) / 2f
+                (tmpRectF.width() - dp(1f)) / 2f
             );
         }
 
@@ -840,7 +852,7 @@ public class ProfileHeader extends FrameLayout {
     }
 
     private boolean shouldDrawAvatarLiquidBackground() {
-        return expandCollapseProgress < 1f && avatarImageView.getTop() < dp(16f);
+        return expandCollapseProgress < 1f && avatarImageView.getTop() < dp(20f);
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -856,16 +868,57 @@ public class ProfileHeader extends FrameLayout {
         return handled || super.onTouchEvent(event);
     }
 
+    Bitmap blurredBmp;
+    Paint opacityPaint = new Paint();
+    int isSet;
+    Path p = new Path();
+
     @Override
     protected void dispatchDraw(@NonNull Canvas canvas) {
         if (starGiftsPattern.hasEmoji()) {
             starGiftsPattern.draw(canvas);
         }
 
-        if (shouldDrawAvatarLiquidBackground() && avatarLiquidBackground != null) {
+        if (shouldDrawAvatarLiquidBackground() &&
+            expandCollapseProgress > 0 &&
+            avatarLiquidBackground != null
+        ) {
             canvas.drawBitmap(avatarLiquidBackground, 0, 0, null);
         } else {
             avatarLiquidBackground = null;
+        }
+
+        if (blurredBmp == null) {
+            blurredBmp = Bitmap.createBitmap(avatarSize, avatarSize, Bitmap.Config.ARGB_8888);
+
+        }
+        ImageReceiver ir = avatarImageView.getImageReceiver();
+        if (isSet < 3 && (ir.hasImageLoaded() || ir.isThumbOnly()) && expandCollapseProgress == 1f) {
+            Canvas c = new Canvas(blurredBmp);
+            int r = avatarImageView.getImageReceiver().getRoundRadius()[0];
+            avatarImageView.getImageReceiver().setRoundRadius(0);
+            avatarImageView.getImageReceiver().draw(c);
+            avatarImageView.getImageReceiver().setRoundRadius(r);
+            Utilities.stackBlurBitmap(blurredBmp, dp(20));
+            isSet++;
+        }
+
+        if (expandCollapseProgress <= 1f) {
+            int a = (int) (thresholdRemap(.3f, .65f, expandCollapseProgress) * 255);
+            opacityPaint.setAlpha(a);
+
+            Paint pa = new Paint();
+            pa.setColor(Color.BLACK);
+            p.reset();
+            p.addCircle(avatarSize / 2f, avatarSize / 2f, avatarSize / 2f, Path.Direction.CW);
+            canvas.save();
+            canvas.translate(avatarImageView.getLeft(), avatarImageView.getTop());
+            float scal = (float) avatarImageView.getMeasuredWidth() / avatarSize;
+            canvas.scale(scal, scal);
+            canvas.drawPath(p, pa);
+            canvas.clipPath(p);
+            canvas.drawBitmap(blurredBmp, 0, 0, opacityPaint);
+            canvas.restore();
         }
 
         super.dispatchDraw(canvas);
