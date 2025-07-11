@@ -7,6 +7,7 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.PixelFormat;
+import android.graphics.Rect;
 import android.media.Image;
 import android.media.ImageReader;
 import android.opengl.GLES30;
@@ -82,6 +83,9 @@ public class LiquidAvatarRenderer {
     private Path shape = new Path();
 
     @Nullable
+    private Rect clipRect;
+
+    @Nullable
     private Callback callback;
 
 
@@ -90,12 +94,13 @@ public class LiquidAvatarRenderer {
     }
 
 
-    public void setShape(@NonNull Path shape) {
+    public void setShape(@NonNull Path shape, @Nullable Rect clipRect) {
         if (this.shape == shape) {
             return;
         }
 
         this.shape = shape;
+        this.clipRect = clipRect;
         if (renderHandler != null) {
             renderHandler.post(this::createShapeJfa);
         }
@@ -274,6 +279,9 @@ public class LiquidAvatarRenderer {
         paint.setColor(Color.WHITE);
         paint.setStyle(Paint.Style.FILL);
 
+        if (clipRect != null) {
+            canvas.clipRect(clipRect);
+        }
         canvas.drawPath(shape, paint);
 
         int[] tex = new int[1];

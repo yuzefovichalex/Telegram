@@ -17,6 +17,7 @@ import android.graphics.Region;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
+import android.text.TextUtils;
 import android.view.DisplayCutout;
 import android.view.MotionEvent;
 import android.view.ViewGroup;
@@ -134,6 +135,23 @@ public class ProfileHeader extends FrameLayout {
     private Bitmap avatarLiquidBackground;
 
     @Nullable
+    private Bitmap blurredAvatarBitmap;
+
+    @NonNull
+    private final Paint blurredAvatarPaint = new Paint();
+
+    private int avatarBlurRounds;
+
+    private final Path avatarBackgroundPath = new Path();
+    private final Paint avatarBackgroundPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+    @Nullable
+    private Path catchedCutoutPath;
+
+    @NonNull
+    private Rect catchedCutoutBoundingRect = new Rect();
+
+    @Nullable
     private Path cutoutPath;
 
     @NonNull
@@ -207,6 +225,8 @@ public class ProfileHeader extends FrameLayout {
         //statusTextView.setWidthWrapContent(true);
         statusTextView.setTextSize(14);
         statusTextView.setTextColor(Color.WHITE);
+        statusTextView.setMaxLines(1);
+        statusTextView.setEllipsize(TextUtils.TruncateAt.END);
         addView(statusTextView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT));
 
         starGiftsPattern.setDefaultAvatarSize(avatarSize);
@@ -221,6 +241,9 @@ public class ProfileHeader extends FrameLayout {
                 invalidate();
             }
         });
+
+        avatarBackgroundPath.addCircle(avatarSize / 2f, avatarSize / 2f, avatarSize / 2f, Path.Direction.CW);
+        avatarBackgroundPaint.setColor(Color.BLACK);
 
         invalidateActionButtonsColors(true);
     }
@@ -673,6 +696,16 @@ public class ProfileHeader extends FrameLayout {
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
         liquidAvatarRenderer.init();
+
+        // TODO unfortunately the path is not correct on most devices (e.g. samsung, oneplus).
+        //  Works on pixel
+//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+//            DisplayCutout cutout = getRootWindowInsets().getDisplayCutout();
+//            if (cutout != null) {
+//                catchedCutoutPath = cutout.getCutoutPath();
+//                catchedCutoutBoundingRect.set(cutout.getBoundingRectTop());
+//            }
+//        }
     }
 
     @Override
@@ -754,7 +787,7 @@ public class ProfileHeader extends FrameLayout {
         if (!isCutoutCalculated) {
             calculateCutoutPath();
             if (cutoutPath != null) {
-                liquidAvatarRenderer.setShape(cutoutPath);
+                liquidAvatarRenderer.setShape(cutoutPath, cutoutRect);
             }
             isCutoutCalculated = true;
         }
@@ -763,13 +796,10 @@ public class ProfileHeader extends FrameLayout {
     }
 
     private void calculateCutoutPath() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            DisplayCutout cutout = getRootWindowInsets().getDisplayCutout();
-            if (cutout != null) {
-                cutoutPath = cutout.getCutoutPath();
-                if (cutoutPath != null) {
-                    cutoutRect.set(intersectRectAndPath(cutout.getBoundingRectTop(), cutoutPath));
-                }
+        if (catchedCutoutPath != null && !catchedCutoutPath.isEmpty()) {
+            cutoutPath = catchedCutoutPath;
+            if (cutoutPath != null) {
+                cutoutRect.set(intersectRectAndPath(catchedCutoutBoundingRect, cutoutPath));
             }
         }
 
@@ -956,11 +986,6 @@ public class ProfileHeader extends FrameLayout {
         return handled || super.onTouchEvent(event);
     }
 
-    Bitmap blurredBmp;
-    Paint opacityPaint = new Paint();
-    int isSet;
-    Path p = new Path();
-
     @Override
     protected void dispatchDraw(@NonNull Canvas canvas) {
         starGiftsPattern.draw(canvas);
@@ -974,19 +999,19 @@ public class ProfileHeader extends FrameLayout {
             avatarLiquidBackground = null;
         }
 
-        if (blurredBmp == null) {
-            blurredBmp = Bitmap.createBitmap(avatarSize, avatarSize, Bitmap.Config.ARGB_8888);
+        if (blurredAvatarBitmap == null) {
+            blurredAvatarBitmap = Bitmap.createBitmap(avatarSize, avatarSize, Bitmap.Config.ARGB_8888);
 
         }
         ImageReceiver ir = avatarImageView.getImageReceiver();
-        if (isSet < 3 && (ir.hasImageLoaded() || ir.isThumbOnly()) && expandCollapseProgress == 1f) {
-            Canvas c = new Canvas(blurredBmp);
+        if (avatarBlurRounds < 3 && (ir.hasImageLoaded() || ir.isThumbOnly()) && expandCollapseProgress == 1f) {
+            Canvas c = new Canvas(blurredAvatarBitmap);
             int r = avatarImageView.getImageReceiver().getRoundRadius()[0];
             avatarImageView.getImageReceiver().setRoundRadius(0);
             avatarImageView.getImageReceiver().draw(c);
             avatarImageView.getImageReceiver().setRoundRadius(r);
-            Utilities.stackBlurBitmap(blurredBmp, dp(20));
-            isSet++;
+            Utilities.stackBlurBitmap(blurredAvatarBitmap, dp(20));
+            avatarBlurRounds++;
         }
 
         // TODO for testing cutout
@@ -996,19 +1021,16 @@ public class ProfileHeader extends FrameLayout {
 
         if (expandCollapseProgress <= 1f) {
             int a = (int) (thresholdRemap(.3f, .65f, expandCollapseProgress) * 255);
-            opacityPaint.setAlpha(a);
-
-            Paint pa = new Paint();
-            pa.setColor(Color.BLACK);
-            p.reset();
-            p.addCircle(avatarSize / 2f, avatarSize / 2f, avatarSize / 2f, Path.Direction.CW);
+            blurredAvatarPaint.setAlpha(a);
             canvas.save();
             canvas.translate(avatarImageView.getLeft(), avatarImageView.getTop());
-            float scal = (float) avatarImageView.getMeasuredWidth() / avatarSize;
-            canvas.scale(scal, scal);
-            canvas.drawPath(p, pa);
-            canvas.clipPath(p);
-            canvas.drawBitmap(blurredBmp, 0, 0, opacityPaint);
+            float avatarScale = (float) avatarImageView.getMeasuredWidth() / avatarSize;
+            canvas.scale(avatarScale, avatarScale);
+            if (expandCollapseProgress <= .65f) {
+                canvas.drawPath(avatarBackgroundPath, avatarBackgroundPaint);
+            }
+            canvas.clipPath(avatarBackgroundPath);
+            canvas.drawBitmap(blurredAvatarBitmap, 0, 0, blurredAvatarPaint);
             canvas.restore();
         }
 
