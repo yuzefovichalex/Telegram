@@ -137,6 +137,38 @@ public class ChatThemeController extends BaseController {
         }
     }
 
+    public void requestGiftThemes(ResultCallback<List<EmojiThemes>> callback) {
+        TL_account.Tl_getUniqueGiftChatThemes request = new TL_account.Tl_getUniqueGiftChatThemes();
+        request.limit = 10;
+        request.offset = 0;
+        final List<EmojiThemes> giftThemes = new ArrayList<>();
+        ConnectionsManager.getInstance(UserConfig.selectedAccount)
+            .sendRequest(
+                request,
+                (resp, err) -> chatThemeQueue.postRunnable(() -> {
+                    boolean isError = false;
+                    if (resp instanceof TL_account.Tl_chatThemes) {
+                        List<TLRPC.ChatTheme> themes = ((TL_account.Tl_chatThemes) resp).themes;
+                        for (int i = 0; i < themes.size(); i++) {
+                            TLRPC.TL_chatThemeUniqueGift theme = (TLRPC.TL_chatThemeUniqueGift)themes.get(i);
+                            EmojiThemes chatTheme = EmojiThemes.createFromGiftTheme(currentAccount, theme);
+                            chatTheme.preloadWallpaper();
+                            giftThemes.add(chatTheme);
+                        }
+                    } else {
+                        isError = true;
+                        AndroidUtilities.runOnUIThread(() -> callback.onError(err));
+                    }
+                    if (!isError) {
+                        for (EmojiThemes theme : giftThemes) {
+                            theme.initColors();
+                        }
+                        AndroidUtilities.runOnUIThread(() -> callback.onComplete(giftThemes));
+                    }
+                })
+            );
+    }
+
     private SharedPreferences getSharedPreferences() {
         return ApplicationLoader.applicationContext.getSharedPreferences("chatthemeconfig_" + currentAccount, Context.MODE_PRIVATE);
     }
@@ -235,8 +267,11 @@ public class ChatThemeController extends BaseController {
         if (dialogId >= 0) {
             TLRPC.UserFull userFull = getMessagesController().getUserFull(dialogId);
             if (userFull != null) {
-                userFull.theme_emoticon = emoticon;
-                getMessagesStorage().updateUserInfo(userFull, true);
+                TLRPC.ChatTheme theme = userFull.theme;
+                if (theme instanceof TLRPC.TL_chatTheme) {
+                    ((TLRPC.TL_chatTheme) theme).emoticon = emoticon;
+                    getMessagesStorage().updateUserInfo(userFull, true);
+                }
             }
         } else {
             TLRPC.ChatFull chatFull = getMessagesController().getChatFull(-dialogId);
@@ -252,7 +287,9 @@ public class ChatThemeController extends BaseController {
 
         if (sendRequest) {
             TLRPC.TL_messages_setChatTheme request = new TLRPC.TL_messages_setChatTheme();
-            request.emoticon = emoticon != null ? emoticon : "";
+            TLRPC.Tl_inputChatTheme theme = new TLRPC.Tl_inputChatTheme();
+            theme.emoticon = emoticon != null ? emoticon : "";
+            request.theme = theme;
             request.peer = getMessagesController().getInputPeer(dialogId);
             getConnectionsManager().sendRequest(request, null);
         }

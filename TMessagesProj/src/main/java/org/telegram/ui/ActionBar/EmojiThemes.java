@@ -28,10 +28,13 @@ public class EmojiThemes {
 
     public static final String REMOVED_EMOJI = "❌";
 
+    private long id = -1L;
+
     public boolean showAsDefaultStub;
     public boolean showAsRemovedStub;
     public String emoji;
     public TLRPC.WallPaper wallpaper;
+    public TLRPC.Document sticker;
     int currentIndex = 0;
     public ArrayList<ThemeItem> items = new ArrayList<>();
     private final int currentAccount;
@@ -52,6 +55,7 @@ public class EmojiThemes {
     }
 
     public EmojiThemes(int currentAccount, TLRPC.TL_theme chatThemeObject, boolean isDefault) {
+        this.id = chatThemeObject.id;
         this.currentAccount = currentAccount;
         this.showAsDefaultStub = isDefault;
         this.emoji = chatThemeObject.emoticon;
@@ -70,6 +74,20 @@ public class EmojiThemes {
 
     public boolean isAnyStub() {
         return showAsDefaultStub || showAsRemovedStub;
+    }
+
+    public long getId() {
+        return id;
+    }
+
+    public static EmojiThemes createFromGiftTheme(int currentAccount, TLRPC.TL_chatThemeUniqueGift giftTheme) {
+        TLRPC.TL_theme_layer133 tltheme = new TLRPC.TL_theme_layer133();
+        tltheme.id = giftTheme.gift.id;
+        tltheme.for_chat = true;
+        tltheme.settings = giftTheme.theme_settings;
+        EmojiThemes themes = new EmojiThemes(currentAccount, tltheme, false);
+        themes.sticker = giftTheme.gift.getDocument();
+        return themes;
     }
 
     public static EmojiThemes createPreviewFullTheme(int currentAccount, TLRPC.TL_theme tl_theme) {

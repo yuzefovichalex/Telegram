@@ -197,6 +197,8 @@ public class ThemeSmallPreviewView extends FrameLayout implements NotificationCe
         TLRPC.Document document = null;
         if (item.chatTheme.getEmoticon() != null) {
             document = MediaDataController.getInstance(currentAccount).getEmojiAnimatedSticker(item.chatTheme.getEmoticon());
+        } else if (item.chatTheme.sticker != null) {
+            document = item.chatTheme.sticker;
         }
         if (itemChanged) {
             if (animationCancelRunnable != null) {

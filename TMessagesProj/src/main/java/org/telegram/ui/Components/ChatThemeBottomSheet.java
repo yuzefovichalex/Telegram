@@ -500,9 +500,7 @@ public class ChatThemeBottomSheet extends BottomSheet implements NotificationCen
                     if (result != null && !result.isEmpty()) {
                         themeDelegate.setCachedThemes(result);
                     }
-                    NotificationCenter.getInstance(currentAccount).doOnIdle(() -> {
-                        onDataLoaded(result);
-                    });
+                    loadGiftThemes(chatThemeController, result);
                 }
 
                 @Override
@@ -511,7 +509,7 @@ public class ChatThemeBottomSheet extends BottomSheet implements NotificationCen
                 }
             }, true);
         } else {
-            onDataLoaded(cachedThemes);
+            loadGiftThemes(chatThemeController, cachedThemes);
         }
 
 
@@ -532,6 +530,29 @@ public class ChatThemeBottomSheet extends BottomSheet implements NotificationCen
 
             container.addView(hintView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.LEFT | Gravity.TOP, 10, 0, 10, 0));
         }
+    }
+
+    private void loadGiftThemes(ChatThemeController controller, List<EmojiThemes> baseThemes) {
+        controller.requestGiftThemes(new ResultCallback<List<EmojiThemes>>() {
+            @Override
+            public void onComplete(List<EmojiThemes> result) {
+                List<EmojiThemes> merged = new ArrayList<>();
+                if (baseThemes != null) {
+                    merged.addAll(baseThemes);
+                }
+                if (result != null) {
+                    merged.addAll(result);
+                }
+                NotificationCenter.getInstance(currentAccount)
+                    .doOnIdle(() -> onDataLoaded(merged));
+            }
+
+            @Override
+            public void onError(TLRPC.TL_error error) {
+                NotificationCenter.getInstance(currentAccount)
+                    .doOnIdle(() -> onDataLoaded(baseThemes));
+            }
+        });
     }
 
     @Override
@@ -984,15 +1005,9 @@ public class ChatThemeBottomSheet extends BottomSheet implements NotificationCen
         if (selectedItem == null) {
             return false;
         } else {
-            String oldEmoticon = currentTheme != null ? currentTheme.getEmoticon() : null;
-            if (TextUtils.isEmpty(oldEmoticon)) {
-                oldEmoticon = "❌";
-            }
-            String newEmoticon = selectedItem.chatTheme != null ? selectedItem.chatTheme.getEmoticon() : null;
-            if (TextUtils.isEmpty(newEmoticon)) {
-                newEmoticon = "❌";
-            }
-            return !Objects.equals(oldEmoticon, newEmoticon);
+            long oldId = currentTheme != null ? currentTheme.getId() : -1L;
+            long newId = selectedItem.chatTheme != null ? selectedItem.chatTheme.getId() : -1L;
+            return oldId != newId;
         }
     }
 
@@ -1035,7 +1050,11 @@ public class ChatThemeBottomSheet extends BottomSheet implements NotificationCen
             }
             boolean animated = true;
             ChatThemeItem newItem = items.get(position);
-            if (view.chatThemeItem == null || !view.chatThemeItem.chatTheme.getEmoticon().equals(newItem.chatTheme.getEmoticon()) || DrawerProfileCell.switchingTheme || view.lastThemeIndex != newItem.themeIndex) {
+            if (view.chatThemeItem == null ||
+                !TextUtils.equals(view.chatThemeItem.chatTheme.getEmoticon(), newItem.chatTheme.getEmoticon()) ||
+                DrawerProfileCell.switchingTheme ||
+                view.lastThemeIndex != newItem.themeIndex
+            ) {
                 animated = false;
             }
 

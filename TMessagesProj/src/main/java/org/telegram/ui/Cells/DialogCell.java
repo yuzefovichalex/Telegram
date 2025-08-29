@@ -742,7 +742,8 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
     private void checkChatTheme() {
         if (message != null && message.messageOwner != null && message.messageOwner.action instanceof TLRPC.TL_messageActionSetChatTheme && lastUnreadState) {
             TLRPC.TL_messageActionSetChatTheme setThemeAction = (TLRPC.TL_messageActionSetChatTheme) message.messageOwner.action;
-            ChatThemeController.getInstance(currentAccount).setDialogTheme(currentDialogId, setThemeAction.emoticon,false);
+            TLRPC.TL_chatTheme theme = (TLRPC.TL_chatTheme) setThemeAction.theme;
+            ChatThemeController.getInstance(currentAccount).setDialogTheme(currentDialogId, theme.emoticon,false);
         }
     }
 

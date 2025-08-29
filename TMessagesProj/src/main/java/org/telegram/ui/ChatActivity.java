@@ -25437,7 +25437,8 @@ public class ChatActivity extends BaseFragment implements NotificationCenter.Not
             }
             if (lastActionSetChatThemeMessageObject != null && lastActionSetChatThemeMessageObject.messageOwner != null && lastActionSetChatThemeMessageObject.messageOwner.action instanceof TLRPC.TL_messageActionSetChatTheme) {
                 TLRPC.TL_messageActionSetChatTheme action = (TLRPC.TL_messageActionSetChatTheme) lastActionSetChatThemeMessageObject.messageOwner.action;
-                setChatThemeEmoticon(action.emoticon);
+                TLRPC.TL_chatTheme theme = (TLRPC.TL_chatTheme) action.theme;
+                setChatThemeEmoticon(theme.emoticon);
             }
             if (webpagesToReload != null) {
                 getMessagesController().reloadWebPages(dialog_id, webpagesToReload, chatMode);
@@ -41839,7 +41840,10 @@ public class ChatActivity extends BaseFragment implements NotificationCenter.Not
         getNotificationCenter().doOnIdle(() -> {
             String emoticon = null;
             if (userInfo != null) {
-                emoticon = userInfo.theme_emoticon;
+                TLRPC.TL_chatTheme theme = (TLRPC.TL_chatTheme) userInfo.theme;
+                if (theme != null) {
+                    emoticon = theme.emoticon;
+                }
             }
 //            if (emoticon == null && chatInfo != null) {
 //                emoticon = chatInfo.theme_emoticon;
@@ -42063,10 +42067,10 @@ public class ChatActivity extends BaseFragment implements NotificationCenter.Not
             }
             final EmojiThemes prevTheme = this.chatTheme;
             boolean newIsDark = forceDark != null ? forceDark : this.isDark;//Theme.getActiveTheme().isDark();
-            String newEmoticon = chatTheme != null ? chatTheme.getEmoticon() : null;
-            String oldEmoticon = this.chatTheme != null ? this.chatTheme.getEmoticon() : null;
+            long newThemeId = chatTheme != null ? chatTheme.getId() : -1;
+            long oldThemeId = this.chatTheme != null ? this.chatTheme.getId() : -1;
             TLRPC.WallPaper oldWallpaper = this.wallpaper;
-            if (!force && (!isThemeChangeAvailable(false) || (TextUtils.equals(oldEmoticon, newEmoticon) && this.isDark == newIsDark && ChatThemeController.equals(newWallpaper, oldWallpaper)))) {
+            if (!force && (!isThemeChangeAvailable(false) || (oldThemeId == newThemeId && this.isDark == newIsDark && ChatThemeController.equals(newWallpaper, oldWallpaper)))) {
                 return;
             }
 
