@@ -74,6 +74,7 @@ import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
+import org.telegram.messenger.SendMessagesHelper;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.UserObject;
 import org.telegram.messenger.Utilities;
@@ -112,6 +113,7 @@ import org.telegram.ui.Components.LinkSpanDrawable;
 import org.telegram.ui.Components.LoadingSpan;
 import org.telegram.ui.Components.Premium.LimitReachedBottomSheet;
 import org.telegram.ui.Components.Premium.PremiumFeatureBottomSheet;
+import org.telegram.ui.Components.Premium.boosts.BoostDialogs;
 import org.telegram.ui.Components.Premium.boosts.UserSelectorBottomSheet;
 import org.telegram.ui.Components.RLottieDrawable;
 import org.telegram.ui.Components.RLottieImageView;
@@ -122,6 +124,7 @@ import org.telegram.ui.Components.TableView;
 import org.telegram.ui.Components.TextHelper;
 import org.telegram.ui.Components.ViewPagerFixed;
 import org.telegram.ui.Components.spoilers.SpoilersTextView;
+import org.telegram.ui.DialogsActivity;
 import org.telegram.ui.Gifts.GiftSheet;
 import org.telegram.ui.Gifts.ProfileGiftsContainer;
 import org.telegram.ui.LaunchActivity;
@@ -735,6 +738,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
             .addIf(link != null, R.drawable.msg_share, getString(R.string.ShareFile), () -> {
                 onSharePressed(null);
             })
+            .addIf(getUniqueGift() != null && getUniqueGift().theme_available, R.drawable.media_draw, "Set as Theme in...", this::openDialogsForThemeSelection)
             .addIf(canTransfer(), R.drawable.menu_feature_transfer, getString(R.string.Gift2TransferOption), this::openTransfer)
             .addIf(savedStarGift == null && getDialogId() != 0, R.drawable.msg_view_file, getString(R.string.Gift2ViewInProfile), this::openInProfile)
             .setDrawScrim(false)
@@ -742,6 +746,33 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
             .setDimAlpha(0)
             .translate(0, -dp(2))
             .show();
+    }
+
+    private void openDialogsForThemeSelection() {
+        TL_stars.TL_starGiftUnique gift = getUniqueGift();
+        if (gift == null) {
+            return;
+        }
+
+        Bundle dialogsArgs = new Bundle();
+        dialogsArgs.putBoolean("onlySelect", true);
+        dialogsArgs.putInt("dialogsType", DialogsActivity.DIALOGS_TYPE_USERS_ONLY);
+        DialogsActivity dialogFragment = new DialogsActivity(dialogsArgs);
+        dialogFragment.setDelegate((fragment1, dids, message, param, notify, scheduleDate, topicsFragment) -> {
+            if (dids.isEmpty()) {
+                fragment1.finishFragment();
+                return true;
+            }
+            long did = dids.get(0).dialogId;
+            Bundle chatArgs = new Bundle();
+            chatArgs.putLong("user_id", did);
+            chatArgs.putLong("gift_theme_to_select_id", gift.id);
+            fragment1.finishFragment();
+            presentFragment(new ChatActivity(chatArgs));
+            return true;
+        });
+        presentFragment(dialogFragment);
+        dismiss();
     }
 
     private ColoredImageSpan lockSpan;

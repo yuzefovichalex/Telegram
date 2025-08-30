@@ -126,15 +126,16 @@ public class ChatThemeBottomSheet extends BottomSheet implements NotificationCen
     public ChatAttachAlert chatAttachAlert;
     private FrameLayout chatAttachButton;
     private AnimatedTextView chatAttachButtonText;
+    private long giftThemeToSelectId;
 
-
-    public ChatThemeBottomSheet(final ChatActivity chatActivity, ChatActivity.ThemeDelegate themeDelegate) {
+    public ChatThemeBottomSheet(final ChatActivity chatActivity, ChatActivity.ThemeDelegate themeDelegate, long giftThemeToSelectId) {
         super(chatActivity.getParentActivity(), true, themeDelegate);
         this.chatActivity = chatActivity;
         this.themeDelegate = themeDelegate;
         this.originalTheme = themeDelegate.getCurrentTheme();
         this.currentWallpaper = themeDelegate.getCurrentWallpaper();
         this.originalIsDark = Theme.getActiveTheme().isDark();
+        this.giftThemeToSelectId = giftThemeToSelectId;
         adapter = new Adapter(currentAccount, themeDelegate, ThemeSmallPreviewView.TYPE_DEFAULT);
         setDimBehind(false);
         setCanDismissWithSwipe(false);
@@ -168,7 +169,7 @@ public class ChatThemeBottomSheet extends BottomSheet implements NotificationCen
         backButtonView.setImageDrawable(backButtonDrawable);
         backButtonView.setOnClickListener(v -> {
             if (hasChanges()) {
-                resetToPrimaryState(true);
+                resetToPrimaryState(true, false);
                 updateState(true);
             } else {
                 dismiss();
@@ -497,9 +498,6 @@ public class ChatThemeBottomSheet extends BottomSheet implements NotificationCen
             chatThemeController.requestAllChatThemes(new ResultCallback<List<EmojiThemes>>() {
                 @Override
                 public void onComplete(List<EmojiThemes> result) {
-                    if (result != null && !result.isEmpty()) {
-                        themeDelegate.setCachedThemes(result);
-                    }
                     loadGiftThemes(chatThemeController, result);
                 }
 
@@ -812,6 +810,7 @@ public class ChatThemeBottomSheet extends BottomSheet implements NotificationCen
             return;
         }
 
+        themeDelegate.setCachedThemes(result);
         dataLoaded = true;
         ChatThemeItem noThemeItem = new ChatThemeItem(result.get(0));
         List<ChatThemeItem> items = new ArrayList<>(result.size());
@@ -851,17 +850,20 @@ public class ChatThemeBottomSheet extends BottomSheet implements NotificationCen
 
         darkThemeView.setVisibility(View.VISIBLE);
 
-        resetToPrimaryState(false);
+        resetToPrimaryState(false, true);
         recyclerView.animate().alpha(1f).setDuration(150).start();
         updateState(true);
     }
 
-    private void resetToPrimaryState(boolean animated) {
+    private void resetToPrimaryState(boolean animated, boolean usePreselectedTheme) {
         List<ChatThemeItem> items = adapter.items;
-        if (currentTheme != null) {
+        long selectedThemeId = usePreselectedTheme && giftThemeToSelectId != -1
+            ? giftThemeToSelectId
+            : originalTheme != null ? originalTheme.getId() : -1;
+        if (selectedThemeId != -1) {
             int selectedPosition = -1;
             for (int i = 0; i != items.size(); ++i) {
-                if (items.get(i).chatTheme.getId() == currentTheme.getId()) {
+                if (items.get(i).chatTheme.getId() == selectedThemeId) {
                     selectedItem = items.get(i);
                     selectedPosition = i;
                     break;
@@ -1011,7 +1013,7 @@ public class ChatThemeBottomSheet extends BottomSheet implements NotificationCen
         if (selectedItem == null) {
             return false;
         } else {
-            long oldId = currentTheme != null ? currentTheme.getId() : -1L;
+            long oldId = originalTheme != null ? originalTheme.getId() : -1L;
             long newId = selectedItem.chatTheme != null ? selectedItem.chatTheme.getId() : -1L;
             return oldId != newId;
         }

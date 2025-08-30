@@ -683,6 +683,8 @@ public class ChatActivity extends BaseFragment implements NotificationCenter.Not
     public boolean loadingPinnedMessagesList;
     private boolean pinnedEndReached;
 
+    private long giftThemeToSelectId = -1;
+
     public void reloadPinnedMessages() {
         pinnedMessageIds.clear();
         pinnedMessageObjects.clear();
@@ -2485,6 +2487,7 @@ public class ChatActivity extends BaseFragment implements NotificationCenter.Not
         scrollToTopOnResume = arguments.getBoolean("scrollToTopOnResume", false);
         needRemovePreviousSameChatActivity = arguments.getBoolean("need_remove_previous_same_chat_activity", true);
         justCreatedChat = arguments.getBoolean("just_created_chat", false);
+        giftThemeToSelectId = arguments.getLong("gift_theme_to_select_id", -1);
         if (quickReplyShortcut != null) {
             QuickRepliesController.QuickReply quickReply = QuickRepliesController.getInstance(currentAccount).findReply(quickReplyShortcut);
             if (quickReply != null) {
@@ -29716,6 +29719,12 @@ public class ChatActivity extends BaseFragment implements NotificationCenter.Not
         if (starReactionsOverlay != null) {
             starReactionsOverlay.bringToFront();
         }
+
+        if (giftThemeToSelectId != -1) {
+            long themeId = giftThemeToSelectId;
+            AndroidUtilities.runOnUIThread(() -> showChatThemeBottomSheet(themeId), 350);
+            giftThemeToSelectId = -1;
+        }
     }
 
     public float getPullingDownOffset() {
@@ -41800,6 +41809,10 @@ public class ChatActivity extends BaseFragment implements NotificationCenter.Not
     }
 
     private void showChatThemeBottomSheet() {
+        showChatThemeBottomSheet(giftThemeToSelectId);
+    }
+
+    private void showChatThemeBottomSheet(long giftThemeToSelectId) {
         if (currentChat != null) {
             if (ChatObject.isMegagroup(currentChat)) {
                 if (ChatObject.hasAdminRights(currentChat)) {
@@ -41812,7 +41825,7 @@ public class ChatActivity extends BaseFragment implements NotificationCenter.Not
             }
             return;
         }
-        chatThemeBottomSheet = new ChatThemeBottomSheet(ChatActivity.this, themeDelegate);
+        chatThemeBottomSheet = new ChatThemeBottomSheet(ChatActivity.this, themeDelegate, giftThemeToSelectId);
         chatListView.setOnInterceptTouchListener(event -> true);
         setChildrenEnabled(contentView, false);
         showDialog(chatThemeBottomSheet, dialogInterface -> {
@@ -41856,7 +41869,9 @@ public class ChatActivity extends BaseFragment implements NotificationCenter.Not
         chatThemeController.setDialogTheme(dialog_id, theme, false);
         if (theme != null) {
             chatThemeController.requestChatTheme(theme, result -> {
-                themeDelegate.setCurrentTheme(result, themeDelegate.wallpaper,openAnimationStartTime != 0, null);
+                if (chatThemeBottomSheet == null || chatThemeBottomSheet.isDismissed()) {
+                    themeDelegate.setCurrentTheme(result, themeDelegate.wallpaper, openAnimationStartTime != 0, null);
+                }
             });
         }
         TLRPC.WallPaper wallPaper = chatThemeController.getDialogWallpaper(dialog_id);
