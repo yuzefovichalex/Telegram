@@ -196,27 +196,55 @@ public class ChatThemeController extends BaseController {
         return themes;
     }
 
-    public void requestChatTheme(final String emoticon, final ResultCallback<EmojiThemes> callback) {
-        if (TextUtils.isEmpty(emoticon)) {
+    public void requestChatTheme(TLRPC.ChatTheme theme, final ResultCallback<EmojiThemes> callback) {
+        if (theme == null) {
             callback.onComplete(null);
             return;
         }
-        requestAllChatThemes(new ResultCallback<List<EmojiThemes>>() {
-            @Override
-            public void onComplete(List<EmojiThemes> result) {
-                for (EmojiThemes theme : result) {
-                    if (emoticon.equals(theme.getEmoticon())) {
-                        theme.initColors();
-                        callback.onComplete(theme);
-                        break;
+        if (theme instanceof TLRPC.TL_chatTheme) {
+            requestAllChatThemes(new ResultCallback<List<EmojiThemes>>() {
+                @Override
+                public void onComplete(List<EmojiThemes> result) {
+                    for (EmojiThemes emojiTheme : result) {
+                        if (((TLRPC.TL_chatTheme) theme).emoticon.equals(emojiTheme.getEmoticon())) {
+                            emojiTheme.initColors();
+                            callback.onComplete(emojiTheme);
+                            break;
+                        }
                     }
                 }
-            }
-            @Override
-            public void onError(TLRPC.TL_error error) {
-                callback.onComplete(null);
-            }
-        }, false);
+
+                @Override
+                public void onError(TLRPC.TL_error error) {
+                    callback.onComplete(null);
+                }
+            }, false);
+        } else if (theme instanceof TLRPC.TL_chatThemeUniqueGift) {
+            requestGiftThemes(new ResultCallback<List<EmojiThemes>>() {
+                @Override
+                public void onComplete(List<EmojiThemes> result) {
+                    TLRPC.TL_chatThemeUniqueGift giftTheme = (TLRPC.TL_chatThemeUniqueGift) theme;
+                    for (EmojiThemes emojiTheme : result) {
+                        if (giftTheme.gift.slug.equals(emojiTheme.getSlug())) {
+                            emojiTheme.initColors();
+                            callback.onComplete(emojiTheme);
+                            break;
+                        }
+                    }
+                    if (giftTheme.gift.theme_peer == null) {
+                        EmojiThemes theme = EmojiThemes.createFromGiftTheme(UserConfig.selectedAccount, giftTheme);
+                        callback.onComplete(theme);
+                    }
+                }
+
+                @Override
+                public void onError(TLRPC.TL_error error) {
+                    callback.onComplete(null);
+                }
+            });
+        } else {
+            callback.onComplete(null);
+        }
     }
 
 
@@ -237,7 +265,7 @@ public class ChatThemeController extends BaseController {
     }
 
 
-    private final LongSparseArray<String> dialogEmoticonsMap = new LongSparseArray<>();
+    private final LongSparseArray<String> dialogSymbolsMap = new LongSparseArray<>();
 
     public static boolean equals(TLRPC.WallPaper wallPaper, TLRPC.WallPaper oldWallpaper) {
         if (wallPaper == null && oldWallpaper == null) {
@@ -252,54 +280,69 @@ public class ChatThemeController extends BaseController {
         return false;
     }
 
-    public void setDialogTheme(long dialogId, String emoticon, boolean sendRequest) {
-        String oldEmoticon = dialogEmoticonsMap.get(dialogId);
-        if (TextUtils.equals(oldEmoticon, emoticon)) {
+    public void setDialogTheme(long dialogId, TLRPC.ChatTheme theme, boolean sendRequest) {
+        String oldSymbol = dialogSymbolsMap.get(dialogId);
+        String symbol;
+        if (theme instanceof TLRPC.TL_chatTheme) {
+            symbol = ((TLRPC.TL_chatTheme) theme).emoticon;
+        } else if (theme instanceof TLRPC.TL_chatThemeUniqueGift) {
+            symbol = ((TLRPC.TL_chatThemeUniqueGift) theme).gift.slug;
+        } else {
+            symbol = null;
+        }
+        if (TextUtils.equals(oldSymbol, symbol)) {
             return;
         }
 
-        if (emoticon == null) {
-            dialogEmoticonsMap.delete(dialogId);
+        if (symbol == null) {
+            dialogSymbolsMap.delete(dialogId);
         } else {
-            dialogEmoticonsMap.put(dialogId, emoticon);
+            dialogSymbolsMap.put(dialogId, symbol);
         }
 
         if (dialogId >= 0) {
             TLRPC.UserFull userFull = getMessagesController().getUserFull(dialogId);
             if (userFull != null) {
-                TLRPC.ChatTheme theme = userFull.theme;
-                if (theme instanceof TLRPC.TL_chatTheme) {
-                    ((TLRPC.TL_chatTheme) theme).emoticon = emoticon;
-                    getMessagesStorage().updateUserInfo(userFull, true);
-                }
+                userFull.theme = theme;
+                getMessagesStorage().updateUserInfo(userFull, true);
             }
         } else {
             TLRPC.ChatFull chatFull = getMessagesController().getChatFull(-dialogId);
             if (chatFull != null) {
-                chatFull.theme_emoticon = emoticon;
+                chatFull.theme_emoticon = symbol;
                 getMessagesStorage().updateChatInfo(chatFull, true);
             }
         }
 
         getEmojiSharedPreferences().edit()
-                .putString("chatTheme_" + currentAccount + "_" + dialogId, emoticon)
+                .putString("chatTheme_" + currentAccount + "_" + dialogId, symbol)
                 .apply();
 
         if (sendRequest) {
             TLRPC.TL_messages_setChatTheme request = new TLRPC.TL_messages_setChatTheme();
-            TLRPC.Tl_inputChatTheme theme = new TLRPC.Tl_inputChatTheme();
-            theme.emoticon = emoticon != null ? emoticon : "";
-            request.theme = theme;
+            TLRPC.InputChatTheme inputTheme;
+            if (theme instanceof TLRPC.TL_chatTheme) {
+                TLRPC.Tl_inputChatTheme inputChatTheme = new TLRPC.Tl_inputChatTheme();
+                inputChatTheme.emoticon = ((TLRPC.TL_chatTheme) theme).emoticon;
+                inputTheme = inputChatTheme;
+            } else if (theme instanceof TLRPC.TL_chatThemeUniqueGift) {
+                TLRPC.Tl_inputChatThemeUniqueGift inputChatTheme = new TLRPC.Tl_inputChatThemeUniqueGift();
+                inputChatTheme.slug = ((TLRPC.TL_chatThemeUniqueGift) theme).gift.slug;
+                inputTheme = inputChatTheme;
+            } else {
+                inputTheme = new TLRPC.Tl_inputChatThemeEmpty();
+            }
+            request.theme = inputTheme;
             request.peer = getMessagesController().getInputPeer(dialogId);
             getConnectionsManager().sendRequest(request, null);
         }
     }
 
     public EmojiThemes getDialogTheme(long dialogId) {
-        String emoticon = dialogEmoticonsMap.get(dialogId);
+        String emoticon = dialogSymbolsMap.get(dialogId);
         if (emoticon == null) {
             emoticon = getEmojiSharedPreferences().getString("chatTheme_" + currentAccount + "_" + dialogId, null);
-            dialogEmoticonsMap.put(dialogId, emoticon);
+            dialogSymbolsMap.put(dialogId, emoticon);
         }
         return getTheme(emoticon);
     }

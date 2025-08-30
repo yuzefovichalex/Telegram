@@ -861,7 +861,7 @@ public class ChatThemeBottomSheet extends BottomSheet implements NotificationCen
         if (currentTheme != null) {
             int selectedPosition = -1;
             for (int i = 0; i != items.size(); ++i) {
-                if (items.get(i).chatTheme.getEmoticon().equals(currentTheme.getEmoticon())) {
+                if (items.get(i).chatTheme.getId() == currentTheme.getId()) {
                     selectedItem = items.get(i);
                     selectedPosition = i;
                     break;
@@ -964,13 +964,13 @@ public class ChatThemeBottomSheet extends BottomSheet implements NotificationCen
         Bulletin bulletin = null;
         EmojiThemes newTheme = selectedItem.chatTheme;
         if (selectedItem != null && newTheme != currentTheme) {
-            EmojiThemes chatTheme = selectedItem.chatTheme;
-            String emoticon = !chatTheme.showAsDefaultStub ? chatTheme.getEmoticon() : null;
+            EmojiThemes emojiTheme = selectedItem.chatTheme;
+            TLRPC.ChatTheme chatTheme = emojiTheme.getChatTheme();
             ChatThemeController.getInstance(currentAccount).clearWallpaper(chatActivity.getDialogId(), false);
-            ChatThemeController.getInstance(currentAccount).setDialogTheme(chatActivity.getDialogId(), emoticon, true);
+            ChatThemeController.getInstance(currentAccount).setDialogTheme(chatActivity.getDialogId(), chatTheme, true);
             TLRPC.WallPaper wallpaper = hasChanges() ? null : themeDelegate.getCurrentWallpaper();
-            if (!chatTheme.showAsDefaultStub) {
-                themeDelegate.setCurrentTheme(chatTheme, wallpaper, true, originalIsDark);
+            if (!emojiTheme.showAsDefaultStub) {
+                themeDelegate.setCurrentTheme(emojiTheme, wallpaper, true, originalIsDark);
             } else {
                 themeDelegate.setCurrentTheme(null, wallpaper, true, originalIsDark);
             }
@@ -979,11 +979,17 @@ public class ChatThemeBottomSheet extends BottomSheet implements NotificationCen
             TLRPC.User user = chatActivity.getCurrentUser();
             if (user != null && !user.self) {
                 boolean themeDisabled = false;
-                if (TextUtils.isEmpty(emoticon)) {
-                    themeDisabled = true;
-                    emoticon = "❌";
+                TLRPC.Document document = null;
+                if (chatTheme instanceof TLRPC.TL_chatThemeUniqueGift) {
+                    document = ((TLRPC.TL_chatThemeUniqueGift) chatTheme).gift.getDocument();
+                } else if (chatTheme instanceof TLRPC.TL_chatTheme) {
+                    String emoticon = emojiTheme.emoji;
+                    if (TextUtils.isEmpty(emoticon)) {
+                        themeDisabled = true;
+                        emoticon = "❌";
+                    }
+                    document = MediaDataController.getInstance(currentAccount).getEmojiAnimatedSticker(emoticon);
                 }
-                TLRPC.Document document = emoticon != null ? MediaDataController.getInstance(currentAccount).getEmojiAnimatedSticker(emoticon) : null;
                 StickerSetBulletinLayout layout = new StickerSetBulletinLayout(getContext(), null, StickerSetBulletinLayout.TYPE_EMPTY, document, chatActivity.getResourceProvider());
                 layout.subtitleTextView.setVisibility(View.GONE);
                 if (themeDisabled) {

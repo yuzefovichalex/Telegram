@@ -29,6 +29,8 @@ public class EmojiThemes {
     public static final String REMOVED_EMOJI = "❌";
 
     private long id = -1L;
+    private TLRPC.ChatTheme chatTheme;
+    private String slug;
 
     public boolean showAsDefaultStub;
     public boolean showAsRemovedStub;
@@ -59,6 +61,27 @@ public class EmojiThemes {
         this.currentAccount = currentAccount;
         this.showAsDefaultStub = isDefault;
         this.emoji = chatThemeObject.emoticon;
+        this.chatTheme = TLRPC.ChatTheme.ofEmoticon(chatThemeObject.emoticon);
+
+        if (!isDefault) {
+            ThemeItem lightTheme = new ThemeItem();
+            lightTheme.tlTheme = chatThemeObject;
+            lightTheme.settingsIndex = 0;
+            items.add(lightTheme);
+
+            ThemeItem darkTheme = new ThemeItem();
+            darkTheme.tlTheme = chatThemeObject;
+            darkTheme.settingsIndex = 1;
+            items.add(darkTheme);
+        }
+    }
+
+    public EmojiThemes(int currentAccount, TLRPC.TL_theme chatThemeObject, TLRPC.ChatTheme chatTheme, boolean isDefault) {
+        this.id = chatThemeObject.id;
+        this.currentAccount = currentAccount;
+        this.showAsDefaultStub = isDefault;
+        this.emoji = chatThemeObject.emoticon;
+        this.chatTheme = chatTheme;
         if (!isDefault) {
             ThemeItem lightTheme = new ThemeItem();
             lightTheme.tlTheme = chatThemeObject;
@@ -80,13 +103,22 @@ public class EmojiThemes {
         return id;
     }
 
+    public TLRPC.ChatTheme getChatTheme() {
+        return chatTheme;
+    }
+
+    public String getSlug() {
+        return slug;
+    }
+
     public static EmojiThemes createFromGiftTheme(int currentAccount, TLRPC.TL_chatThemeUniqueGift giftTheme) {
         TLRPC.TL_theme_layer133 tltheme = new TLRPC.TL_theme_layer133();
         tltheme.id = giftTheme.gift.id;
         tltheme.for_chat = true;
         tltheme.settings = giftTheme.theme_settings;
-        EmojiThemes themes = new EmojiThemes(currentAccount, tltheme, false);
+        EmojiThemes themes = new EmojiThemes(currentAccount, tltheme, giftTheme, false);
         themes.sticker = giftTheme.gift.getDocument();
+        themes.slug = giftTheme.gift.slug;
         return themes;
     }
 

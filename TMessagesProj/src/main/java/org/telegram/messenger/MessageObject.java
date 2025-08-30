@@ -5297,22 +5297,32 @@ public class MessageObject {
                     TLRPC.TL_messageActionWebViewDataSent dataSent = (TLRPC.TL_messageActionWebViewDataSent) messageOwner.action;
                     messageText = formatString(R.string.ActionBotWebViewData, dataSent.text);
                 } else if (messageOwner.action instanceof TLRPC.TL_messageActionSetChatTheme) {
-                    String emoticon = ((TLRPC.TL_chatTheme) ((TLRPC.TL_messageActionSetChatTheme) messageOwner.action).theme).emoticon;
+                    TLRPC.TL_messageActionSetChatTheme action = (TLRPC.TL_messageActionSetChatTheme) messageOwner.action;
+                    TLRPC.ChatTheme theme = action.theme;
+                    String themeName = "";
+                    if (theme instanceof TLRPC.TL_chatTheme) {
+                        themeName = ((TLRPC.TL_chatTheme) theme).emoticon;
+                    } else if (theme instanceof TLRPC.TL_chatThemeUniqueGift) {
+                        TLRPC.TL_chatThemeUniqueGift giftTheme = (TLRPC.TL_chatThemeUniqueGift) theme;
+                        themeName = giftTheme.gift.title + " #" + giftTheme.gift.num;
+                    }
+
                     String userName = UserObject.getFirstName(fromUser);
                     boolean isChannel = fromUser == null && fromChat != null;
                     if (isChannel) {
                         userName = fromChat.title;
                     }
                     boolean isUserSelf = UserObject.isUserSelf(fromUser);
-                    if (TextUtils.isEmpty(emoticon)) {
+                    if (TextUtils.isEmpty(themeName)) {
                         messageText = isUserSelf
-                                ? formatString(R.string.ChatThemeDisabledYou)
-                                : formatString(isChannel ? R.string.ChannelThemeDisabled : R.string.ChatThemeDisabled, userName, emoticon);
+                            ? formatString(R.string.ChatThemeDisabledYou)
+                            : formatString(isChannel ? R.string.ChannelThemeDisabled : R.string.ChatThemeDisabled, userName, themeName);
                     } else {
                         messageText = isUserSelf
-                                ? formatString(R.string.ChatThemeChangedYou, emoticon)
-                                : formatString(isChannel ? R.string.ChannelThemeChangedTo : R.string.ChatThemeChangedTo, userName, emoticon);
+                            ? formatString(R.string.ChatThemeChangedYou, themeName)
+                            : formatString(isChannel ? R.string.ChannelThemeChangedTo : R.string.ChatThemeChangedTo, userName, themeName);
                     }
+
                 } else if (messageOwner.action instanceof TLRPC.TL_messageActionChatJoinedByRequest) {
                     if (UserObject.isUserSelf(fromUser)) {
                         boolean isChannel = ChatObject.isChannelAndNotMegaGroup(messageOwner.peer_id.channel_id, currentAccount);

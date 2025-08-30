@@ -25437,8 +25437,7 @@ public class ChatActivity extends BaseFragment implements NotificationCenter.Not
             }
             if (lastActionSetChatThemeMessageObject != null && lastActionSetChatThemeMessageObject.messageOwner != null && lastActionSetChatThemeMessageObject.messageOwner.action instanceof TLRPC.TL_messageActionSetChatTheme) {
                 TLRPC.TL_messageActionSetChatTheme action = (TLRPC.TL_messageActionSetChatTheme) lastActionSetChatThemeMessageObject.messageOwner.action;
-                TLRPC.TL_chatTheme theme = (TLRPC.TL_chatTheme) action.theme;
-                setChatThemeEmoticon(theme.emoticon);
+                setChatTheme(action.theme);
             }
             if (webpagesToReload != null) {
                 getMessagesController().reloadWebPages(dialog_id, webpagesToReload, chatMode);
@@ -41838,28 +41837,25 @@ public class ChatActivity extends BaseFragment implements NotificationCenter.Not
 
     private void checkThemeEmoticonOrWallpaper() {
         getNotificationCenter().doOnIdle(() -> {
-            String emoticon = null;
+            TLRPC.ChatTheme theme = null;
             if (userInfo != null) {
-                TLRPC.TL_chatTheme theme = (TLRPC.TL_chatTheme) userInfo.theme;
-                if (theme != null) {
-                    emoticon = theme.emoticon;
-                }
+                theme = (TLRPC.ChatTheme) userInfo.theme;
             }
 //            if (emoticon == null && chatInfo != null) {
 //                emoticon = chatInfo.theme_emoticon;
 //            }
-            setChatThemeEmoticon(emoticon);
+            setChatTheme(theme);
         });
     }
 
-    private void setChatThemeEmoticon(final String emoticon) {
+    private void setChatTheme(final TLRPC.ChatTheme theme) {
         if (themeDelegate == null || parentThemeDelegate != null) {
             return;
         }
         ChatThemeController chatThemeController = ChatThemeController.getInstance(currentAccount);
-        chatThemeController.setDialogTheme(dialog_id, emoticon, false);
-        if (!TextUtils.isEmpty(emoticon)) {
-            chatThemeController.requestChatTheme(emoticon, result -> {
+        chatThemeController.setDialogTheme(dialog_id, theme, false);
+        if (theme != null) {
+            chatThemeController.requestChatTheme(theme, result -> {
                 themeDelegate.setCurrentTheme(result, themeDelegate.wallpaper,openAnimationStartTime != 0, null);
             });
         }
