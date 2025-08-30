@@ -1057,7 +1057,7 @@ public class ChatThemeBottomSheet extends BottomSheet implements NotificationCen
             boolean animated = true;
             ChatThemeItem newItem = items.get(position);
             if (view.chatThemeItem == null ||
-                !TextUtils.equals(view.chatThemeItem.chatTheme.getEmoticon(), newItem.chatTheme.getEmoticon()) ||
+                !TextUtils.equals(view.chatThemeItem.chatTheme.getSymbol(), newItem.chatTheme.getSymbol()) ||
                 DrawerProfileCell.switchingTheme ||
                 view.lastThemeIndex != newItem.themeIndex
             ) {

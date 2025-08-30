@@ -33,6 +33,8 @@ public class ChatThemeController extends BaseController {
     private volatile long themesHash;
     private volatile long lastReloadTimeMs;
 
+    private final GiftThemeController giftThemeController = new GiftThemeController();
+
     private ChatThemeController(int num) {
         super(num);
         init();
@@ -57,6 +59,8 @@ public class ChatThemeController extends BaseController {
                preloadSticker(chatTheme.getEmoticon());
             }
         }
+
+        giftThemeController.preload(currentAccount);
     }
 
     private void preloadSticker(String emojicon) {
@@ -138,35 +142,7 @@ public class ChatThemeController extends BaseController {
     }
 
     public void requestGiftThemes(ResultCallback<List<EmojiThemes>> callback) {
-        TL_account.Tl_getUniqueGiftChatThemes request = new TL_account.Tl_getUniqueGiftChatThemes();
-        request.limit = 10;
-        request.offset = 0;
-        final List<EmojiThemes> giftThemes = new ArrayList<>();
-        ConnectionsManager.getInstance(UserConfig.selectedAccount)
-            .sendRequest(
-                request,
-                (resp, err) -> chatThemeQueue.postRunnable(() -> {
-                    boolean isError = false;
-                    if (resp instanceof TL_account.Tl_chatThemes) {
-                        List<TLRPC.ChatTheme> themes = ((TL_account.Tl_chatThemes) resp).themes;
-                        for (int i = 0; i < themes.size(); i++) {
-                            TLRPC.TL_chatThemeUniqueGift theme = (TLRPC.TL_chatThemeUniqueGift)themes.get(i);
-                            EmojiThemes chatTheme = EmojiThemes.createFromGiftTheme(currentAccount, theme);
-                            chatTheme.preloadWallpaper();
-                            giftThemes.add(chatTheme);
-                        }
-                    } else {
-                        isError = true;
-                        AndroidUtilities.runOnUIThread(() -> callback.onError(err));
-                    }
-                    if (!isError) {
-                        for (EmojiThemes theme : giftThemes) {
-                            theme.initColors();
-                        }
-                        AndroidUtilities.runOnUIThread(() -> callback.onComplete(giftThemes));
-                    }
-                })
-            );
+        giftThemeController.getGiftThemes(currentAccount, callback);
     }
 
     private SharedPreferences getSharedPreferences() {
@@ -225,15 +201,14 @@ public class ChatThemeController extends BaseController {
                 public void onComplete(List<EmojiThemes> result) {
                     TLRPC.TL_chatThemeUniqueGift giftTheme = (TLRPC.TL_chatThemeUniqueGift) theme;
                     for (EmojiThemes emojiTheme : result) {
-                        if (giftTheme.gift.slug.equals(emojiTheme.getSlug())) {
+                        if (giftTheme.gift.slug.equals(emojiTheme.getSymbol())) {
                             emojiTheme.initColors();
                             callback.onComplete(emojiTheme);
                             break;
                         }
                     }
                     if (giftTheme.gift.theme_peer == null) {
-                        EmojiThemes theme = EmojiThemes.createFromGiftTheme(UserConfig.selectedAccount, giftTheme);
-                        callback.onComplete(theme);
+                        callback.onComplete(giftThemeController.getOrCreateExternalTheme(currentAccount, giftTheme));
                     }
                 }
 
@@ -339,23 +314,23 @@ public class ChatThemeController extends BaseController {
     }
 
     public EmojiThemes getDialogTheme(long dialogId) {
-        String emoticon = dialogSymbolsMap.get(dialogId);
-        if (emoticon == null) {
-            emoticon = getEmojiSharedPreferences().getString("chatTheme_" + currentAccount + "_" + dialogId, null);
-            dialogSymbolsMap.put(dialogId, emoticon);
+        String symbol = dialogSymbolsMap.get(dialogId);
+        if (symbol == null) {
+            symbol = getEmojiSharedPreferences().getString("chatTheme_" + currentAccount + "_" + dialogId, null);
+            dialogSymbolsMap.put(dialogId, symbol);
         }
-        return getTheme(emoticon);
+        return getTheme(symbol);
     }
 
-    public EmojiThemes getTheme(String emoticon) {
-        if (emoticon != null) {
+    public EmojiThemes getTheme(String symbol) {
+        if (symbol != null) {
             for (EmojiThemes theme : allChatThemes) {
-                if (emoticon.equals(theme.getEmoticon())) {
+                if (symbol.equals(theme.getEmoticon())) {
                     return theme;
                 }
             }
         }
-        return null;
+        return giftThemeController.getTheme(symbol);
     }
 
     public void saveChatWallpaper(long dialogId, TLRPC.WallPaper wallPaper) {

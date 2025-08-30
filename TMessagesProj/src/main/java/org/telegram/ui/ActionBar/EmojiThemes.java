@@ -30,7 +30,7 @@ public class EmojiThemes {
 
     private long id = -1L;
     private TLRPC.ChatTheme chatTheme;
-    private String slug;
+    private String symbol;
 
     public boolean showAsDefaultStub;
     public boolean showAsRemovedStub;
@@ -62,6 +62,7 @@ public class EmojiThemes {
         this.showAsDefaultStub = isDefault;
         this.emoji = chatThemeObject.emoticon;
         this.chatTheme = TLRPC.ChatTheme.ofEmoticon(chatThemeObject.emoticon);
+        this.symbol = chatThemeObject.emoticon;
 
         if (!isDefault) {
             ThemeItem lightTheme = new ThemeItem();
@@ -107,8 +108,8 @@ public class EmojiThemes {
         return chatTheme;
     }
 
-    public String getSlug() {
-        return slug;
+    public String getSymbol() {
+        return symbol;
     }
 
     public static EmojiThemes createFromGiftTheme(int currentAccount, TLRPC.TL_chatThemeUniqueGift giftTheme) {
@@ -118,7 +119,7 @@ public class EmojiThemes {
         tltheme.settings = giftTheme.theme_settings;
         EmojiThemes themes = new EmojiThemes(currentAccount, tltheme, giftTheme, false);
         themes.sticker = giftTheme.gift.getDocument();
-        themes.slug = giftTheme.gift.slug;
+        themes.symbol = giftTheme.gift.slug;
         return themes;
     }
 
