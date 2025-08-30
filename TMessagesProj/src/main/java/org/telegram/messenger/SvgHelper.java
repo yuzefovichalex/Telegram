@@ -59,11 +59,15 @@ import java.io.StringReader;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
 
 public class SvgHelper {
+
+    private static final Pattern transformAttrPattern = Pattern.compile("(\\w+\\([^)]*\\))");
 
     private static class Line {
         float x1, y1, x2, y2;
@@ -653,76 +657,67 @@ public class SvgHelper {
         return new NumberParse(numbers, p);
     }
 
-    private static Matrix parseTransform(String s) {
-        if (s.startsWith("matrix(")) {
-            NumberParse np = parseNumbers(s.substring("matrix(".length()));
-            if (np.numbers.size() == 6) {
-                Matrix matrix = new Matrix();
-                matrix.setValues(new float[]{
+    private static Matrix parseTransform(String t) {
+        Matrix matrix = null;
+        Matcher m = transformAttrPattern.matcher(t);
+        while (m.find()) {
+            String s = m.group(1);
+            if (s == null) continue;
+            if (s.startsWith("matrix(")) {
+                NumberParse np = parseNumbers(s.substring("matrix(".length()));
+                if (np.numbers.size() == 6) {
+                    if (matrix == null) {
+                        matrix = new Matrix();
+                    }
+                    matrix.setValues(new float[]{
                         np.numbers.get(0), np.numbers.get(2), np.numbers.get(4),
                         np.numbers.get(1), np.numbers.get(3), np.numbers.get(5),
                         0, 0, 1,
-                });
-                return matrix;
-            }
-        } else if (s.startsWith("translate(")) {
-            NumberParse np = parseNumbers(s.substring("translate(".length()));
-            if (np.numbers.size() > 0) {
-                float tx = np.numbers.get(0);
-                float ty = 0;
-                if (np.numbers.size() > 1) {
-                    ty = np.numbers.get(1);
+                    });
+                    return matrix;
                 }
-                Matrix matrix = new Matrix();
-                matrix.postTranslate(tx, ty);
-                return matrix;
-            }
-        } else if (s.startsWith("scale(")) {
-            NumberParse np = parseNumbers(s.substring("scale(".length()));
-            if (np.numbers.size() > 0) {
-                float sx = np.numbers.get(0);
-                float sy = 0;
-                if (np.numbers.size() > 1) {
-                    sy = np.numbers.get(1);
+            } else if (s.startsWith("translate(")) {
+                NumberParse np = parseNumbers(s.substring("translate(".length()));
+                if (!np.numbers.isEmpty()) {
+                    float tx = np.numbers.get(0);
+                    float ty = np.numbers.size() > 1 ? np.numbers.get(1) : 0;
+                    if (matrix == null) matrix = new Matrix();
+                    matrix.preTranslate(tx, ty);
                 }
-                Matrix matrix = new Matrix();
-                matrix.postScale(sx, sy);
-                return matrix;
-            }
-        } else if (s.startsWith("skewX(")) {
-            NumberParse np = parseNumbers(s.substring("skewX(".length()));
-            if (np.numbers.size() > 0) {
-                float angle = np.numbers.get(0);
-                Matrix matrix = new Matrix();
-                matrix.postSkew((float) Math.tan(angle), 0);
-                return matrix;
-            }
-        } else if (s.startsWith("skewY(")) {
-            NumberParse np = parseNumbers(s.substring("skewY(".length()));
-            if (np.numbers.size() > 0) {
-                float angle = np.numbers.get(0);
-                Matrix matrix = new Matrix();
-                matrix.postSkew(0, (float) Math.tan(angle));
-                return matrix;
-            }
-        } else if (s.startsWith("rotate(")) {
-            NumberParse np = parseNumbers(s.substring("rotate(".length()));
-            if (np.numbers.size() > 0) {
-                float angle = np.numbers.get(0);
-                float cx = 0;
-                float cy = 0;
-                if (np.numbers.size() > 2) {
-                    cx = np.numbers.get(1);
-                    cy = np.numbers.get(2);
+            } else if (s.startsWith("scale(")) {
+                NumberParse np = parseNumbers(s.substring("scale(".length()));
+                if (!np.numbers.isEmpty()) {
+                    float sx = np.numbers.get(0);
+                    float sy = np.numbers.size() > 1 ? np.numbers.get(1) : 0;
+                    if (matrix == null) matrix = new Matrix();
+                    matrix.preScale(sx, sy);
                 }
-                Matrix matrix = new Matrix();
-                matrix.postTranslate(cx, cy);
-                matrix.postRotate(angle);
-                matrix.postTranslate(-cx, -cy);
-                return matrix;
+            } else if (s.startsWith("skewX(")) {
+                NumberParse np = parseNumbers(s.substring("skewX(".length()));
+                if (!np.numbers.isEmpty()) {
+                    float angle = np.numbers.get(0);
+                    if (matrix == null) matrix = new Matrix();
+                    matrix.preSkew((float) Math.tan(angle), 0);
+                }
+            } else if (s.startsWith("skewY(")) {
+                NumberParse np = parseNumbers(s.substring("skewY(".length()));
+                if (!np.numbers.isEmpty()) {
+                    float angle = np.numbers.get(0);
+                    if (matrix == null) matrix = new Matrix();
+                    matrix.preSkew(0, (float) Math.tan(angle));
+                }
+            } else if (s.startsWith("rotate(")) {
+                NumberParse np = parseNumbers(s.substring("rotate(".length()));
+                if (!np.numbers.isEmpty()) {
+                    float angle = np.numbers.get(0);
+                    float cx = np.numbers.size() > 2 ? np.numbers.get(1) : 0;
+                    float cy = np.numbers.size() > 2 ? np.numbers.get(2) : 0;
+                    if (matrix == null) matrix = new Matrix();
+                    matrix.preRotate(angle, cx, cy);
+                }
             }
         }
-        return null;
+        return matrix;
     }
 
     public static Path doPath(String s) {
@@ -855,47 +850,53 @@ public class SvgHelper {
                 case 'C':
                 case 'c': {
                     wasCurve = true;
-                    float x1 = ph.nextFloat();
-                    float y1 = ph.nextFloat();
-                    float x2 = ph.nextFloat();
-                    float y2 = ph.nextFloat();
-                    float x = ph.nextFloat();
-                    float y = ph.nextFloat();
-                    if (cmd == 'c') {
-                        x1 += lastX;
-                        x2 += lastX;
-                        x += lastX;
-                        y1 += lastY;
-                        y2 += lastY;
-                        y += lastY;
+                    while (ph.hasMoreNumbers()) {
+                        float x1 = ph.nextFloat();
+                        float y1 = ph.nextFloat();
+                        float x2 = ph.nextFloat();
+                        float y2 = ph.nextFloat();
+                        float x = ph.nextFloat();
+                        float y = ph.nextFloat();
+                        if (cmd == 'c') {
+                            x1 += lastX;
+                            x2 += lastX;
+                            x += lastX;
+                            y1 += lastY;
+                            y2 += lastY;
+                            y += lastY;
+                        }
+                        p.cubicTo(x1, y1, x2, y2, x, y);
+                        lastX1 = x2;
+                        lastY1 = y2;
+                        lastX = x;
+                        lastY = y;
+                        ph.skipNumberSeparator();
                     }
-                    p.cubicTo(x1, y1, x2, y2, x, y);
-                    lastX1 = x2;
-                    lastY1 = y2;
-                    lastX = x;
-                    lastY = y;
                     break;
                 }
                 case 'S':
                 case 's': {
                     wasCurve = true;
-                    float x2 = ph.nextFloat();
-                    float y2 = ph.nextFloat();
-                    float x = ph.nextFloat();
-                    float y = ph.nextFloat();
-                    if (cmd == 's') {
-                        x2 += lastX;
-                        x += lastX;
-                        y2 += lastY;
-                        y += lastY;
+                    while (ph.hasMoreNumbers()) {
+                        float x2 = ph.nextFloat();
+                        float y2 = ph.nextFloat();
+                        float x = ph.nextFloat();
+                        float y = ph.nextFloat();
+                        if (cmd == 's') {
+                            x2 += lastX;
+                            x += lastX;
+                            y2 += lastY;
+                            y += lastY;
+                        }
+                        float x1 = 2 * lastX - lastX1;
+                        float y1 = 2 * lastY - lastY1;
+                        p.cubicTo(x1, y1, x2, y2, x, y);
+                        lastX1 = x2;
+                        lastY1 = y2;
+                        lastX = x;
+                        lastY = y;
+                        ph.skipNumberSeparator();
                     }
-                    float x1 = 2 * lastX - lastX1;
-                    float y1 = 2 * lastY - lastY1;
-                    p.cubicTo(x1, y1, x2, y2, x, y);
-                    lastX1 = x2;
-                    lastY1 = y2;
-                    lastX = x;
-                    lastY = y;
                     break;
                 }
                 case 'A':
@@ -1913,6 +1914,22 @@ public class SvgHelper {
             float f = parseFloat();
             skipNumberSeparator();
             return f;
+        }
+
+        public boolean hasMoreNumbers() {
+            int tempPos = pos;
+            while (tempPos < n) {
+                char c = s.charAt(tempPos);
+                if (c == ' ' || c == ',' || c == '\n' || c == '\t') {
+                    tempPos++;
+                } else {
+                    break;
+                }
+            }
+            if (tempPos >= n) return false;
+
+            char c = s.charAt(tempPos);
+            return (c == '+' || c == '-' || (c >= '0' && c <= '9') || c == '.');
         }
     }
 
