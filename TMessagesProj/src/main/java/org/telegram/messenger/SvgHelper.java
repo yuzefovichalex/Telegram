@@ -472,11 +472,16 @@ public class SvgHelper {
     }
 
     public static Bitmap getBitmap(File file, int width, int height, boolean white) {
+        return getBitmap(file, width, height, white, null);
+    }
+
+    public static Bitmap getBitmap(File file, int width, int height, boolean white, SvgHelper.ElementInterceptor interceptor) {
         try (FileInputStream stream = new FileInputStream(file)) {
             SAXParserFactory spf = SAXParserFactory.newInstance();
             SAXParser sp = spf.newSAXParser();
             XMLReader xr = sp.getXMLReader();
             SVGHandler handler = new SVGHandler(width, height, white ? 0xffffffff : null, false, 1f);
+            handler.setElementInterceptor(interceptor);
             if (!white) {
                 handler.alphaOnly = true;
             }
@@ -657,7 +662,7 @@ public class SvgHelper {
         return new NumberParse(numbers, p);
     }
 
-    private static Matrix parseTransform(String t) {
+    public static Matrix parseTransform(String t) {
         Matrix matrix = null;
         Matcher m = transformAttrPattern.matcher(t);
         while (m.find()) {
@@ -937,7 +942,7 @@ public class SvgHelper {
         return null;
     }
 
-    private static String getStringAttr(String name, Attributes attributes) {
+    public static String getStringAttr(String name, Attributes attributes) {
         int n = attributes.getLength();
         for (int i = 0; i < n; i++) {
             if (attributes.getLocalName(i).equals(name)) {
@@ -951,7 +956,7 @@ public class SvgHelper {
         return getFloatAttr(name, attributes, null);
     }
 
-    private static Float getFloatAttr(String name, Attributes attributes, Float defaultValue) {
+    public static Float getFloatAttr(String name, Attributes attributes, Float defaultValue) {
         String v = getStringAttr(name, attributes);
         if (v == null) {
             return defaultValue;
@@ -1000,6 +1005,11 @@ public class SvgHelper {
                 return Color.WHITE;
         }
         return null;
+    }
+
+    public interface ElementInterceptor {
+        boolean onElementStart(Canvas canvas, String localName, Attributes attrs);
+        boolean onElementEnd(String localName);
     }
 
     private static class NumberParse {
@@ -1143,6 +1153,8 @@ public class SvgHelper {
         private HashMap<String, StyleSet> globalStyles = new HashMap<>();
         private boolean alphaOnly;
 
+        private ElementInterceptor elementInterceptor;
+
         private SVGHandler(int dw, int dh, Integer color, boolean asDrawable, float scale) {
             globalScale = scale;
             desiredWidth = dw;
@@ -1151,6 +1163,10 @@ public class SvgHelper {
             if (asDrawable) {
                 drawable = new SvgDrawable();
             }
+        }
+
+        public void setElementInterceptor(ElementInterceptor elementInterceptor) {
+            this.elementInterceptor = elementInterceptor;
         }
 
         @Override
@@ -1272,6 +1288,9 @@ public class SvgHelper {
         @Override
         public void startElement(String namespaceURI, String localName, String qName, Attributes atts) {
             if (boundsMode && !localName.equals("style")) {
+                return;
+            }
+            if (elementInterceptor != null && elementInterceptor.onElementStart(canvas, localName, atts)) {
                 return;
             }
             switch (localName) {
@@ -1512,6 +1531,9 @@ public class SvgHelper {
 
         @Override
         public void endElement(String namespaceURI, String localName, String qName) {
+            if (elementInterceptor != null && elementInterceptor.onElementEnd(localName)) {
+                return;
+            }
             switch (localName) {
                 case "style":
                     if (styles != null) {

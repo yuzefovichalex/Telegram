@@ -26749,6 +26749,12 @@ public class ChatActivity extends BaseFragment implements NotificationCenter.Not
             attachMenuBotToOpen = null;
         }
         checkGroupEmojiPackHint();
+
+        if (isOpen && giftThemeToSelectId != -1) {
+            long themeId = giftThemeToSelectId;
+            AndroidUtilities.runOnUIThread(() -> showChatThemeBottomSheet(themeId), 150);
+            giftThemeToSelectId = -1;
+        }
     }
 
     private void checkGroupEmojiPackHint() {
@@ -29718,12 +29724,6 @@ public class ChatActivity extends BaseFragment implements NotificationCenter.Not
 
         if (starReactionsOverlay != null) {
             starReactionsOverlay.bringToFront();
-        }
-
-        if (giftThemeToSelectId != -1) {
-            long themeId = giftThemeToSelectId;
-            AndroidUtilities.runOnUIThread(() -> showChatThemeBottomSheet(themeId), 350);
-            giftThemeToSelectId = -1;
         }
     }
 
@@ -42646,6 +42646,9 @@ public class ChatActivity extends BaseFragment implements NotificationCenter.Not
                         int intensity = chatTheme.getWallpaper(isDarkTheme ? 1 : 0).settings.intensity;
                         motionDrawable.setPatternBitmap(intensity, bitmap);
                         motionDrawable.setPatternColorFilter(patternColor);
+                        if (chatTheme.getChatTheme() instanceof TLRPC.TL_chatThemeUniqueGift) {
+                            motionDrawable.setGift(((TLRPC.TL_chatThemeUniqueGift) chatTheme.getChatTheme()).gift);
+                        }
                         patternIntensityAnimator = ValueAnimator.ofFloat(0, 1f);
                         patternIntensityAnimator.addUpdateListener(animator -> {
                             float value = (float) animator.getAnimatedValue();
@@ -42654,6 +42657,9 @@ public class ChatActivity extends BaseFragment implements NotificationCenter.Not
                         patternIntensityAnimator.setDuration(250);
                         patternIntensityAnimator.start();
                     }
+                });
+                chatTheme.loadGiftPatterns(isDark ? 1 : 0, patterns -> {
+                    motionDrawable.setGiftPatterns(patterns);
                 });
                 drawable = motionDrawable;
             }

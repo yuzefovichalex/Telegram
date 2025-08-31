@@ -16,13 +16,18 @@ import org.telegram.messenger.FileLog;
 import org.telegram.messenger.ImageLoader;
 import org.telegram.messenger.ImageLocation;
 import org.telegram.messenger.ImageReceiver;
+import org.telegram.messenger.SvgHelper;
+import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
+import org.telegram.messenger.WallpaperGiftPattern;
+import org.telegram.messenger.WallpaperGiftPatternDetector;
 import org.telegram.tgnet.ResultCallback;
 import org.telegram.tgnet.TLRPC;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.util.ArrayList;
+import java.util.List;
 
 public class EmojiThemes {
 
@@ -495,6 +500,24 @@ public class EmojiThemes {
                 ChatThemeController.getInstance(currentAccount).saveWallpaperBitmap(bitmap, hash);
             });
             ImageLoader.getInstance().loadImageForImageReceiver(imageReceiver);
+        });
+    }
+
+    public void loadGiftPatterns(int index, ResultCallback<List<WallpaperGiftPattern>> callback) {
+        final TLRPC.WallPaper wallPaper = getWallpaper(index);
+        if (wallPaper == null) {
+            if (callback != null) {
+                callback.onComplete(null);
+            }
+            return;
+        }
+        ChatThemeController.chatThemeQueue.postRunnable(() -> {
+            int w = Math.min(AndroidUtilities.displaySize.x, AndroidUtilities.displaySize.y);
+            int h = Math.max(AndroidUtilities.displaySize.x, AndroidUtilities.displaySize.y);
+            File patternPath = FileLoader.getInstance(UserConfig.selectedAccount).getPathToAttach(wallPaper.document, true);
+            WallpaperGiftPatternDetector detector = new WallpaperGiftPatternDetector();
+            SvgHelper.getBitmap(patternPath, w, h, false, detector);
+            AndroidUtilities.runOnUIThread(() -> callback.onComplete(detector.getFoundPatterns()));
         });
     }
 
