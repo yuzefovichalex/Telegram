@@ -10,7 +10,6 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.ColorFilter;
 import android.graphics.ComposeShader;
-import android.graphics.LinearGradient;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.PixelFormat;
@@ -20,7 +19,6 @@ import android.graphics.PorterDuffXfermode;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.Shader;
-import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
@@ -37,10 +35,10 @@ import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
 import org.telegram.messenger.WallpaperGiftPattern;
+import org.telegram.messenger.WallpaperGiftPatternInfo;
 import org.telegram.tgnet.tl.TL_stars;
 
 import java.lang.ref.WeakReference;
-import java.util.List;
 
 public class MotionBackgroundDrawable extends Drawable {
 
@@ -126,8 +124,9 @@ public class MotionBackgroundDrawable extends Drawable {
     private int bitmapWidth = 60;
     private int bitmapHeight = 80;
 
-    private List<WallpaperGiftPattern> giftPatterns;
+    private WallpaperGiftPatternInfo giftPatternInfo;
     private AnimatedEmojiDrawable giftPatternDrawable;
+    private AnimatedEmojiDrawable giftDrawable;
 
     public MotionBackgroundDrawable() {
         super();
@@ -170,16 +169,22 @@ public class MotionBackgroundDrawable extends Drawable {
         }
     }
 
-    public void setGiftPatterns(List<WallpaperGiftPattern> giftPatterns) {
-        this.giftPatterns = giftPatterns;
+    public void setGiftPatternsInfo(WallpaperGiftPatternInfo info) {
+        giftPatternInfo = info;
     }
 
-    public void setGift(TL_stars.StarGift gift) {
+    public void setGift(TL_stars.StarGift gift, boolean isDark) {
         final TL_stars.starGiftAttributePattern pattern = findAttribute(gift.attributes, TL_stars.starGiftAttributePattern.class);
         final TL_stars.starGiftAttributeModel model = findAttribute(gift.attributes, TL_stars.starGiftAttributeModel.class);
+        final TL_stars.starGiftAttributeBackdrop backdrop = findAttribute(gift.attributes, TL_stars.starGiftAttributeBackdrop.class);
         giftPatternDrawable = AnimatedEmojiDrawable.make(UserConfig.selectedAccount, AnimatedEmojiDrawable.CACHE_TYPE_EMOJI_STATUS, pattern.document);
         giftPatternDrawable.preload();
         giftPatternDrawable.addView((AnimatedEmojiSpan.InvalidateHolder) null);
+        int patternColor = isDark ? getAverageColor() : (backdrop.pattern_color | 0xFF000000);
+        giftPatternDrawable.setColorFilter(new PorterDuffColorFilter(patternColor, PorterDuff.Mode.SRC_IN));
+        giftDrawable = AnimatedEmojiDrawable.make(UserConfig.selectedAccount, AnimatedEmojiDrawable.CACHE_TYPE_NOANIMATE_FOLDER, model.document);
+        giftDrawable.preload();
+        giftDrawable.addView((AnimatedEmojiSpan.InvalidateHolder) null);
         invalidateParent();
     }
 
@@ -217,6 +222,17 @@ public class MotionBackgroundDrawable extends Drawable {
         }
         float[] hsb = AndroidUtilities.RGBtoHSB(Color.red(averageColor), Color.green(averageColor), Color.blue(averageColor));
         return hsb[2] < 0.3f;
+    }
+
+    private int getAverageColor() {
+        int averageColor = AndroidUtilities.getAverageColor(colors[0], colors[1]);
+        if (colors[2] != 0) {
+            averageColor = AndroidUtilities.getAverageColor(averageColor, colors[2]);
+        }
+        if (colors[3] != 0) {
+            averageColor = AndroidUtilities.getAverageColor(averageColor, colors[3]);
+        }
+        return averageColor;
     }
 
     @Override
@@ -876,30 +892,32 @@ public class MotionBackgroundDrawable extends Drawable {
         }
         canvas.restore();
 
-        if (giftPatterns != null && !giftPatterns.isEmpty() && giftPatternDrawable != null) {
+        if (giftPatternInfo != null &&
+            giftPatternInfo.patterns != null &&
+            !giftPatternInfo.patterns.isEmpty() &&
+            giftPatternDrawable != null
+        ) {
             canvas.save();
             canvas.translate(0f, tr);
-            // TODO
-            int saveCount = canvas.saveLayer(
-                0, 0, w, h,
-                null,
-                Canvas.ALL_SAVE_FLAG
-            );
-            canvas.scale(0.667f, 0.667f);
-            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
-            p.setShader(gradientShader);
-            p.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SRC_IN));
-            for (int i = 0; i < giftPatterns.size(); i++) {
-                WallpaperGiftPattern giftPattern = giftPatterns.get(i);
+            float scale =  height / giftPatternInfo.originalHeight;
+            canvas.scale(scale, scale);
+            for (int i = 0; i < giftPatternInfo.patterns.size(); i++) {
+                WallpaperGiftPattern giftPattern = giftPatternInfo.patterns.get(i);
                 canvas.save();
                 canvas.concat(giftPattern.transform);
                 canvas.translate(giftPattern.x, giftPattern.y);
-                giftPatternDrawable.setBounds(0, 0, (int) giftPattern.width, (int) giftPattern.height);
-                giftPatternDrawable.draw(canvas);
-                canvas.drawRect(0, 0, (int) giftPattern.width, (int) giftPattern.height, p);
+                if (i % 2 == 0) {
+                    giftPatternDrawable.setBounds(0, 0, (int) giftPattern.width, (int) giftPattern.height);
+                    giftPatternDrawable.setAlpha((int) ((Math.abs(intensity) / 100f) * alpha * .5));
+                    giftPatternDrawable.draw(canvas);
+                } else {
+                    giftDrawable.setBounds(0, 0, (int) giftPattern.width, (int) giftPattern.height);
+                    giftDrawable.setAlpha((int) ((Math.abs(intensity) / 100f) * alpha * .7));
+                    giftDrawable.draw(canvas);
+                }
                 canvas.restore();
             }
-            canvas.restoreToCount(saveCount);
+            canvas.restore();
         }
 
         updateAnimation(true);

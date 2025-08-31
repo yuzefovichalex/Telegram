@@ -42647,7 +42647,7 @@ public class ChatActivity extends BaseFragment implements NotificationCenter.Not
                         motionDrawable.setPatternBitmap(intensity, bitmap);
                         motionDrawable.setPatternColorFilter(patternColor);
                         if (chatTheme.getChatTheme() instanceof TLRPC.TL_chatThemeUniqueGift) {
-                            motionDrawable.setGift(((TLRPC.TL_chatThemeUniqueGift) chatTheme.getChatTheme()).gift);
+                            motionDrawable.setGift(((TLRPC.TL_chatThemeUniqueGift) chatTheme.getChatTheme()).gift, isDarkTheme);
                         }
                         patternIntensityAnimator = ValueAnimator.ofFloat(0, 1f);
                         patternIntensityAnimator.addUpdateListener(animator -> {
@@ -42658,8 +42658,8 @@ public class ChatActivity extends BaseFragment implements NotificationCenter.Not
                         patternIntensityAnimator.start();
                     }
                 });
-                chatTheme.loadGiftPatterns(isDark ? 1 : 0, patterns -> {
-                    motionDrawable.setGiftPatterns(patterns);
+                chatTheme.loadGiftPatterns(isDark ? 1 : 0, info -> {
+                    motionDrawable.setGiftPatternsInfo(info);
                 });
                 drawable = motionDrawable;
             }

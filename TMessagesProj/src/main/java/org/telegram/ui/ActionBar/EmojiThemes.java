@@ -21,6 +21,7 @@ import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
 import org.telegram.messenger.WallpaperGiftPattern;
 import org.telegram.messenger.WallpaperGiftPatternDetector;
+import org.telegram.messenger.WallpaperGiftPatternInfo;
 import org.telegram.tgnet.ResultCallback;
 import org.telegram.tgnet.TLRPC;
 
@@ -503,7 +504,7 @@ public class EmojiThemes {
         });
     }
 
-    public void loadGiftPatterns(int index, ResultCallback<List<WallpaperGiftPattern>> callback) {
+    public void loadGiftPatterns(int index, ResultCallback<WallpaperGiftPatternInfo> callback) {
         final TLRPC.WallPaper wallPaper = getWallpaper(index);
         if (wallPaper == null) {
             if (callback != null) {
@@ -517,7 +518,7 @@ public class EmojiThemes {
             File patternPath = FileLoader.getInstance(UserConfig.selectedAccount).getPathToAttach(wallPaper.document, true);
             WallpaperGiftPatternDetector detector = new WallpaperGiftPatternDetector();
             SvgHelper.getBitmap(patternPath, w, h, false, detector);
-            AndroidUtilities.runOnUIThread(() -> callback.onComplete(detector.getFoundPatterns()));
+            AndroidUtilities.runOnUIThread(() -> callback.onComplete(detector.getInfo()));
         });
     }
 
