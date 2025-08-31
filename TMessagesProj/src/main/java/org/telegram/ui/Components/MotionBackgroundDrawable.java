@@ -1,5 +1,6 @@
 package org.telegram.ui.Components;
 
+import static org.telegram.messenger.AndroidUtilities.dp;
 import static org.telegram.ui.Stars.StarsController.findAttribute;
 
 import android.annotation.SuppressLint;
@@ -32,7 +33,6 @@ import org.telegram.messenger.FileLog;
 import org.telegram.messenger.GenericProvider;
 import org.telegram.messenger.LiteMode;
 import org.telegram.messenger.NotificationCenter;
-import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
 import org.telegram.messenger.WallpaperGiftPattern;
 import org.telegram.messenger.WallpaperGiftPatternInfo;
@@ -125,8 +125,8 @@ public class MotionBackgroundDrawable extends Drawable {
     private int bitmapHeight = 80;
 
     private WallpaperGiftPatternInfo giftPatternInfo;
-    private AnimatedEmojiDrawable giftPatternDrawable;
-    private AnimatedEmojiDrawable giftDrawable;
+    private AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable giftPatternDrawable;
+    private AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable giftDrawable;
 
     public MotionBackgroundDrawable() {
         super();
@@ -177,14 +177,16 @@ public class MotionBackgroundDrawable extends Drawable {
         final TL_stars.starGiftAttributePattern pattern = findAttribute(gift.attributes, TL_stars.starGiftAttributePattern.class);
         final TL_stars.starGiftAttributeModel model = findAttribute(gift.attributes, TL_stars.starGiftAttributeModel.class);
         final TL_stars.starGiftAttributeBackdrop backdrop = findAttribute(gift.attributes, TL_stars.starGiftAttributeBackdrop.class);
-        giftPatternDrawable = AnimatedEmojiDrawable.make(UserConfig.selectedAccount, AnimatedEmojiDrawable.CACHE_TYPE_EMOJI_STATUS, pattern.document);
-        giftPatternDrawable.preload();
-        giftPatternDrawable.addView((AnimatedEmojiSpan.InvalidateHolder) null);
         int patternColor = isDark ? getAverageColor() : (backdrop.pattern_color | 0xFF000000);
-        giftPatternDrawable.setColorFilter(new PorterDuffColorFilter(patternColor, PorterDuff.Mode.SRC_IN));
-        giftDrawable = AnimatedEmojiDrawable.make(UserConfig.selectedAccount, AnimatedEmojiDrawable.CACHE_TYPE_NOANIMATE_FOLDER, model.document);
-        giftDrawable.preload();
-        giftDrawable.addView((AnimatedEmojiSpan.InvalidateHolder) null);
+        giftPatternDrawable = new AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable(dp(72), AnimatedEmojiDrawable.CACHE_TYPE_EMOJI_STATUS);
+        giftPatternDrawable.setInvalidateRunnable(this::invalidateParent);
+        giftPatternDrawable.attach();
+        giftPatternDrawable.set(pattern.document, true);
+        giftPatternDrawable.setColor(patternColor);
+        giftDrawable = new AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable(dp(72), AnimatedEmojiDrawable.CACHE_TYPE_NOANIMATE_FOLDER);
+        giftDrawable.setInvalidateRunnable(this::invalidateParent);
+        giftDrawable.attach();
+        giftDrawable.set(model.document, true);
         invalidateParent();
     }
 

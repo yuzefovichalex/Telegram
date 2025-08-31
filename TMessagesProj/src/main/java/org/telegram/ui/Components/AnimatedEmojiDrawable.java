@@ -1087,6 +1087,7 @@ public class AnimatedEmojiDrawable extends Drawable {
         private int alpha = 255;
         boolean attached;
         private Theme.ResourcesProvider resourcesProvider;
+        private Runnable invalidateRunnable;
 
         public SwapAnimatedEmojiDrawable(View parentView, int size) {
             this(parentView, false, size, CACHE_TYPE_EMOJI_STATUS);
@@ -1098,6 +1099,10 @@ public class AnimatedEmojiDrawable extends Drawable {
 
         public SwapAnimatedEmojiDrawable(View parentView, int size, int cacheType) {
             this(parentView, false, size, cacheType);
+        }
+
+        public SwapAnimatedEmojiDrawable(int size, int cacheType) {
+            this(null, false, size, cacheType);
         }
 
         public SwapAnimatedEmojiDrawable(View parentView, boolean invalidateParent, int size, int cacheType) {
@@ -1112,6 +1117,12 @@ public class AnimatedEmojiDrawable extends Drawable {
             changeProgress.setParent(parentView);
             particlesAlpha.setParent(parentView);
             this.parentView = parentView;
+        }
+
+        public void setInvalidateRunnable(Runnable invalidateRunnable) {
+            changeProgress.setInvalidate(invalidateRunnable);
+            particlesAlpha.setInvalidate(invalidateRunnable);
+            this.invalidateRunnable = invalidateRunnable;
         }
 
         public void play() {
@@ -1460,6 +1471,9 @@ public class AnimatedEmojiDrawable extends Drawable {
             }
             if (secondParent != null) {
                 secondParent.invalidate();
+            }
+            if (invalidateRunnable != null) {
+                invalidateRunnable.run();
             }
             invalidateSelf();
         }

@@ -1,5 +1,7 @@
 package org.telegram.ui.ActionBar;
 
+import static org.telegram.ui.Stars.StarsController.findAttribute;
+
 import android.app.Activity;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
@@ -24,6 +26,8 @@ import org.telegram.messenger.WallpaperGiftPatternDetector;
 import org.telegram.messenger.WallpaperGiftPatternInfo;
 import org.telegram.tgnet.ResultCallback;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.tgnet.tl.TL_stars;
+import org.telegram.ui.Components.AnimatedEmojiDrawable;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -594,6 +598,18 @@ public class EmojiThemes {
         loadWallpaperThumb(1, null);
         loadWallpaper(0, null);
         loadWallpaper(1, null);
+    }
+
+    public void preloadGift() {
+        if (chatTheme instanceof TLRPC.TL_chatThemeUniqueGift) {
+            TLRPC.TL_chatThemeUniqueGift giftTheme = (TLRPC.TL_chatThemeUniqueGift) chatTheme;
+            final TL_stars.starGiftAttributePattern pattern = findAttribute(giftTheme.gift.attributes, TL_stars.starGiftAttributePattern.class);
+            final TL_stars.starGiftAttributeModel model = findAttribute(giftTheme.gift.attributes, TL_stars.starGiftAttributeModel.class);
+            AndroidUtilities.runOnUIThread(() -> {
+                AnimatedEmojiDrawable.make(UserConfig.selectedAccount, AnimatedEmojiDrawable.CACHE_TYPE_EMOJI_STATUS, pattern.document).preload();
+                AnimatedEmojiDrawable.make(UserConfig.selectedAccount, AnimatedEmojiDrawable.CACHE_TYPE_NOANIMATE_FOLDER, model.document).preload();
+            });
+        }
     }
 
     private File getWallpaperThumbFile(long themeId) {

@@ -33,6 +33,14 @@ public class GiftThemeController {
 
         cached = loadCachedThemes(account, PREFS_THEMES, "count", "theme_");
         cachedExternal = loadCachedThemes(account, PREFS_THEMES_EXT, "count_ext", "theme_ext_");
+
+        for (EmojiThemes theme : cached) {
+            theme.preloadGift();
+        }
+
+        for (EmojiThemes theme : cachedExternal) {
+            theme.preloadGift();
+        }
     }
 
     public void getGiftThemes(int account, ResultCallback<List<EmojiThemes>> callback) {
