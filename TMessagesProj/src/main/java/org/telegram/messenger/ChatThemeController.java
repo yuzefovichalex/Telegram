@@ -8,8 +8,10 @@ import android.text.TextUtils;
 import android.util.LongSparseArray;
 
 import org.telegram.tgnet.ConnectionsManager;
+import org.telegram.tgnet.RequestDelegate;
 import org.telegram.tgnet.ResultCallback;
 import org.telegram.tgnet.SerializedData;
+import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.tgnet.tl.TL_account;
 import org.telegram.ui.ActionBar.EmojiThemes;
@@ -294,6 +296,7 @@ public class ChatThemeController extends BaseController {
                 .apply();
 
         if (sendRequest) {
+            TLRPC.Peer prevoiusPeer = null;
             TLRPC.TL_messages_setChatTheme request = new TLRPC.TL_messages_setChatTheme();
             TLRPC.InputChatTheme inputTheme;
             if (theme instanceof TLRPC.TL_chatTheme) {
@@ -304,12 +307,25 @@ public class ChatThemeController extends BaseController {
                 TLRPC.Tl_inputChatThemeUniqueGift inputChatTheme = new TLRPC.Tl_inputChatThemeUniqueGift();
                 inputChatTheme.slug = ((TLRPC.TL_chatThemeUniqueGift) theme).gift.slug;
                 inputTheme = inputChatTheme;
+                prevoiusPeer = ((TLRPC.TL_chatThemeUniqueGift) theme).gift.theme_peer;
             } else {
                 inputTheme = new TLRPC.Tl_inputChatThemeEmpty();
             }
             request.theme = inputTheme;
             request.peer = getMessagesController().getInputPeer(dialogId);
-            getConnectionsManager().sendRequest(request, null);
+            if (prevoiusPeer != null) {
+                TLRPC.TL_messages_setChatTheme resetRequest = new TLRPC.TL_messages_setChatTheme();
+                resetRequest.theme = new TLRPC.Tl_inputChatThemeEmpty();
+                resetRequest.peer = getMessagesController().getInputPeer(prevoiusPeer.user_id);
+                getConnectionsManager().sendRequest(resetRequest, new RequestDelegate() {
+                    @Override
+                    public void run(TLObject response, TLRPC.TL_error error) {
+                        getConnectionsManager().sendRequest(request, null);
+                    }
+                });
+            } else {
+                getConnectionsManager().sendRequest(request, null);
+            }
         }
     }
 
