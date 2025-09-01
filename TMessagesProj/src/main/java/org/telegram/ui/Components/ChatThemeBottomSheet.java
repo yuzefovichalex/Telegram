@@ -137,7 +137,7 @@ public class ChatThemeBottomSheet extends BottomSheet implements NotificationCen
         this.currentWallpaper = themeDelegate.getCurrentWallpaper();
         this.originalIsDark = Theme.getActiveTheme().isDark();
         this.giftThemeToSelectId = giftThemeToSelectId;
-        adapter = new Adapter(currentAccount, themeDelegate, ThemeSmallPreviewView.TYPE_DEFAULT, chatActivity.getMessagesController());
+        adapter = new Adapter(currentAccount, chatActivity.getCurrentUser().id, themeDelegate, ThemeSmallPreviewView.TYPE_DEFAULT, chatActivity.getMessagesController());
         setDimBehind(false);
         setCanDismissWithSwipe(false);
         setApplyBottomPadding(false);
@@ -508,7 +508,7 @@ public class ChatThemeBottomSheet extends BottomSheet implements NotificationCen
                 }
             }, true);
         } else {
-            loadGiftThemes(chatThemeController, cachedThemes);
+            onDataLoaded(cachedThemes);
         }
 
 
@@ -1031,19 +1031,21 @@ public class ChatThemeBottomSheet extends BottomSheet implements NotificationCen
         private final int currentAccount;
         private final int currentViewType;
         private final MessagesController messagesController;
+        private long currentUserId = -1;
 
         private HashMap<String, Theme.ThemeInfo> loadingThemes = new HashMap<>();
         private HashMap<Theme.ThemeInfo, String> loadingWallpapers = new HashMap<>();
 
         public Adapter(int currentAccount, Theme.ResourcesProvider resourcesProvider, int type) {
-            this(currentAccount, resourcesProvider, type, null);
+            this(currentAccount, -1, resourcesProvider, type, null);
         }
 
-        public Adapter(int currentAccount, Theme.ResourcesProvider resourcesProvider, int type, MessagesController messagesController) {
+        public Adapter(int currentAccount, long currentUserId, Theme.ResourcesProvider resourcesProvider, int type, MessagesController messagesController) {
             this.currentViewType = type;
             this.resourcesProvider = resourcesProvider;
             this.currentAccount = currentAccount;
             this.messagesController = messagesController;
+            this.currentUserId = currentUserId;
         }
 
         @NonNull
@@ -1051,6 +1053,7 @@ public class ChatThemeBottomSheet extends BottomSheet implements NotificationCen
         public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
             ThemeSmallPreviewView view = new ThemeSmallPreviewView(parent.getContext(), currentAccount, resourcesProvider, currentViewType);
             view.setMessagesController(messagesController);
+            view.setCurrentUserId(currentUserId);
             return new RecyclerListView.Holder(view);
         }
 

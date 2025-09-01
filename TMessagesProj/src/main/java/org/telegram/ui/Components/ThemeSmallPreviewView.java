@@ -93,6 +93,7 @@ public class ThemeSmallPreviewView extends FrameLayout implements NotificationCe
     private AvatarDrawable peerAvatarDrawable;
     private ImageReceiver peerAvatarImageReceiver;
     private MessagesController messagesController;
+    private long currentUserId = -1;
 
 
     public ThemeSmallPreviewView(Context context, int currentAccount, Theme.ResourcesProvider resourcesProvider, int currentType) {
@@ -121,6 +122,10 @@ public class ThemeSmallPreviewView extends FrameLayout implements NotificationCe
         peerAvatarImageReceiver = new ImageReceiver();
         peerAvatarImageReceiver.setRoundRadius(AndroidUtilities.dp(32));
         peerAvatarImageReceiver.setCrossfadeAlpha((byte) 0);
+    }
+
+    public void setCurrentUserId(long currentUserId) {
+        this.currentUserId = currentUserId;
     }
 
     public void setMessagesController(MessagesController messagesController) {
@@ -361,7 +366,7 @@ public class ThemeSmallPreviewView extends FrameLayout implements NotificationCe
         }
 
         TLRPC.Peer themePeer = chatThemeItem.chatTheme.getThemePeer();
-        if (themePeer != null) {
+        if (themePeer != null && currentUserId != themePeer.user_id) {
             peerId = themePeer.user_id;
             themeDrawable.peerBubblePaint.setColor(chatThemeItem.chatTheme.getThemeItem(chatThemeItem.themeIndex).outLineColor);
             if (messagesController != null) {
