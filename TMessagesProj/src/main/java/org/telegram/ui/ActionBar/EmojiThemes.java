@@ -41,6 +41,7 @@ public class EmojiThemes {
     private long id = -1L;
     private TLRPC.ChatTheme chatTheme;
     private String symbol;
+    private TLRPC.Peer themePeer;
 
     public boolean showAsDefaultStub;
     public boolean showAsRemovedStub;
@@ -122,6 +123,10 @@ public class EmojiThemes {
         return symbol;
     }
 
+    public TLRPC.Peer getThemePeer() {
+        return themePeer;
+    }
+
     public static EmojiThemes createFromGiftTheme(int currentAccount, TLRPC.TL_chatThemeUniqueGift giftTheme) {
         TLRPC.TL_theme_layer133 tltheme = new TLRPC.TL_theme_layer133();
         tltheme.id = giftTheme.gift.id;
@@ -130,6 +135,7 @@ public class EmojiThemes {
         EmojiThemes themes = new EmojiThemes(currentAccount, tltheme, giftTheme, false);
         themes.sticker = giftTheme.gift.getDocument();
         themes.symbol = giftTheme.gift.slug;
+        themes.themePeer = giftTheme.gift.theme_peer;
         return themes;
     }
 

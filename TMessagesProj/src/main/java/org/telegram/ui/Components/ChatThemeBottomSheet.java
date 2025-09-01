@@ -51,6 +51,7 @@ import org.telegram.messenger.ImageLoader;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaController;
 import org.telegram.messenger.MediaDataController;
+import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
@@ -136,7 +137,7 @@ public class ChatThemeBottomSheet extends BottomSheet implements NotificationCen
         this.currentWallpaper = themeDelegate.getCurrentWallpaper();
         this.originalIsDark = Theme.getActiveTheme().isDark();
         this.giftThemeToSelectId = giftThemeToSelectId;
-        adapter = new Adapter(currentAccount, themeDelegate, ThemeSmallPreviewView.TYPE_DEFAULT);
+        adapter = new Adapter(currentAccount, themeDelegate, ThemeSmallPreviewView.TYPE_DEFAULT, chatActivity.getMessagesController());
         setDimBehind(false);
         setCanDismissWithSwipe(false);
         setApplyBottomPadding(false);
@@ -1029,20 +1030,28 @@ public class ChatThemeBottomSheet extends BottomSheet implements NotificationCen
         private int selectedItemPosition = -1;
         private final int currentAccount;
         private final int currentViewType;
+        private final MessagesController messagesController;
 
         private HashMap<String, Theme.ThemeInfo> loadingThemes = new HashMap<>();
         private HashMap<Theme.ThemeInfo, String> loadingWallpapers = new HashMap<>();
 
         public Adapter(int currentAccount, Theme.ResourcesProvider resourcesProvider, int type) {
+            this(currentAccount, resourcesProvider, type, null);
+        }
+
+        public Adapter(int currentAccount, Theme.ResourcesProvider resourcesProvider, int type, MessagesController messagesController) {
             this.currentViewType = type;
             this.resourcesProvider = resourcesProvider;
             this.currentAccount = currentAccount;
+            this.messagesController = messagesController;
         }
 
         @NonNull
         @Override
         public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            return new RecyclerListView.Holder(new ThemeSmallPreviewView(parent.getContext(), currentAccount, resourcesProvider, currentViewType));
+            ThemeSmallPreviewView view = new ThemeSmallPreviewView(parent.getContext(), currentAccount, resourcesProvider, currentViewType);
+            view.setMessagesController(messagesController);
+            return new RecyclerListView.Holder(view);
         }
 
         @Override

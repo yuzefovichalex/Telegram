@@ -24,6 +24,8 @@ import android.view.View;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.widget.FrameLayout;
 
+import androidx.core.content.ContextCompat;
+
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ChatThemeController;
 import org.telegram.messenger.DocumentObject;
@@ -34,6 +36,7 @@ import org.telegram.messenger.ImageLocation;
 import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaDataController;
+import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SvgHelper;
@@ -85,6 +88,12 @@ public class ThemeSmallPreviewView extends FrameLayout implements NotificationCe
     private float selectionProgress;
     ChatBackgroundDrawable chatBackgroundDrawable;
     boolean attached;
+    private long peerId = -1;
+    private Drawable reverseDrawable;
+    private AvatarDrawable peerAvatarDrawable;
+    private ImageReceiver peerAvatarImageReceiver;
+    private MessagesController messagesController;
+
 
     public ThemeSmallPreviewView(Context context, int currentAccount, Theme.ResourcesProvider resourcesProvider, int currentType) {
         super(context);
@@ -105,6 +114,17 @@ public class ThemeSmallPreviewView extends FrameLayout implements NotificationCe
         outlineBackgroundPaint.setStrokeWidth(AndroidUtilities.dp(2));
         outlineBackgroundPaint.setStyle(Paint.Style.STROKE);
         outlineBackgroundPaint.setColor(0x20E3E3E3);
+
+        reverseDrawable = ContextCompat.getDrawable(context, R.drawable.ic_swap_24dp);
+        peerAvatarDrawable = new AvatarDrawable();
+        peerAvatarDrawable.setCallback(this);
+        peerAvatarImageReceiver = new ImageReceiver();
+        peerAvatarImageReceiver.setRoundRadius(AndroidUtilities.dp(32));
+        peerAvatarImageReceiver.setCrossfadeAlpha((byte) 0);
+    }
+
+    public void setMessagesController(MessagesController messagesController) {
+        this.messagesController = messagesController;
     }
 
     @Override
@@ -338,6 +358,19 @@ public class ThemeSmallPreviewView extends FrameLayout implements NotificationCe
             setContentDescription(LocaleController.getString(R.string.ChatNoTheme));
         } else {
             setContentDescription(chatThemeItem.chatTheme.getEmoticon());
+        }
+
+        TLRPC.Peer themePeer = chatThemeItem.chatTheme.getThemePeer();
+        if (themePeer != null) {
+            peerId = themePeer.user_id;
+            themeDrawable.peerBubblePaint.setColor(chatThemeItem.chatTheme.getThemeItem(chatThemeItem.themeIndex).outLineColor);
+            if (messagesController != null) {
+                TLRPC.User user = messagesController.getUser(peerId);
+                peerAvatarDrawable.setInfo(currentAccount, user);
+                peerAvatarImageReceiver.setForUserOrChat(user, peerAvatarDrawable);
+            }
+        } else {
+            peerId = -1;
         }
     }
 
@@ -592,6 +625,7 @@ public class ThemeSmallPreviewView extends FrameLayout implements NotificationCe
         private final Paint strokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint outBubblePaintSecond = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint inBubblePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint peerBubblePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         Drawable previewDrawable;
 
         ThemeDrawable() {
@@ -700,7 +734,22 @@ public class ThemeSmallPreviewView extends FrameLayout implements NotificationCe
                     }
 
                     if (currentType == TYPE_DEFAULT || currentType == TYPE_CHANNEL) {
-                        canvas.drawRoundRect(rectF, rectF.height() * 0.5f, rectF.height() * 0.5f, inBubblePaint);
+                        if (peerId == -1) {
+                            canvas.drawRoundRect(rectF, rectF.height() * 0.5f, rectF.height() * 0.5f, inBubblePaint);
+                        } else {
+                            canvas.drawRoundRect(rectF, rectF.height() * 0.5f, rectF.height() * 0.5f, peerBubblePaint);
+                            canvas.save();
+                            canvas.translate(rectF.left, rectF.top);
+                            int offset = (int) ((rectF.width() / 2f - (rectF.height() - 12)) / 2f);
+                            peerAvatarDrawable.setBounds(offset, offset, (int) rectF.height() - offset, (int) rectF.height() - offset);
+                            peerAvatarDrawable.draw(canvas);
+                            if (reverseDrawable != null) {
+                                canvas.translate(rectF.width() / 2f, 0f);
+                                reverseDrawable.setBounds(offset, offset, (int) rectF.height() - offset, (int) rectF.height() - offset);
+                                reverseDrawable.draw(canvas);
+                            }
+                            canvas.restore();
+                        }
                     } else {
                         messageDrawableIn.setBounds((int) rectF.left - AndroidUtilities.dp(4), (int) rectF.top - AndroidUtilities.dp(2), (int) rectF.right, (int) rectF.bottom + AndroidUtilities.dp(2));
                         messageDrawableIn.setRoundRadius((int) (rectF.height() * 0.5f));
