@@ -119,7 +119,13 @@ public class ThemeSmallPreviewView extends FrameLayout implements NotificationCe
         reverseDrawable = ContextCompat.getDrawable(context, R.drawable.ic_swap_24dp);
         peerAvatarDrawable = new AvatarDrawable();
         peerAvatarDrawable.setCallback(this);
-        peerAvatarImageReceiver = new ImageReceiver();
+        peerAvatarImageReceiver = new ImageReceiver() {
+            @Override
+            public void invalidate() {
+                super.invalidate();
+                ThemeSmallPreviewView.this.invalidate();
+            }
+        };
         peerAvatarImageReceiver.setRoundRadius(AndroidUtilities.dp(32));
         peerAvatarImageReceiver.setCrossfadeAlpha((byte) 0);
     }

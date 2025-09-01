@@ -61,6 +61,7 @@ import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.ResultCallback;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.tgnet.tl.TL_account;
+import org.telegram.tgnet.tl.TL_stars;
 import org.telegram.tgnet.tl.TL_stories;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BackDrawable;
@@ -73,6 +74,7 @@ import org.telegram.ui.ActionBar.ThemeDescription;
 import org.telegram.ui.Cells.DrawerProfileCell;
 import org.telegram.ui.Cells.ThemesHorizontalListCell;
 import org.telegram.ui.ChatActivity;
+import org.telegram.ui.ChatThemeBottomSheetAlertHeader;
 import org.telegram.ui.Components.Premium.LimitReachedBottomSheet;
 import org.telegram.ui.PhotoViewer;
 import org.telegram.ui.StatisticActivity;
@@ -267,7 +269,7 @@ public class ChatThemeBottomSheet extends BottomSheet implements NotificationCen
 
         applyButton = new View(getContext());
         applyButton.setBackground(Theme.createSimpleSelectorRoundRectDrawable(dp(6), getThemedColor(Theme.key_featuredStickers_addButton), getThemedColor(Theme.key_featuredStickers_addButtonPressed)));
-        applyButton.setOnClickListener((view) -> applySelectedTheme());
+        applyButton.setOnClickListener((view) -> applySelectedTheme(true));
         rootLayout.addView(applyButton, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 48, Gravity.START, 16, 162, 16, 16));
 
         chooseBackgroundTextView = new TextView(getContext());
@@ -604,7 +606,7 @@ public class ChatThemeBottomSheet extends BottomSheet implements NotificationCen
             AlertDialog.Builder builder = new AlertDialog.Builder(getContext(), resourcesProvider);
             builder.setTitle(LocaleController.getString(R.string.ChatThemeSaveDialogTitle));
             builder.setSubtitle(LocaleController.getString(R.string.ChatThemeSaveDialogText));
-            builder.setPositiveButton(LocaleController.getString(R.string.ChatThemeSaveDialogApply), (dialogInterface, i) -> applySelectedTheme());
+            builder.setPositiveButton(LocaleController.getString(R.string.ChatThemeSaveDialogApply), (dialogInterface, i) -> applySelectedTheme(true));
             builder.setNegativeButton(LocaleController.getString(R.string.ChatThemeSaveDialogDiscard), (dialogInterface, i) -> dismiss());
             builder.show();
         } else {
@@ -943,7 +945,7 @@ public class ChatThemeBottomSheet extends BottomSheet implements NotificationCen
         }
     }
 
-    private void applySelectedTheme() {
+    private void applySelectedTheme(boolean checkForAnotherPeer) {
         if (checkingBoostsLevel) {
             return;
         }
@@ -969,6 +971,14 @@ public class ChatThemeBottomSheet extends BottomSheet implements NotificationCen
         if (selectedItem != null && newTheme != currentTheme) {
             EmojiThemes emojiTheme = selectedItem.chatTheme;
             TLRPC.ChatTheme chatTheme = emojiTheme.getChatTheme();
+            if (checkForAnotherPeer &&
+                emojiTheme.getThemePeer() != null &&
+                emojiTheme.getThemePeer().user_id != chatActivity.getCurrentUser().id
+            ) {
+                showThemePeerResetAlert(emojiTheme.getGift(), emojiTheme.getThemePeer().user_id);
+                return;
+            }
+
             ChatThemeController.getInstance(currentAccount).clearWallpaper(chatActivity.getDialogId(), false);
             ChatThemeController.getInstance(currentAccount).setDialogTheme(chatActivity.getDialogId(), chatTheme, true);
             TLRPC.WallPaper wallpaper = hasChanges() ? null : themeDelegate.getCurrentWallpaper();
@@ -1008,6 +1018,17 @@ public class ChatThemeBottomSheet extends BottomSheet implements NotificationCen
         if (bulletin != null) {
             bulletin.show();
         }
+    }
+
+    private void showThemePeerResetAlert(TL_stars.StarGift gift, long userId) {
+        ChatThemeBottomSheetAlertHeader header = new ChatThemeBottomSheetAlertHeader(getContext(), currentAccount, selectedItem.themeIndex != 0);
+        header.setGift(gift);
+        header.setUser(chatActivity.getMessagesController().getUser(userId));
+        AlertDialog.Builder builder = new AlertDialog.Builder(getContext(), resourcesProvider);
+        builder.setView(header);
+        builder.setPositiveButton("Yes", (dialogInterface, i) -> applySelectedTheme(false));
+        builder.setNegativeButton("Cancel", (dialogInterface, i) -> {});
+        builder.show();
     }
 
     private boolean hasChanges() {

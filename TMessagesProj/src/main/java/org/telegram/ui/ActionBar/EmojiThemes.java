@@ -119,6 +119,13 @@ public class EmojiThemes {
         return chatTheme;
     }
 
+    public TL_stars.StarGift getGift() {
+        if (chatTheme instanceof TLRPC.TL_chatThemeUniqueGift) {
+            return ((TLRPC.TL_chatThemeUniqueGift) chatTheme).gift;
+        }
+        return null;
+    }
+
     public String getSymbol() {
         return symbol;
     }

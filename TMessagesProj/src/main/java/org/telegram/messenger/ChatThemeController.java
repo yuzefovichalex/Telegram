@@ -257,6 +257,10 @@ public class ChatThemeController extends BaseController {
         return false;
     }
 
+    public TLRPC.UserFull getUserFull(long dialogId) {
+        return getMessagesController().getUserFull(dialogId);
+    }
+
     public void setDialogTheme(long dialogId, TLRPC.ChatTheme theme, boolean sendRequest) {
         String oldSymbol = dialogSymbolsMap.get(dialogId);
         String symbol;
